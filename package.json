@@ -1,0 +1,30 @@
+{
+  "name": "opencode-context-guard",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": "./src/core.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "inspect": "bun src/cli.ts",
+    "test:live": "bun scripts/live.ts",
+    "format": "prettier --write src tests scripts docs README.md examples package.json tsconfig.json",
+    "format:check": "prettier --check src tests scripts docs README.md examples package.json tsconfig.json"
+  },
+  "dependencies": {
+    "@opencode/plugin": "2.0.29",
+    "@opencode/client": "2.0.29"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.11",
+    "typescript": "5.9.3",
+    "prettier": "3.6.2"
+  },
+  "engines": {
+    "bun": ">=1.1.34"
+  }
+}

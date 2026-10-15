@@ -1,0 +1,34 @@
+{
+  // Replace package with the absolute checkout path. This is V2's plural "plugins".
+  "plugins": [
+    {
+      "package": "/absolute/path/to/opencode-cgp",
+      "options": {
+        "enabled": true,
+        "mode": "observe",
+        "defaults": { "threshold": { "type": "tokens", "value": 131072 } },
+        // All selectors within one rule must match. LAST matching rule wins.
+        "policies": [
+          {
+            "match": { "role": "subagent" },
+            "threshold": { "type": "tokens", "value": 98304 },
+          },
+          {
+            "match": { "model": "local/deepseek*" },
+            "threshold": { "type": "ratio", "value": 0.25 },
+          },
+          {
+            "match": { "agent": "reviewer" },
+            "threshold": { "type": "tokens", "value": 65536 },
+          },
+        ],
+        "safety": {
+          "cooldownMs": 60000,
+          "minReclaimTokens": 8192,
+          "maxConsecutiveFailures": 3,
+        },
+        "telemetry": { "enabled": true, "jsonl": true },
+      },
+    },
+  ],
+}
