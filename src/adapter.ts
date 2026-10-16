@@ -1,3 +1,5 @@
+import { SnapshotStore } from "./snapshot.ts";
+import { serveSnapshots, type SnapshotRpcPort } from "./snapshotserver.ts";
 import type { Plugin } from "@opencode/plugin";
 import type { OpenCodeEvent } from "@opencode/client";
 import type { Registration } from "@opencode/plugin/promise/registration";
@@ -10,6 +12,7 @@ import { decodeRecovery, encodeRecovery } from "./recovery.ts";
 import { JsonlTelemetrySink, defaultPath } from "./telemetry.ts";
 import type { Identity, ModelLimits, TelemetrySink } from "./types.ts";
 export interface Host {
+  rpc?: SnapshotRpcPort;
   app: { version: string };
   options: unknown;
   location: { directory: string };
@@ -24,10 +27,49 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     config.telemetry.path ?? defaultPath(ctx.location.directory),
     config.telemetry,
   );
-  const sink = injectedSink ?? disk;
+  const diagnostics = injectedSink ?? disk;
+  const store = new SnapshotStore(config, () => monitor?.sessions ?? new Map());
+  let monitor: ContextMonitor | undefined;
+  const sink: TelemetrySink = {
+    emit(event) {
+      try {
+        if (event.session) store.mark(event.session.sessionId);
+        if (
+          [
+            "event-stream-gap",
+            "persistence-unavailable",
+            "capacity-exceeded",
+            "model-metadata-unavailable",
+          ].includes(event.type)
+        ) {
+          if (event.type === "event-stream-gap")
+            store.degrade("event-stream-gap");
+          if (event.type === "persistence-unavailable")
+            store.degrade("persistence-unavailable");
+          if (event.type === "capacity-exceeded")
+            store.degrade("capacity-exceeded");
+          if (event.type === "model-metadata-unavailable")
+            store.degrade("model-metadata-unavailable");
+        }
+      } catch {
+        /* Projection must never interrupt monitoring. */
+      }
+      diagnostics.emit(event);
+    },
+  };
+  const stopSnapshots = await serveSnapshots(ctx.rpc, store).catch(() => {
+    diagnostics.emit({
+      time: Date.now(),
+      type: "snapshot-service-unavailable",
+    });
+    return () => {};
+  });
   if (!config.enabled) {
     sink.emit({ time: Date.now(), type: "disabled" });
-    return async () => disk.flush();
+    return async () => {
+      await stopSnapshots();
+      await disk.flush();
+    };
   }
   const controller = new AbortController();
   let stopped = false,
@@ -55,7 +97,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
   let persistChain = Promise.resolve();
   const persist = () => {
     if (!persistenceHealthy) return persistChain;
-    const rows = [...monitor.sessions.values()]
+    const rows = [...(monitor?.sessions.values() ?? [])]
       .filter(
         (s) =>
           s.compaction.lastAttempt !== undefined ||
@@ -67,7 +109,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         compaction: { ...s.compaction },
       }));
     const missing = [...recoveries]
-      .filter(([id]) => !monitor.sessions.has(id))
+      .filter(([id]) => !monitor?.sessions.has(id))
       .map(([, recovery]) => recovery);
     // Only validated scalar safety fields enter the JSON storage contract.
     const data = encodeRecovery(
@@ -89,8 +131,8 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
           throw new Error("Safety persistence unavailable");
         await persist(); // Durable local intent before admitting the runtime control.
         if (
-          !monitor.sessions.has(sessionId) ||
-          monitor.sessions.get(sessionId)?.compaction.phase !== "requesting"
+          !monitor?.sessions.has(sessionId) ||
+          monitor?.sessions.get(sessionId)?.compaction.phase !== "requesting"
         )
           throw new Error("Session no longer requesting");
         if (!persistenceHealthy || stopped)
@@ -103,7 +145,8 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     },
     sink,
   );
-  const monitor = new ContextMonitor(config, scheduler, sink);
+  monitor = new ContextMonitor(config, scheduler, sink);
+  const activeMonitor = monitor;
   let models = new Map<string, ModelLimits>(),
     modelAt = 0;
   async function refreshModels() {
@@ -115,9 +158,13 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
           await ctx.model.list(undefined, { signal: controller.signal })
         ).data.map((m) => [`${m.providerID}/${m.id}`, { ...m.limit }]),
       );
+      store.recover("model-metadata-unavailable");
     } catch {
       models.clear();
-      for (const s of monitor.sessions.values()) delete s.limits;
+      for (const s of activeMonitor.sessions.values()) {
+        delete s.limits;
+        store.mark(s.sessionId);
+      }
       sink.emit({ time: Date.now(), type: "model-metadata-unavailable" });
     }
   }
@@ -136,14 +183,14 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         : {}),
     };
     if (
-      !monitor.sessions.has(sessionId) &&
+      !activeMonitor.sessions.has(sessionId) &&
       !recoveries.has(sessionId) &&
-      monitor.sessions.size + recoveries.size >= config.safety.maxSessions
+      activeMonitor.sessions.size + recoveries.size >= config.safety.maxSessions
     ) {
       sink.emit({ time: Date.now(), type: "capacity-exceeded" });
       return;
     }
-    const s = monitor.touch(
+    const s = activeMonitor.touch(
       identity,
       identity.model ? models.get(identity.model) : undefined,
     );
@@ -157,6 +204,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       }
       s.usage.cumulative = info.tokens;
       s.usage.cumulativeScope = "session";
+      store.mark(s.sessionId);
     }
     return s;
   }
@@ -173,14 +221,14 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       for (const [id, h] of pending) {
         pending.delete(id);
         try {
-          const s = monitor.sessions.get(id) ?? (await discover(id));
+          const s = activeMonitor.sessions.get(id) ?? (await discover(id));
           if (!s) continue;
           if (
             h.at <=
             Math.max(s.lastExecutionEnd ?? 0, s.compaction.lastCompleted ?? 0)
           )
             continue;
-          monitor.touch(
+          activeMonitor.touch(
             h.identity,
             h.identity.model ? models.get(h.identity.model) : undefined,
           );
@@ -191,7 +239,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
             h.estimate !== undefined &&
             s.model
           )
-            monitor.measure(s, {
+            activeMonitor.measure(s, {
               tokens: h.estimate,
               at: h.at,
               model: s.model,
@@ -199,7 +247,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
               provenance: "serialized-estimate",
               scope: "prepared-request",
             });
-          else monitor.evaluate(s);
+          else activeMonitor.evaluate(s);
         } catch {
           sink.emit({ time: Date.now(), type: "session-observation-failed" });
         }
@@ -212,7 +260,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     if (stopped) return;
     const id = event.sessionID,
       model = `${event.model.providerID}/${event.model.id}`,
-      current = monitor.sessions.get(id)?.usage.current;
+      current = activeMonitor.sessions.get(id)?.usage.current;
     if (!pending.has(id) && pending.size >= config.safety.maxSessions) {
       sink.emit({ time: Date.now(), type: "hook-capacity-exceeded" });
       return;
@@ -236,15 +284,17 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     // No mutations or custom summary: the hook only marks an ongoing summary.
     registrations.push(
       await ctx.session.hook("compaction", (e) => {
-        const s = monitor.sessions.get(e.sessionID);
+        const s = activeMonitor.sessions.get(e.sessionID);
         if (s) {
           s.compaction.phase = "running";
           s.compaction.armed = false;
+          store.mark(s.sessionId);
         }
       }),
     );
   } catch (error) {
     for (const r of registrations) await r.dispose();
+    await stopSnapshots();
     throw error;
   }
   const relevant = new Set([
@@ -270,8 +320,9 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     if (event.location && event.location.directory !== ctx.location.directory)
       return;
     if (event.type === "session.deleted") {
+      store.remove(id);
       requests.delete(id);
-      monitor.remove(id);
+      activeMonitor.remove(id);
       recoveries.delete(id);
       await persist();
       return;
@@ -283,12 +334,12 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     if (
       "durable" in event &&
       event.durable &&
-      !monitor.accept(s, event.durable.seq)
+      !activeMonitor.accept(s, event.durable.seq)
     )
       return;
     switch (event.type) {
       case "session.step.started":
-        monitor.touch(
+        activeMonitor.touch(
           {
             sessionId: id,
             agent: event.data.agent,
@@ -312,7 +363,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
           request?.id === event.data.assistantMessageID &&
           request.model === s.model
         )
-          monitor.measure(s, {
+          activeMonitor.measure(s, {
             tokens,
             at: event.created,
             requestId: event.data.assistantMessageID,
@@ -357,13 +408,19 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     await persist();
   }
   const timer = setInterval(() => {
+    store.flush();
     if (draining || stopped) return;
     draining = true;
     void serialized(async () => {
       await drainHooks();
-      monitor.cleanup();
+      activeMonitor.cleanup();
+      if (
+        activeMonitor.sessions.size + recoveries.size <
+        config.safety.maxSessions
+      )
+        store.recover("capacity-exceeded");
       for (const id of requests.keys())
-        if (!monitor.sessions.has(id)) requests.delete(id);
+        if (!activeMonitor.sessions.has(id)) requests.delete(id);
     }).catch(() => {
       draining = false;
     });
@@ -430,6 +487,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     await work;
     await scheduler.flush();
     await persist();
+    await stopSnapshots();
     await disk.flush();
   };
 }

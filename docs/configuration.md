@@ -41,3 +41,34 @@ Peak usage, model-request and tool-call counters cover **this monitor residency*
 ## Logging
 
 Only whitelisted scalar identity, usage, decisions and lifecycle state are serialized. No event payloads, prompts, tool arguments/results, model responses, summaries, credentials, or exception bodies are logged. Session/agent/model IDs are intentionally included. `jsonl:false` sends structured records to stderr instead of writing a journal; `enabled:false` disables usage telemetry, not bounded safety persistence. Files are created 0600 inside a 0700 directory. Existing parent permissions are not changed. Use a dedicated path, not a symlink or shared log destination.
+
+## Native Context Guard view
+
+The package exposes separate server, RPC and TUI entries. The same checkout registration in `opencode.jsonc` supplies both local entries on the inspected 2.0.29 host. For a remote connection, also install/register the package on the client in V2 `cli.json`:
+
+```jsonc
+{
+  "plugins": [{ "package": "/absolute/client/path/to/opencode-cgp" }],
+}
+```
+
+The remote server needs its own registration in the owning location. The client path is local to that client; it is never used as a remote telemetry path. Server options remain in `opencode.jsonc`. The TUI does not change enforcement, model limits, or native Context display. There are no new server configuration keys.
+
+Open **Context Guard** from the command palette or `/context-guard`. Root sessions show a native sidebar section when the host mounts its sidebar. The inspected host suppresses that sidebar in child sessions; the command opens a session panel there and in narrow terminals. The host controls focus, Escape, fullscreen and resize. Panel keys apply while focused:
+
+| Key       | Action                                     |
+| --------- | ------------------------------------------ |
+| Up / Down | Select a family row; keep sibling order    |
+| Enter     | Close this panel and navigate to selection |
+| Space     | Expand/collapse a completed branch         |
+| i         | Inspect selected session details           |
+| r         | Refresh inventory and measurements         |
+| l         | Resume partial inventory discovery         |
+
+The sidebar shows six descendants plus the family root. The panel renders a moving window of at most 25 rows. Completed branches collapse unless they contain the current ancestry, running work, crossed pressure, or blocked/uncertain compaction. Expanded-branch preferences are persisted as at most 1024 IDs; measurements and execution caches are transient.
+
+Occupancy is prompt input plus cache reads/writes divided by Guard's effective input capacity. It differs from native Context, which includes other token categories and uses the context limit. Threshold comparisons use raw numbers: `tokens` and `ratio` are inclusive, `remaining` is strict. `~` labels estimates, `! near` means at least 90% of a positive trigger, and `!! crossed` means the configured comparison holds. Stale/missing measurements have unknown pressure. Cumulative input/output/reasoning/cache totals appear separately in inspected detail. A compaction phase of `accepted` means admission only.
+
+Snapshots work with telemetry disabled. Public RPC reads and live events carry only allowlisted scalar metadata and numeric usage. Reads cannot discover monitor sessions, admit compaction, restore suspended enforcement, or read transcripts. Native inventory discovers ancestors and paginated descendants outside rendering; discovered but unmonitored sessions retain unknown Guard values.
+
+Automatic inventory is bounded to 1024 nodes, depth 64 and 100 list pages per scan, with one list request at a time. `l` resumes pending pages and permits up to 2048 resident client nodes, still with 100 pages per action. A partial marker remains when a bound, cycle, missing parent or failed branch prevents completeness. A visible family rescan runs every 30 seconds. Each owning location has a separate cancellable transport, reads at most 128 IDs per call with concurrency two, and reconciles every 15 seconds with a 5-second deadline. Live batches coalesce on the existing 100 ms worker. Gaps, reconnects, incompatible payloads and missing services are visible; transient errors retain last-known measurements. Hiding the last consumer aborts requests, streams, listeners and timers.

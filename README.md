@@ -45,6 +45,12 @@ Usable input is `min(positive limit.input, limit.context − output reservation)
 
 A provider measurement refers to its **completed request**, not the next assembled prompt. Prompt tokens include uncached input plus cache reads and writes; output and reasoning are separate. Approximate fallback measurements are visibly labeled. See [configuration and accounting](docs/configuration.md).
 
+## Native TUI
+
+Open `/context-guard` or **Open Context Guard** in the command palette for current prompt occupancy, effective input capacity, trigger/headroom, measurement freshness, compaction phase and nested agent status. A native sidebar section appears where the host mounts its sidebar; the panel also works on child routes and narrow terminals. Estimates, unknown values, stale measurements and uncertain compaction remain explicit.
+
+The TUI reads bounded snapshots over public OpenCode RPC, including when telemetry is disabled. Remote clients also need a client-side package registration in `cli.json`; see [the example](examples/cli.jsonc) and [controls, installation and bounds](docs/configuration.md#native-context-guard-view). It targets the inspected 2.0.29 API. Offline native-renderer tests pass; live host and terminal-environment validation remain unverified.
+
 ## Inspect
 
 The startup message reports a location-specific JSONL file under `$XDG_STATE_HOME/opencode-context-guard/` (default `~/.local/state/opencode-context-guard/`). A custom absolute `telemetry.path` is supported. Use a distinct file per plugin location/process.

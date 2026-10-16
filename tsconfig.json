@@ -9,7 +9,9 @@
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["bun"],
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "jsx": "preserve",
+    "jsxImportSource": "@opentui/solid"
   },
-  "include": ["src", "tests", "scripts"]
+  "include": ["src", "tests", "scripts", "server.ts", "tui.tsx", "rpc.ts"]
 }

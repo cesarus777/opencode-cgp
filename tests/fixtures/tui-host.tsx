@@ -1,0 +1,133 @@
+// Executed with the public OpenTUI Solid preload in an isolated Bun process.
+import { testRender } from "@opentui/solid";
+import { RGBA } from "@opentui/core";
+import type { Plugin } from "@opencode/plugin/tui";
+import type { KeymapLayer } from "@opencode/plugin/tui/context";
+import type { GuardState } from "../../src/tui/state.ts";
+import type { GuardRow } from "../../src/family.ts";
+import { GuardPanel } from "../../src/tui/panel.tsx";
+import { createSignal } from "solid-js";
+import assert from "node:assert/strict";
+
+const [sessionID, setSessionID] = createSignal("s0");
+const [width, setWidth] = createSignal(40);
+const [focused, setFocused] = createSignal(true);
+let consumers = 0,
+  closed = false,
+  destination = "";
+const family: GuardRow[] = Array.from({ length: 150 }, (_, i) => ({
+  node: { sessionId: `s${i}`, agent: `agent${i}`, status: "running" },
+  depth: i ? 1 : 0,
+  current: i === 0,
+  freshness: "missing",
+  pressure: "unknown",
+  hidden: 0,
+}));
+const state: GuardState = {
+  version: () => 0,
+  acquire: () => {
+    consumers++;
+    return {
+      update() {},
+      release() {
+        consumers--;
+      },
+    };
+  },
+  rows: () => family,
+  dispose() {},
+  age: () => 0,
+  health: () => undefined,
+  connection: () => "live",
+  complete: () => true,
+  refresh() {},
+  loadMore() {},
+  expand() {},
+};
+let layer: (() => KeymapLayer) | undefined;
+// Only the public fields used by this component are needed by the renderer fixture.
+const context = {
+  app: { version: "2.0.29" },
+  theme: {
+    text: {
+      base: RGBA.fromHex("#ffffff"),
+      muted: RGBA.fromHex("#aaaaaa"),
+      feedback: {
+        warning: { base: RGBA.fromHex("#ffff00") },
+        error: { base: RGBA.fromHex("#ff0000") },
+      },
+    },
+  },
+  keymap: {
+    layer(factory: () => KeymapLayer) {
+      layer = factory;
+    },
+  },
+  ui: {
+    panel: {
+      close() {
+        closed = true;
+      },
+      open() {},
+    },
+    router: {
+      navigate(route: { sessionID: string }) {
+        destination = route.sessionID;
+      },
+    },
+  },
+} as unknown as Plugin.Context;
+const input = {
+  name: "context-guard.monitor",
+  get sessionID() {
+    return sessionID();
+  },
+  get width() {
+    return width();
+  },
+  presentation: "panel" as const,
+  get focused() {
+    return focused();
+  },
+  focus() {},
+  close() {
+    closed = true;
+  },
+  toggleFullscreen() {},
+};
+const host = await testRender(
+  () => <GuardPanel input={input} context={context} state={state} />,
+  { width: 40, height: 50 },
+);
+try {
+  Object.assign(context, { renderer: host.renderer });
+  await host.renderOnce();
+  assert.equal(consumers, 1);
+  assert.match(host.captureCharFrame(), /Context Guard/);
+  const run = (id: string) => {
+    const command = layer?.().commands?.find((command) => command.id === id);
+    assert.ok(command);
+    return command.run();
+  };
+  for (let i = 0; i < 120; i++) run("context-guard.next");
+  await host.renderOnce();
+  assert.match(host.captureCharFrame(), /agent120/);
+  assert.doesNotMatch(host.captureCharFrame(), /agent0 RUN/);
+  run("context-guard.open");
+  assert.equal(destination, "s120");
+  assert.equal(closed, true);
+  setSessionID("s3");
+  setWidth(20);
+  host.resize(20, 50);
+  await host.renderOnce();
+  assert.match(host.captureCharFrame(), /agent3/);
+  setFocused(false);
+  const enabled = layer?.().enabled;
+  assert.equal(typeof enabled === "function" ? enabled() : enabled, false);
+} finally {
+  host.renderer.destroy();
+}
+assert.equal(consumers, 0);
+console.log(
+  "PASS: native renderer, row window, reactive session/width, navigation and cleanup",
+);

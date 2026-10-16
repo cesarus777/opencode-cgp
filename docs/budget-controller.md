@@ -13,3 +13,5 @@ Actions are `continue`, `warn`, `compact`, `checkpoint`, `rotate`, and `stop` (a
 5. Test budget sharing among concurrent siblings and persistence across restarts before enabling it.
 
 A Codex or other harness adapter can reuse Config/PolicyResolver/ThresholdEvaluator, ContextUsageProvider, CompactionScheduler and the budget interfaces. It must accurately declare its own compaction and interruption semantics; OpenCode guarantees do not transfer automatically.
+
+The TUI's `ContextSnapshot` is a read-only projection of existing measurements and scheduler state, exported with `SnapshotStore` and family calculations from `./core`. RPC reads and presentation freshness checks do not call a budget controller or execute actions. New budget UI fields should extend a versioned, validated scalar contract and retain separate cumulative versus per-request scope. Never infer inherited budgets, successful execution, or enforcement permission from a rendered row or a reconnected UI.

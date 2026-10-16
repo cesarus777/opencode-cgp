@@ -5,15 +5,20 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./core": "./src/core.ts"
+    "./core": "./src/core.ts",
+    "./rpc": "./src/rpc.ts",
+    "./tui": "./src/tui.tsx",
+    "./server": "./src/index.ts"
   },
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "inspect": "bun src/cli.ts",
     "test:live": "bun scripts/live.ts",
-    "format": "prettier --write src tests scripts docs README.md examples package.json tsconfig.json",
-    "format:check": "prettier --check src tests scripts docs README.md examples package.json tsconfig.json"
+    "format": "prettier --write src tests scripts docs README.md examples package.json tsconfig.json server.ts tui.tsx rpc.ts",
+    "format:check": "prettier --check src tests scripts docs README.md examples package.json tsconfig.json server.ts tui.tsx rpc.ts",
+    "test:tui-live": "bun scripts/tui-live.ts",
+    "bench:tui": "bun scripts/tui-bench.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.0.29",
@@ -22,9 +27,29 @@
   "devDependencies": {
     "@types/bun": "1.3.11",
     "typescript": "5.9.3",
-    "prettier": "3.6.2"
+    "prettier": "3.6.2",
+    "solid-js": "1.9.15",
+    "@opentui/core": "0.5.17",
+    "@opentui/solid": "0.5.17",
+    "@opencode/theme": "2.0.29"
   },
   "engines": {
     "bun": ">=1.1.34"
+  },
+  "peerDependencies": {
+    "solid-js": ">=1.9.0",
+    "@opentui/core": ">=0.5.17",
+    "@opentui/solid": ">=0.5.17"
+  },
+  "peerDependenciesMeta": {
+    "solid-js": {
+      "optional": true
+    },
+    "@opentui/core": {
+      "optional": true
+    },
+    "@opentui/solid": {
+      "optional": true
+    }
   }
 }

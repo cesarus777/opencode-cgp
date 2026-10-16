@@ -1,3 +1,5 @@
+import { isBatch, isResult } from "../src/rpc.ts";
+import type { SnapshotBatch } from "../src/snapshot.ts";
 import { test, expect } from "bun:test";
 import type { OpenCodeEvent, SessionInfo } from "@opencode/client";
 import { setup, type Host } from "../src/adapter.ts";
@@ -9,6 +11,11 @@ const zero = {
   cache: { read: 0, write: 0 },
 };
 class EventQueue {
+  private ended = false;
+  end() {
+    this.ended = true;
+    this.wake?.();
+  }
   private queue: OpenCodeEvent[] = [];
   private wake: (() => void) | undefined;
   push(event: OpenCodeEvent) {
@@ -18,7 +25,7 @@ class EventQueue {
   async *subscribe(options?: {
     signal?: AbortSignal;
   }): AsyncIterable<OpenCodeEvent> {
-    while (!options?.signal?.aborted) {
+    while (!this.ended && !options?.signal?.aborted) {
       const next = this.queue.shift();
       if (next) {
         yield next;
@@ -62,7 +69,33 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
       time: { created: 1, updated: 1 },
       location: { directory: "/test" },
     });
+  let readSnapshot: ((ids: string[]) => Promise<unknown>) | undefined;
+  const snapshots: SnapshotBatch[] = [];
   const host: Host = {
+    rpc: {
+      register: async (_definition, handlers) => {
+        readSnapshot = (ids) =>
+          handlers.read(
+            { schemaVersion: 1, sessionIds: ids },
+            {
+              signal: new AbortController().signal,
+              error: () => {
+                throw new Error("unused");
+              },
+            },
+          );
+        return {
+          events: {
+            emit: async (_name, batch) => {
+              if (isBatch(batch)) snapshots.push(batch);
+            },
+          },
+          dispose: async () => {
+            readSnapshot = undefined;
+          },
+        };
+      },
+    },
     app: { version: "2.0.29" },
     location: { directory: "/test" },
     options: { mode, telemetry: { enabled: false } },
@@ -144,6 +177,11 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
     add,
     step,
     base,
+    read: (ids: string[]) => {
+      if (!readSnapshot) throw new Error("RPC not registered");
+      return readSnapshot(ids);
+    },
+    snapshots,
     disposed: () => disposed,
     state: () => state,
   };
@@ -313,6 +351,37 @@ test("malformed stored safety state disables admission without overwriting it", 
     await until(() => f.logs.some((e) => e.type === "compaction.uncertain"));
     expect(f.calls.length).toBe(0);
     expect(writes).toBe(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("snapshots publish final scheduler state with telemetry disabled and expose stream suspension", async () => {
+  const f = fixture();
+  f.add("child", "parent");
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    f.step("child", 150000, "request");
+    await until(() => f.calls.length === 1);
+    const value = await f.read(["child", "unknown"]);
+    if (!isResult(value)) throw new Error("Invalid service result");
+    expect(value.upserts[0]?.compaction.phase).toBe("accepted");
+    expect(value.upserts[0]?.measurement?.tokens).toBe(150000);
+    expect(value.unavailable).toEqual([
+      { sessionId: "unknown", reason: "not-monitored" },
+    ]);
+    expect(f.calls.length).toBe(1);
+    await until(() =>
+      f.snapshots.some((batch) =>
+        batch.upserts.some((row) => row.compaction.phase === "accepted"),
+      ),
+    );
+    f.events.end();
+    await until(() =>
+      f.logs.some((event) => event.type === "event-stream-gap"),
+    );
+    const gap = await f.read(["child"]);
+    expect(isResult(gap) && gap.health.enforcement).toBe("suspended");
   } finally {
     await cleanup();
   }
