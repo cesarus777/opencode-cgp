@@ -6,32 +6,81 @@ Targets **`@opencode/plugin@2.0.29`**. The published SDK, official documentation
 
 ## Install
 
+The intended npm distribution is **`@cesarus777/opencode-cgp`**. It becomes available after this repository's first publication. The unscoped `opencode-context-guard` name belongs to another project; do not install it expecting this plugin.
+
+Minimum supported host: **OpenCode V2 2.0.29**. Only 2.0.29 has been tested; V1 is unsupported.
+
+After this project's first publication, register the global package through the native manager:
+
 ```sh
-cd /path/to/opencode-cgp
-bun install --frozen-lockfile
-bun run typecheck
-bun test
+opencode plugin add @cesarus777/opencode-cgp@latest
 ```
 
-Register the checkout in your **V2** `opencode.jsonc` (project scope), or your existing global configuration to cover every location that loads it:
+The CLI manages global package registration and installation. To register the plugin manually, add the following to **one** applicable `opencode.jsonc` instead. The host installs missing packages; a separate `npm install` in your project is unnecessary.
 
 ```jsonc
 {
   "plugins": [
     {
-      "package": "/absolute/path/to/opencode-cgp",
+      "package": "@cesarus777/opencode-cgp",
       "options": {
         "mode": "observe",
-        "defaults": { "threshold": { "type": "tokens", "value": 131072 } },
+        "defaults": {
+          "threshold": {
+            "type": "tokens",
+            "value": 131072,
+          },
+        },
       },
     },
   ],
 }
 ```
 
-Restart/reload OpenCode and look for `context-guard: observe; diagnostics ...`. The package entrypoint has been import-tested with Bun and type-checked against the published V2 SDK. Plugin registration/options match the [official V2 plugin contract](https://dev.opencode.ai/v2/docs/build/plugins/). Actual registration in a running V2 host has not been tested here. Do not register the plugin twice (for example, both auto-discovery and `plugins`). No configuration is edited by the plugin.
+Global configuration is `~/.config/opencode/opencode.jsonc` (or the OpenCode config directory selected by `XDG_CONFIG_HOME`). Project configuration is `./opencode.jsonc` or `./.opencode/opencode.jsonc`; relative plugin paths resolve from the containing configuration file. Plugin arrays accumulate across applicable configurations. Avoid duplicate registration through global/project configuration, discovery directories, or CLI registration. When adding options to a CLI-managed entry, edit that entry rather than adding another copy. The plugin never edits configuration itself.
 
-Watch diagnostics first; then set `mode` to `enforce`. The complete [example](examples/opencode.jsonc) includes model, role, and agent policies. **Last matching rule wins**; selectors within a rule are ANDed. Put a subagent rule last if it must override every model rule.
+Restart/reload OpenCode and look for `context-guard: observe; diagnostics ...`. Observe mode records policy decisions and never requests compaction; OpenCode's own automatic compaction remains active. Inspect diagnostics first, then set `mode` to `enforce` to admit native compaction at runtime step boundaries. The complete [example](examples/opencode.jsonc) includes model, role, and agent policies. **Last matching rule wins**; selectors within a rule are ANDed.
+
+For a known-good published version, pin the exact version in the existing entry's `package` field or use the manager. Use `0.1.0` only after this project publishes that version.
+
+```sh
+opencode plugin add @cesarus777/opencode-cgp@0.1.0
+```
+
+Manage the configured target with the [official V2 CLI](https://dev.opencode.ai/v2/docs/plugins):
+
+```sh
+opencode plugin list
+opencode plugin check
+opencode plugin update @cesarus777/opencode-cgp@latest
+opencode plugin remove @cesarus777/opencode-cgp@latest
+```
+
+Use the actual configured target when it differs. Exact versions and full Git commit hashes stay pinned and are skipped by updates. To change a pin, edit the existing `package` field while preserving its options, or remove the old CLI target and add the desired version. Manually configured entries are removed by deleting that entry from its configuration file. Remote TUI clients also need the package registered in their client `cli.json`, in addition to server registration; see [client configuration](examples/cli.jsonc).
+
+For development or unreleased Git revisions, V2 supports npm-compatible Git targets:
+
+```sh
+opencode plugin add 'github:cesarus777/opencode-cgp#master'
+```
+
+Replace `master` with a version tag or full commit hash to pin a revision. Git installs require Bun and development dependencies to run `prepare`; unlike npm artifacts they build from source. Prefer an exact published prerelease such as `@cesarus777/opencode-cgp@0.2.0-beta.1` after publication. Git preparation has not been verified with the real plugin manager; use a built local checkout if it fails.
+
+Contributors can build and register a checkout without publishing:
+
+```sh
+git clone https://github.com/cesarus777/opencode-cgp.git
+cd opencode-cgp
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+bun run build
+bun run test:package
+```
+
+Use `{"plugins":[{"package":"/absolute/path/to/opencode-cgp","options":{"mode":"observe"}}]}` in a disposable project's `opencode.jsonc`. Local paths are configured directly; `plugin add` does not accept local paths or tarballs. Root checkout wrappers continue to support the host's source loader. The npm package instead uses built JavaScript exports. See [build and release instructions](docs/releasing.md).
+
+If loading fails, run `opencode plugin list` and `opencode plugin check`, confirm V2 2.0.29 and the correct configuration scope, and inspect OpenCode's startup logs. A missing `@opencode/plugin` or client module indicates an incomplete package installation: remove/re-add the configured package using the manager. TUI-only missing `solid-js`/OpenTUI modules usually indicate an unsupported host or loading the TUI outside its host runtime. These optional peers are supplied by the native TUI and must share its runtime instances; do not bundle private renderer copies. Standalone renderer tests need the pinned peers and public runtime preload described in [testing](docs/testing.md). Never reset persisted safety state merely to fix loading. For remote clients, check both client installation and server registration in the session's owning location.
 
 ## Thresholds
 

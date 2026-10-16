@@ -18,7 +18,8 @@ Use Bun 1.1.34 or newer:
 - `bun run inspect /absolute/path/events.jsonl --history`: inspect retained diagnostics.
 - `bun run test:live`: validate against a configured V2 server; explicitly skips without required environment variables. See `docs/testing.md`.
 
-There is no separate build step; the plugin exports TypeScript directly.
+`bun run build` produces npm JavaScript and declarations under ignored `dist/`.
+`bun run test:package` packs, installs and validates the distribution in isolation (requires registry access).
 
 ## Coding Style & Naming Conventions
 

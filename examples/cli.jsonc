@@ -1,5 +1,5 @@
 // Client-side installation for a remote V2 TUI. Register the server separately
 // in its owning location's opencode.jsonc. This path belongs to this client.
 {
-  "plugins": [{ "package": "/absolute/client/path/to/opencode-cgp" }],
+  "plugins": [{ "package": "@cesarus777/opencode-cgp" }],
 }

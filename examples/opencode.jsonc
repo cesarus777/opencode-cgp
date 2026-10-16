@@ -2,7 +2,7 @@
   // Replace package with the absolute checkout path. This is V2's plural "plugins".
   "plugins": [
     {
-      "package": "/absolute/path/to/opencode-cgp",
+      "package": "@cesarus777/opencode-cgp",
       "options": {
         "enabled": true,
         "mode": "observe",

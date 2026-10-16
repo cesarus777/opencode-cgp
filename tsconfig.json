@@ -11,7 +11,12 @@
     "types": ["bun"],
     "allowImportingTsExtensions": true,
     "jsx": "preserve",
-    "jsxImportSource": "@opentui/solid"
+    "jsxImportSource": "@opentui/solid",
+    "paths": {
+      "@cesarus777/opencode-cgp": ["./src/index.ts"],
+      "@cesarus777/opencode-cgp/server": ["./src/index.ts"],
+      "@cesarus777/opencode-cgp/*": ["./src/*"]
+    }
   },
   "include": ["src", "tests", "scripts", "server.ts", "tui.tsx", "rpc.ts"]
 }

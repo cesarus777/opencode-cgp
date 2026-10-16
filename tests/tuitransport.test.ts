@@ -1,6 +1,3 @@
-import { mkdtemp, mkdir, symlink, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { test, expect } from "bun:test";
 import {
   SnapshotClient,
@@ -301,24 +298,6 @@ test("server and core entries import when renderer dependencies are unavailable"
   ]);
   expect(stderr).toBe("");
   expect(code).toBe(0);
-});
-
-test("installed package export resolution finds all three runtime entries", async () => {
-  const directory = await mkdtemp(join(tmpdir(), "guard-package-"));
-  try {
-    await mkdir(join(directory, "node_modules"));
-    await symlink(
-      process.cwd(),
-      join(directory, "node_modules/opencode-context-guard"),
-      "dir",
-    );
-    const entries = Host.resolve({ directory, name: "opencode-context-guard" });
-    expect(entries.server).toEndWith("src/index.ts");
-    expect(entries.tui).toEndWith("src/tui.tsx");
-    expect(entries.rpc).toEndWith("src/rpc.ts");
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
 });
 
 test("bootstrap buffer overflow discards the partial stream and a read repairs it", async () => {

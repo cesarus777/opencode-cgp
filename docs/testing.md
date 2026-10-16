@@ -48,3 +48,33 @@ The benchmark compares monitoring alone, projection without a TUI, and one/two c
 An implementation run on Linux, Bun 1.1.34, AMD Ryzen 5 5500U measured projection p95 around 2.1 ms and family view p95 3.2–4.8 ms with one/two consumers. Each view retained 1000 rows; the replay generated 118 bounded messages including eight bootstrap batches, about 1.65 MB encoded per client. Short-run heap/RSS deltas include allocation and GC effects and do not prove a leak or plateau. Re-run locally with `bun run bench:tui`; results vary with machine and warm-up.
 
 Actual local 2.0.29 package loading, authenticated HTTP client/server transport, wide root sidebar/slash access, resized child/grandchild panel access and current-session navigation have now passed using a synthetic provider. Remaining gates are cross-machine remote aliases, tmux detach/resize, Neovim terminal focus, genuine-provider/model changes, live manual/Guard compaction and continuation, and 30-minute resource/idle CPU measurements. Synthetic usage validates integration and display arithmetic, not real-provider accounting accuracy.
+
+## Packed npm artifact
+
+```sh
+bun run test:package
+```
+
+This network-enabled check upgrades the former workspace-symlink export check to a real npm tarball installation. It verifies server imports without optional renderer peers, every public export, configuration, the existing adapter behavior suite against the installed default export, native compiled TUI rendering through public host runtime support, and consumer declarations. It uses no repository symlinks and removes its temporary installation on success or failure. See [package architecture](releasing.md#package-layout-and-runtime-boundary).
+
+The native renderer fixture deliberately installs `solid-js@1.9.15` with `@opentui/solid@0.5.17`, matching the inspected OpenCode 2.0.29 host. That renderer declares a narrower Solid peer version, so this test uses npm's `--legacy-peer-deps` while supplying the exact tested host modules explicitly. Server-only installation also bypasses peer auto-installation and omits optional dependencies to prove the renderer is not required. This does not change consumers' dependency resolution or bundle host modules into the package.
+
+For an actual installed **OpenCode V2 2.0.29** executable on PATH, additionally run:
+
+```sh
+GUARD_PACKAGE_HOST=1 bun run test:package
+```
+
+This starts disposable loopback servers in observe and enforce mode with separate XDG configuration/data/cache/state directories, registers the **installed tarball's built directory**, checks native plugin registration, and reads the public RPC snapshot health. It makes no model requests, uses a generated temporary authentication password, does not modify real configuration, and stops its servers before removing temporary resources. Native npm-manager installation cannot be tested until the first registry publication. This actual-server check does not exercise compaction or the compiled host's interactive TUI; the default smoke test separately renders the packed TUI using OpenTUI's public test renderer.
+
+To verify interactive packed TUI and real-provider behavior before production enforcement:
+
+1. Run `npm pack --pack-destination /absolute/disposable/artifacts` from the checkout. In a separate disposable directory, use `npm install /absolute/disposable/artifacts/cesarus777-opencode-cgp-0.1.0.tgz`. Do not pass the tarball to `opencode plugin add`, which rejects tarball targets.
+2. Set `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `XDG_STATE_HOME`, and `XDG_CACHE_HOME` to separate directories under that disposable root for **every** host command. Keep the source checkout outside the project being opened. Register the absolute installed `node_modules/@cesarus777/opencode-cgp/dist` directory in the disposable project's `opencode.jsonc`, preserving the options from the normal example. Put the same absolute installed `dist` directory in the isolated `cli.json` plugin list. Built-directory registration avoids fetching an unpublished npm version. The inspected 2.0.29 config loader requires directories for explicitly configured local plugins, despite newer live documentation also describing direct files.
+3. Configure a local OpenAI-compatible provider in that disposable project, as described above. Start `opencode serve --hostname 127.0.0.1 --port <free-port>` with a generated `OPENCODE_PASSWORD` value; use that password for the client connection. Never record credentials in diagnostic artifacts.
+4. In another terminal with the same isolated XDG environment and password, start `opencode --server http://127.0.0.1:<free-port> /absolute/disposable/project`. Check root/child/grandchild sidebar/panel access, `/context-guard`, row navigation and narrow layouts using the [existing checklist](validation/tui-2.0.29-2026-10-16.md). Exercise observe first, then enforce with a deliberately low threshold in this disposable configuration.
+5. Run the existing `test:live` with `GUARD_SERVER_URL`, `GUARD_TEST_DIRECTORY`, `GUARD_TEST_MODEL`, and the full Basic `GUARD_AUTHORIZATION` header. Use `test:tui-live` with a disposable session ID to check transport. Confirm **completed** compaction and continuation, not admission alone. Stop hosts and delete only the temporary root afterward.
+
+Interactive packed-host TUI, synthetic/real-provider compaction, and native npm-manager installation remain separate checks; do not infer them from a passing registration or mock test. GitHub Actions/OIDC cannot be certified by local validation.
+
+Packed validation executed on 2026-10-16 with Bun 1.1.34, Node 26.11.1 and npm 12.2.0: default clean-install smoke passed; nine installed adapter regressions passed; native renderer and declaration consumer passed. The opt-in actual OpenCode 2.0.29 server registration/RPC checks passed in both modes without model requests. CI pins Node 22.14.0/npm 11.6.2; execution on that toolchain and GitHub-hosted runners still needs a CI run. Existing provider-driven `test:live` and remote `test:tui-live` executed their explicit SKIP paths because their required endpoint/session variables were not supplied.

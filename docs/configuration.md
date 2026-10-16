@@ -44,11 +44,11 @@ Only whitelisted scalar identity, usage, decisions and lifecycle state are seria
 
 ## Native Context Guard view
 
-The package exposes separate server, RPC and TUI entries. The same checkout registration in `opencode.jsonc` supplies both local entries on the inspected 2.0.29 host. For a remote connection, also install/register the package on the client in V2 `cli.json`:
+The package exposes separate server, RPC and TUI entries. The same package or checkout registration in `opencode.jsonc` supplies both local entries on the inspected 2.0.29 host. For a remote connection, also install/register the package on the client in V2 `cli.json`:
 
 ```jsonc
 {
-  "plugins": [{ "package": "/absolute/client/path/to/opencode-cgp" }],
+  "plugins": [{ "package": "@cesarus777/opencode-cgp" }],
 }
 ```
 
