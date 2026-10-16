@@ -13,7 +13,7 @@ import { cells, clip, wrap } from "./format.ts";
 import {
   agentLines,
   agentHeading,
-  mainLines,
+  mainSections,
   statistics,
   subagentTree,
 } from "./compactformat.ts";
@@ -103,22 +103,26 @@ export function CompactSidebar(props: {
     ],
   }));
   const colors = () => props.context.theme.text;
-  const executionColor = (row: GuardRow) =>
-    row.node.status === "running"
+  const executionColor = (row: GuardRow | undefined) =>
+    row?.node.status === "running"
       ? colors().feedback.success.base
-      : row.node.status === "failed"
+      : row?.node.status === "failed"
         ? colors().feedback.error.base
         : colors().muted;
+  const pressureColor = (row: GuardRow | undefined) =>
+    row?.freshness !== "fresh" || row.pressure === "unknown"
+      ? colors().muted
+      : row.pressure === "crossed"
+        ? colors().feedback.error.base
+        : row.pressure === "near"
+          ? colors().feedback.warning.base
+          : colors().feedback.success.base;
   const rowColor = (row: GuardRow) =>
-    row.pressure === "crossed" || row.node.status === "failed"
+    row.node.status === "failed"
       ? colors().feedback.error.base
-      : row.pressure === "near"
-        ? colors().feedback.warning.base
-        : row.node.status === "completed" ||
-            row.node.status === "unknown" ||
-            row.node.status === "idle"
-          ? colors().muted
-          : colors().base;
+      : row.node.status === "completed" && row.pressure === "normal"
+        ? colors().muted
+        : pressureColor(row);
   function Lines(input: { lines: readonly string[] }) {
     return (
       <Index each={input.lines}>
@@ -162,9 +166,35 @@ export function CompactSidebar(props: {
         setMeasuredWidth(this.width);
       }}
     >
-      <Lines
-        lines={mainLines(current(), width(), props.state.age(props.sessionID))}
-      />
+      <Index
+        each={mainSections(
+          current(),
+          width(),
+          props.state.age(props.sessionID),
+        )}
+      >
+        {(section) => (
+          <Index each={section().lines}>
+            {(line) => (
+              <text
+                fg={
+                  section().tone === "execution"
+                    ? executionColor(current())
+                    : section().tone === "pressure"
+                      ? pressureColor(current())
+                      : section().tone === "measurement"
+                        ? current()?.freshness === "fresh"
+                          ? colors().muted
+                          : colors().feedback.warning.base
+                        : colors().base
+                }
+              >
+                {line() || " "}
+              </text>
+            )}
+          </Index>
+        )}
+      </Index>
       <Index each={notices()}>
         {(line) => <text fg={colors().feedback.warning.base}>{line()}</text>}
       </Index>

@@ -26,12 +26,18 @@ export function progress(ratio: number | undefined, width: number): string {
   );
 }
 
-export function mainLines(
+export interface MainSection {
+  readonly tone: "base" | "execution" | "pressure" | "measurement";
+  readonly lines: readonly string[];
+}
+
+export function mainSections(
   row: GuardRow | undefined,
   width: number,
   age: number,
-) {
-  if (!row) return wrap("Loading session family...", width);
+): MainSection[] {
+  if (!row)
+    return [{ tone: "base", lines: wrap("Loading session family...", width) }];
   const s = row.snapshot,
     m = s?.measurement;
   const valid = row.freshness === "fresh" || row.freshness === "stale";
@@ -45,43 +51,79 @@ export function mainLines(
       ? s.policy.triggerTokens - measured
       : undefined;
   return [
-    ...columns(
-      `${row.node.agent ?? s?.agent ?? "Main"} · ${row.node.model ?? s?.model ?? "?"}`,
-      row.node.status.toUpperCase(),
-      width,
-    ),
-    "",
-    ...columns(
-      "Context",
-      `${tokens(measured)} / ${tokens(s?.capacityTokens)}`,
-      width,
-    ),
-    progress(ratio(s?.capacityTokens), width),
-    "",
-    ...columns(
-      "Compact threshold",
-      `${tokens(measured)} / ${tokens(s?.policy.triggerTokens)}`,
-      width,
-    ),
-    progress(ratio(s?.policy.triggerTokens), width),
-    ...wrap(
-      remaining === undefined
-        ? "Compaction distance unknown"
-        : remaining < 0
-          ? `${tokens(-remaining)} tokens over threshold`
-          : `${tokens(remaining)} tokens until compaction`,
-      width,
-    ),
-    "",
-    ...wrap(
-      `Measurement: ${m?.confidence ?? "unknown"}${m ? ` · ${Math.floor(Math.max(0, age) / 1000)}s ago` : ""}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}`,
-      width,
-    ),
-    ...(s && s.compaction.phase !== "idle"
-      ? wrap(`Compact: ${s.compaction.phase}`, width)
-      : []),
-    ...(!s ? wrap("Guard: not monitored / unavailable", width) : []),
+    {
+      tone: "execution",
+      lines: columns(
+        `${row.node.agent ?? s?.agent ?? "Main"} · ${row.node.model ?? s?.model ?? "?"}`,
+        row.node.status.toUpperCase(),
+        width,
+      ),
+    },
+    {
+      tone: "base",
+      lines: [
+        "",
+        ...columns(
+          "Context",
+          `${tokens(measured)} / ${tokens(s?.capacityTokens)}`,
+          width,
+        ),
+      ],
+    },
+    { tone: "pressure", lines: [progress(ratio(s?.capacityTokens), width)] },
+    {
+      tone: "base",
+      lines: [
+        "",
+        ...columns(
+          "Compact threshold",
+          `${tokens(measured)} / ${tokens(s?.policy.triggerTokens)}`,
+          width,
+        ),
+      ],
+    },
+    {
+      tone: "pressure",
+      lines: [
+        progress(ratio(s?.policy.triggerTokens), width),
+        ...wrap(
+          remaining === undefined
+            ? "Compaction distance unknown"
+            : remaining < 0
+              ? `${tokens(-remaining)} tokens over threshold`
+              : `${tokens(remaining)} tokens until compaction`,
+          width,
+        ),
+      ],
+    },
+    {
+      tone: "measurement",
+      lines: [
+        "",
+        ...wrap(
+          `Measurement: ${m?.confidence ?? "unknown"}${m ? ` · ${Math.floor(Math.max(0, age) / 1000)}s ago` : ""}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}`,
+          width,
+        ),
+      ],
+    },
+    {
+      tone: "base",
+      lines: [
+        ...(s && s.compaction.phase !== "idle"
+          ? wrap(`Compact: ${s.compaction.phase}`, width)
+          : []),
+        ...(!s ? wrap("Guard: not monitored / unavailable", width) : []),
+      ],
+    },
   ];
+}
+
+export function mainLines(
+  row: GuardRow | undefined,
+  width: number,
+  age: number,
+) {
+  return mainSections(row, width, age).flatMap((section) => section.lines);
 }
 
 export const statusSymbol = {

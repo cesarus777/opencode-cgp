@@ -31,17 +31,23 @@ const state = {
   connection: () => "live",
   complete: () => true,
 } as unknown as GuardState;
-const color = RGBA.fromHex("#ffffff");
+const palette = {
+  base: RGBA.fromHex("#ffffff"),
+  muted: RGBA.fromHex("#777777"),
+  success: RGBA.fromHex("#00ff00"),
+  warning: RGBA.fromHex("#ffff00"),
+  error: RGBA.fromHex("#ff0000"),
+};
 const context = {
   app: { version: "2.0.29" },
   theme: {
     text: {
-      base: color,
-      muted: color,
+      base: palette.base,
+      muted: palette.muted,
       feedback: {
-        error: { base: color },
-        warning: { base: color },
-        success: { base: color },
+        error: { base: palette.error },
+        warning: { base: palette.warning },
+        success: { base: palette.success },
       },
     },
   },
@@ -82,10 +88,52 @@ const run = (id: string) => {
   assert.ok(command);
   command.run();
 };
+function assertColor(text: string, expected: RGBA, within?: string) {
+  const lines = host.captureSpans().lines;
+  const candidates = within
+    ? lines.filter((line) =>
+        line.spans
+          .map((span) => span.text)
+          .join("")
+          .includes(within),
+      )
+    : lines;
+  assert.ok(
+    candidates.some((line) =>
+      line.spans.some(
+        (span) => span.text.includes(text) && span.fg.equals(expected),
+      ),
+    ),
+    `Expected ${text} in ${expected.toString()}${within ? ` within ${within}` : ""}`,
+  );
+}
+function assertMainBars(expected: RGBA) {
+  const bars = host
+    .captureSpans()
+    .lines.filter((line) => line.spans.some((span) => span.text.includes("█")))
+    .slice(0, 2);
+  assert.equal(bars.length, 2);
+  for (const line of bars)
+    assert.ok(
+      line.spans.some(
+        (span) => span.text.includes("█") && span.fg.equals(expected),
+      ),
+      "Main bar foreground must reflect current pressure",
+    );
+}
 try {
   await host.renderOnce();
   await host.renderOnce();
   assert.equal(consumers, 1);
+  assertMainBars(palette.success);
+  assertColor("RUNNING", palette.success, "Main");
+  assertColor("●", palette.success, "explore");
+  assertColor("explore", palette.error);
+  assertColor("CRITICAL", palette.error);
+  assertColor("indexer", palette.success);
+  assertColor("implementor", palette.warning);
+  assertColor("WARNING", palette.warning);
+  assertColor("reviewer", palette.muted);
   const golden = new URL("./sidebar-frame.txt", import.meta.url);
   if (process.env.UPDATE_SIDEBAR_FRAME === "1") writeFileSync(golden, frame());
   assert.equal(frame(), readFileSync(golden, "utf8"));
@@ -132,7 +180,48 @@ try {
   await host.renderOnce();
   assert.match(frame(), /144K \/ 500K/);
   assert.match(frame(), /90%/);
+  assertMainBars(palette.warning);
   assert.match(frame(), /awaiting-measurement/);
+  const nearRows = rows();
+  const criticalSnapshot = {
+    ...snapshot,
+    measurement: { ...snapshot.measurement, tokens: 176000 },
+  };
+  setRows([
+    {
+      ...before,
+      snapshot: criticalSnapshot,
+      ...metric(criticalSnapshot, 4000, 300000),
+    },
+    ...nearRows.slice(1),
+  ]);
+  await host.renderOnce();
+  assertMainBars(palette.error);
+  assertColor("RUNNING", palette.success, "Main");
+  setRows([
+    {
+      ...before,
+      snapshot: criticalSnapshot,
+      ...metric(criticalSnapshot, 400000, 300000),
+    },
+    ...nearRows.slice(1),
+  ]);
+  await host.renderOnce();
+  assertMainBars(palette.muted);
+  assertColor("STALE", palette.warning);
+  setRows([
+    {
+      ...before,
+      node: { ...before.node, status: "failed" },
+      snapshot: criticalSnapshot,
+      ...metric(criticalSnapshot, 4000, 300000),
+    },
+    ...nearRows.slice(1),
+  ]);
+  await host.renderOnce();
+  assertColor("FAILED", palette.error, "Main");
+  setRows(nearRows);
+  await host.renderOnce();
   host.resize(35, 100);
   await host.renderOnce();
   await host.renderOnce();
@@ -162,5 +251,5 @@ try {
 }
 assert.equal(consumers, 0);
 console.log(
-  "PASS: sidebar layout, reactive metrics/width/session, filters, grouping, navigation and cleanup",
+  "PASS: sidebar layout, rendered theme colors, reactive metrics/width/session, filters, grouping, navigation and cleanup",
 );
