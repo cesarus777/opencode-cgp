@@ -1,6 +1,6 @@
 # Context Guard native TUI integration plan
 
-Planning baseline: 2026-10-15. Status: implemented with offline validation on 2026-10-16; live host/environment gates remain open. The architecture/evidence below retains the original planning baseline. See [validation results](../testing.md#native-tui-offline-and-transport-checks) and [runtime controls and bounds](../configuration.md#native-context-guard-view). Follow the repository's Markdown/Prettier conventions. New paths below are proposed files, not claims that those files already exist.
+Planning baseline: 2026-10-15. Status: implemented with offline validation on 2026-10-16; local live-host checks now pass with a synthetic provider; external-provider/environment gates remain open. The architecture/evidence below retains the original planning baseline. See [validation results](../testing.md#native-tui-offline-and-transport-checks) and [runtime controls and bounds](../configuration.md#native-context-guard-view). Follow the repository's Markdown/Prettier conventions. New paths below are proposed files, not claims that those files already exist.
 
 ## A. Executive summary
 
@@ -526,7 +526,7 @@ Open validation items are bounded: actual host package/path automatic loading, r
 ## K. Final implementation checklist
 
 - [x] Recheck installed declarations and inspected source against 2.0.29 evidence; no API differences found.
-- [ ] Recheck a deployed runtime against 2.0.29 evidence; none was supplied.
+- [x] Install and verify the actual local 2.0.29 runtime with a synthetic provider; see the [verification report](../validation/tui-2.0.29-2026-10-16.md).
 - [x] Preserve server/core entrypoints and headless import behavior.
 - [x] Add immutable scalar snapshot projection using existing policy/accounting functions.
 - [x] Test raw threshold, capacity, scope, freshness and cumulative separation.
@@ -538,7 +538,7 @@ Open validation items are bounded: actual host package/path automatic loading, r
 - [x] Discover ancestors and all paginated nested children with public SDK calls; expose partial scans/load more.
 - [x] Reduce current execution/outcome evidence without treating idle/step-end as success.
 - [x] Preserve parent-child edges while prioritizing pressure and bounding rendered rows.
-- [x] Register native Context Guard sidebar and panel; provide palette/slash access on child routes.
+- [x] Register native Context Guard sidebar/panel and global palette/slash command; provide a native composer action on child routes where the host hides prompt/palette shortcuts.
 - [x] Show all main metrics, per-child quantities/status/proximity, and explicit unknown/stale/uncertain states.
 - [x] Add supported navigation, focus-safe input, semantic themes and narrow layout.
 - [x] Add optional peers/dev pins, TSX config and `./tui`/`./rpc` exports; verify package and checkout loading.
@@ -549,4 +549,4 @@ Open validation items are bounded: actual host package/path automatic loading, r
 - [ ] Record performance, bounded resources and repeated disposal/reload results.
 - [x] Update configuration, compatibility, testing and budget-extension documentation with actual results.
 
-Implementation is present in the separate server/RPC/TUI entries. Offline checks and the public native renderer have passed; live validation claims still require execution against an actual host. Inventory continuation uses 100 pages per action and at most 2048 client nodes after explicit load-more, with a visible partial marker at that bound. The accelerated replay is recorded in testing.md; real-time host CPU and long-run memory remain open.
+Implementation is present in the separate server/RPC/TUI entries. Offline checks, the public native renderer and an actual local 2.0.29 host with a synthetic provider have passed. A native composer action supplements palette/slash access on child routes, where the real host hides its normal prompt/palette shortcut. Real-provider compaction and external terminal/remote environments remain unverified. Inventory continuation uses 100 pages per action and at most 2048 client nodes after explicit load-more, with a visible partial marker at that bound. The accelerated replay is recorded in testing.md; real-time host CPU and long-run memory remain open.

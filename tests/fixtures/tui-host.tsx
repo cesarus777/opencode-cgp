@@ -131,3 +131,54 @@ assert.equal(consumers, 0);
 console.log(
   "PASS: native renderer, row window, reactive session/width, navigation and cleanup",
 );
+
+// Exercise the actual entry's child-route access, not a fixture-only command.
+const { default: entry } = await import("../../src/tui.tsx");
+let renderChildAction: (() => import("@opentui/solid").JSX.Element) | undefined;
+let openedPanel = "",
+  registrations = 0;
+const activationContext = {
+  ...context,
+  client: { rpc: () => ({}) },
+  data: { session: { get: () => ({ parentID: "parent" }) } },
+  storage: { store: () => [{ expanded: [] }, async () => {}] },
+  ui: {
+    ...context.ui,
+    panel: {
+      ...context.ui.panel,
+      open(name: string) {
+        openedPanel = name;
+        return true;
+      },
+    },
+    slot(claim: import("@opencode/plugin/tui/context").SlotClaim) {
+      registrations++;
+      if (claim.append === "session.composer.top")
+        renderChildAction = () => claim.render({ sessionID: "child" });
+      return () => {
+        registrations--;
+      };
+    },
+  },
+} as unknown as Plugin.Context;
+const unload = await entry.setup(activationContext);
+assert.equal(layer?.().mode, "global");
+assert.equal(registrations, 3);
+assert.ok(renderChildAction);
+const actionHost = await testRender(renderChildAction, {
+  width: 40,
+  height: 4,
+});
+try {
+  await actionHost.renderOnce();
+  assert.match(actionHost.captureCharFrame(), /Context Guard: open panel/);
+  await actionHost.mockMouse.click(4, 0);
+  assert.equal(openedPanel, "context-guard.monitor");
+} finally {
+  actionHost.renderer.destroy();
+  if (typeof unload === "function") await unload();
+}
+assert.equal(registrations, 0);
+console.log(
+  "PASS: child composer action opens the panel and cleans up its registrations",
+);

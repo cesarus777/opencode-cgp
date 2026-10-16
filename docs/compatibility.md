@@ -8,21 +8,21 @@ The source's `packages/core/test/session-runner.test.ts` includes “runs manual
 
 ## Capability matrix
 
-| Criterion                                                           | Status                                                                         |
-| ------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| Immutable model limits; three thresholds; role/model/agent policies | Implemented and unit-tested                                                    |
-| Root, child and nested child monitoring                             | Implemented; mocked SDK integration tested                                     |
-| Durable public V2 compaction and completion tracking                | Implemented; compiled against published SDK                                    |
-| Active child can compact before task end                            | Supported by inspected runner; mocked plugin path tested; live host unverified |
-| Strict compaction before the immediately next request               | **Unsupported guarantee**; asynchronous event/admission race                   |
-| Global session inventory before next activity                       | **Unavailable on plugin SessionContext**; lazy discovery via hooks/events      |
-| Exact next-request size from public provider metrics                | **Unavailable**; reported previous request plus labeled fallback only          |
-| Completed compaction reconstruction after an event gap/restart      | Conservative `uncertain`; no full transcript replay                            |
-| Exact cumulative session tokens                                     | Uses harness session totals; provider omissions still propagate                |
-| Lifetime peak/request/tool counters                                 | **Not implemented**; residency-scoped counters are explicit                    |
-| Superpowers workflow coexistence                                    | No workflow modifications; **real Superpowers run unverified**                 |
-| Live V2 installation/provider check                                 | **Not run**: binary/server/endpoint absent in the supplied workspace           |
-| Forced budget stop, rotation, checkpoints                           | Intentionally not implemented                                                  |
+| Criterion                                                           | Status                                                                                       |
+| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Immutable model limits; three thresholds; role/model/agent policies | Implemented and unit-tested                                                                  |
+| Root, child and nested child monitoring                             | Implemented; mocked SDK integration tested                                                   |
+| Durable public V2 compaction and completion tracking                | Implemented; compiled against published SDK                                                  |
+| Active child can compact before task end                            | Supported by inspected runner; mocked plugin path tested; live host unverified               |
+| Strict compaction before the immediately next request               | **Unsupported guarantee**; asynchronous event/admission race                                 |
+| Global session inventory before next activity                       | **Unavailable on plugin SessionContext**; lazy discovery via hooks/events                    |
+| Exact next-request size from public provider metrics                | **Unavailable**; reported previous request plus labeled fallback only                        |
+| Completed compaction reconstruction after an event gap/restart      | Conservative `uncertain`; no full transcript replay                                          |
+| Exact cumulative session tokens                                     | Uses harness session totals; provider omissions still propagate                              |
+| Lifetime peak/request/tool counters                                 | **Not implemented**; residency-scoped counters are explicit                                  |
+| Superpowers workflow coexistence                                    | No workflow modifications; **real Superpowers run unverified**                               |
+| Live V2 installation/provider check                                 | **Local TUI verified on 2.0.29 with synthetic metrics**; real-provider compaction unverified |
+| Forced budget stop, rotation, checkpoints                           | Intentionally not implemented                                                                |
 
 An active long-running child is never excluded because it is a child or because it has not become idle. The hook observes every primary request and step events drive enforcement. A single long model request or tool cannot be interrupted by Context Guard. There may be one or more additional requests before admission reaches a safe boundary. This plugin is early compaction policy, not a hard token-limit firewall.
 
@@ -36,8 +36,8 @@ An event stream gap suspends enforcement until reload even when observation reco
 
 ## Native TUI validation boundary
 
-The TUI and RPC boundaries compile against the installed 2.0.29 declarations. Offline tests verify public checkout entry resolution, server imports without renderer modules, mocked server snapshots, cancellation/order recovery, nested paginated inventory, execution reduction and native OpenTUI rendering through its public Solid preload. Optional renderer peers remain separate from server imports. These are offline compatibility checks; they do not certify a deployed OpenCode host or every V2 version.
+The TUI and RPC boundaries compile against the installed 2.0.29 declarations. Offline tests verify public checkout entry resolution, server imports without renderer modules, mocked server snapshots, cancellation/order recovery, nested paginated inventory, execution reduction and native OpenTUI rendering through its public Solid preload. Optional renderer peers remain separate from server imports. The actual compiled 2.0.29 host additionally passed local synthetic-provider checks; see the [verification report](validation/tui-2.0.29-2026-10-16.md). Other V2 versions remain uncertified.
 
-The inspected host controls sidebar visibility and suppresses it for child routes. `/context-guard` and the palette command provide the panel on those routes. Another plugin can suppress additive sidebar claims through replacement. Remote clients need a client-side package installation plus the server plugin in every owning location. Workspace IDs are used when available for canonical alias matching, with directory equality as the fallback. Actual remote routing/authentication aliases remain a live-validation item.
+The inspected host controls sidebar visibility and suppresses it for child routes. The child composer also occupies its own input mode, hiding the normal prompt/palette shortcut. The native **Context Guard: open panel** action above that composer provides panel access without navigating to the parent; `/context-guard` and palette access remain available in the usual prompt scope. Another plugin can suppress additive sidebar claims through replacement. Remote clients need a client-side package installation plus the server plugin in every owning location. Workspace IDs are used when available for canonical alias matching, with directory equality as the fallback. Actual remote routing/authentication aliases remain a live-validation item.
 
-A live binary/provider, remote TUI, tmux and Neovim terminal were not available for validation. Wide/narrow rendering and reactive width/session changes pass the public test renderer, but real-host focus, resize, automatic entry loading and long-running terminal behavior remain unverified. Unknown/evicted historical sessions do not acquire fabricated measurements. Reconnecting the UI never re-enables enforcement suspended by a server event-stream gap.
+The actual local server/TUI passed authenticated RPC reads/live updates, root sidebar rendering, slash access, child/grandchild navigation, child panel actions and 160×50, 80×30 and 40×20 terminal layouts with synthetic provider usage. Startup catalog recovery was verified and regression-tested. Real-provider compaction, cross-machine remote TUI, tmux, Neovim terminal and long-running resource behavior remain unverified. Unknown/evicted historical sessions do not acquire fabricated measurements. Reconnecting the UI never re-enables enforcement suspended by a server event-stream gap.

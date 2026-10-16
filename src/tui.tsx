@@ -42,7 +42,27 @@ export default Plugin.define({
           ),
         }),
       );
+      // The host's child composer occupies its own input mode and hides the
+      // normal prompt/palette shortcuts. Keep panel access on the child route.
+      unregister.push(
+        context.ui.slot({
+          append: "session.composer.top",
+          render: (input) => (
+            <Show when={context.data.session.get(input.sessionID)?.parentID}>
+              <text
+                fg={context.theme.text.muted}
+                onMouseDown={() =>
+                  context.ui.panel.open("context-guard.monitor")
+                }
+              >
+                Context Guard: open panel
+              </text>
+            </Show>
+          ),
+        }),
+      );
       context.keymap.layer(() => ({
+        mode: "global",
         commands: [
           {
             id: "context-guard.show",

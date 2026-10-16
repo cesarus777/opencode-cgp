@@ -386,3 +386,60 @@ test("snapshots publish final scheduler state with telemetry disabled and expose
     await cleanup();
   }
 });
+
+test("a catalog populated after startup repairs resident capacity without admitting work until another observation", async () => {
+  const f = fixture();
+  f.host.options = {
+    mode: "enforce",
+    defaults: { threshold: { type: "ratio", value: 0.75 } },
+    telemetry: { enabled: false },
+  };
+  let available = false,
+    catalogReads = 0;
+  f.host.model.list = async () => {
+    catalogReads++;
+    return {
+      location: { directory: "/test" },
+      data: available
+        ? [
+            {
+              id: "deepseek",
+              modelID: "deepseek",
+              providerID: "local",
+              name: "Synthetic",
+              capabilities: { tools: false, input: ["text"], output: ["text"] },
+              variants: [],
+              time: { released: 0 },
+              cost: [],
+              status: "active",
+              enabled: true,
+              limit: { context: 136000, input: 128000, output: 8000 },
+            },
+          ]
+        : [],
+    };
+  };
+  f.add("root");
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    await until(() => catalogReads === 1);
+    f.step("root", 96000, "first");
+    await until(() => f.logs.some((event) => event.type === "usage"));
+    expect(f.calls.length).toBe(0);
+    available = true;
+    let capacity: number | undefined;
+    for (let attempt = 0; attempt < 250; attempt++) {
+      const value = await f.read(["root"]);
+      if (isResult(value)) capacity = value.upserts[0]?.capacityTokens;
+      if (capacity !== undefined) break;
+      await Bun.sleep(10);
+    }
+    expect(capacity).toBe(128000);
+    expect(catalogReads).toBe(2);
+    expect(f.calls.length).toBe(0);
+    f.step("root", 96000, "second");
+    await until(() => f.calls.length === 1);
+  } finally {
+    await cleanup();
+  }
+});

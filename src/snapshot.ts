@@ -19,6 +19,8 @@ export interface ContextSnapshot {
   readonly limits?: Readonly<ModelLimits>;
   readonly capacityTokens?: number;
   readonly outputReserveTokens?: number;
+  /** Peak prompt tokens observed during monitor residency. */
+  readonly peakTokens?: number;
   readonly policy: {
     readonly id: string;
     readonly configured: Readonly<Threshold>;
@@ -29,6 +31,8 @@ export interface ContextSnapshot {
   };
   readonly compaction: {
     readonly phase: CompactionPhase;
+    /** Completed lifecycle events observed by the monitor, never admissions. */
+    readonly count?: number;
     readonly armed: boolean;
     readonly blockedReason?: string;
     readonly lastAttempt?: number;
@@ -128,6 +132,7 @@ export function project(
           outputReserveTokens:
             config.safety.outputReserveTokens ?? s.limits?.output ?? 0,
         }),
+    peakTokens: s.usage.peak,
     policy: {
       id: p.policy,
       configured: { type: p.threshold.type, value: p.threshold.value },
@@ -138,6 +143,7 @@ export function project(
     },
     compaction: {
       phase: c.phase,
+      count: c.count,
       armed: c.armed,
       ...(c.blockedReason ? { blockedReason: c.blockedReason } : {}),
       ...(c.lastAttempt === undefined

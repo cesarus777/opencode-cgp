@@ -148,16 +148,32 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
   monitor = new ContextMonitor(config, scheduler, sink);
   const activeMonitor = monitor;
   let models = new Map<string, ModelLimits>(),
-    modelAt = 0;
-  async function refreshModels() {
-    if (Date.now() - modelAt < 60000) return;
-    modelAt = Date.now();
+    modelAt = 0,
+    modelRetryAt = 0,
+    modelRetryMs = 1000;
+  async function refreshModels(retryMissing = false) {
+    const now = Date.now();
+    if (now - modelAt < 60000 && (!retryMissing || now < modelRetryAt)) return;
+    modelAt = now;
+    modelRetryAt = now + modelRetryMs;
+    modelRetryMs = Math.min(60000, modelRetryMs * 2);
     try {
       models = new Map(
         (
           await ctx.model.list(undefined, { signal: controller.signal })
         ).data.map((m) => [`${m.providerID}/${m.id}`, { ...m.limit }]),
       );
+      let missing = false;
+      for (const s of activeMonitor.sessions.values()) {
+        const limits = s.model ? models.get(s.model) : undefined;
+        if (limits) s.limits = { ...limits };
+        else {
+          delete s.limits;
+          missing ||= s.model !== undefined;
+        }
+        store.mark(s.sessionId);
+      }
+      if (!missing) modelRetryMs = 1000;
       store.recover("model-metadata-unavailable");
     } catch {
       models.clear();
@@ -217,7 +233,13 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
   async function drainHooks() {
     if (stopped) return;
     try {
-      await refreshModels();
+      // A catalog read can precede provider initialization. Repair missing limits
+      // with bounded backoff; never evaluate policy merely because metadata arrives.
+      await refreshModels(
+        [...activeMonitor.sessions.values()].some(
+          (s) => s.model !== undefined && !models.has(s.model),
+        ),
+      );
       for (const [id, h] of pending) {
         pending.delete(id);
         try {

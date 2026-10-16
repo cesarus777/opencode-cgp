@@ -206,3 +206,16 @@ test("mixed removals and upserts use at most 128 changes per monotonically seque
   expect(batches.flatMap((b) => b.removed).length).toBe(200);
   expect(batches.flatMap((b) => b.upserts).length).toBe(200);
 });
+
+test("sidebar statistics project observed peaks and completed counts without counting admissions", () => {
+  const f = fixture();
+  f.s.compaction.phase = "accepted";
+  expect(project(f.s, f.config, 1000).compaction.count).toBe(0);
+  expect(project(f.s, f.config, 1000).peakTokens).toBe(100);
+  f.s.compaction.count = 2;
+  f.s.compaction.phase = "awaiting-measurement";
+  const result = f.store.read({ schemaVersion: 1, sessionIds: ["root"] });
+  expect(isResult(result)).toBe(true);
+  expect(result.upserts[0]?.compaction.count).toBe(2);
+  expect(result.upserts[0]?.peakTokens).toBe(100);
+});

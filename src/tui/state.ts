@@ -239,7 +239,7 @@ export function createGuardState(context: Plugin.Context) {
     evidence.clear();
     currentId = "";
   }
-  function rows(stableOrder: readonly string[] = []) {
+  function rows(stableOrder: readonly string[] = [], allDescendants = false) {
     version();
     const snapshots = new Map(
       [...clients.values()].flatMap((c) => [...c.rows]),
@@ -277,7 +277,7 @@ export function createGuardState(context: Plugin.Context) {
       currentId,
       c?.now() ?? Date.now(),
       c?.health?.staleMs ?? 300000,
-      expanded,
+      allDescendants ? new Set(nodes.map((node) => node.sessionId)) : expanded,
       maxNodes,
       (id) => {
         const session = inventory?.sessions.get(id);

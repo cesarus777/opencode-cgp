@@ -1,0 +1,47 @@
+╭─ CONTEXT GUARD ─────────────────────╮
+│ Main · deepseek-flash       RUNNING │
+│                                     │
+│ Context                 112K / 500K │
+│ ███████░░░░░░░░░░░░░░░░░░░░░░░░ 22% │
+│                                     │
+│ Compact threshold       112K / 160K │
+│ ██████████████████████░░░░░░░░░ 70% │
+│ 48K tokens until compaction         │
+│                                     │
+│ Measurement: reported · 3s ago      │
+│ Observe mode                        │
+│                                     │
+│ ── SUBAGENTS (4) ────────────────── │
+│ 3 running · 1 completed             │
+│                                     │
+│ ▾ ● explore                     82% │
+│  ████████████████████████░░░░░ 82%  │
+│  410K / 500K · CRITICAL             │
+│  RUNNING                            │
+│                                     │
+│   └─ ● indexer                  34% │
+│    █████████░░░░░░░░░░░░░░░░░░ 34%  │
+│    170K / 500K                      │
+│    RUNNING                          │
+│                                     │
+│ ● implementor                   55% │
+│  ████████████████░░░░░░░░░░░░░ 55%  │
+│  275K / 500K · WARNING              │
+│  RUNNING                            │
+│                                     │
+│ ✓ reviewer                      14% │
+│  ████░░░░░░░░░░░░░░░░░░░░░░░░░ 14%  │
+│  70K / 500K                         │
+│  COMPLETED                          │
+│                                     │
+│ Hide completed                      │
+│ Sort: pressure                      │
+│ Collapse groups                     │
+│                                     │
+│ ── STATISTICS ───────────────────── │
+│ Compactions                       4 │
+│ Active subagents                  3 │
+│ Family peaks (sum)               1M │
+│ Observed · separate windows         │
+│ Open: /context-guard                │
+╰─────────────────────────────────────╯

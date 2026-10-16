@@ -52,6 +52,7 @@ const row = object(
     ]),
     capacityTokens: count,
     outputReserveTokens: count,
+    peakTokens: count,
     policy: object(
       {
         id: text,
@@ -86,6 +87,7 @@ const row = object(
           "blocked",
           "uncertain",
         ),
+        count,
         armed: { type: "boolean" },
         blockedReason: enumeration(
           "session-removed",

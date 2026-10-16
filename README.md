@@ -2,7 +2,7 @@
 
 Configurable early compaction for root sessions and nested agents, using OpenCode's native durable compaction API. No model-limit changes, prompt injection, custom summaries, or task/workflow rewrites. Observe mode is the default.
 
-Targets **`@opencode/plugin@2.0.29`**. The published SDK, official documentation, runner implementation, and upstream continuation test were inspected. This workspace had no installed OpenCode executable or local model endpoint: **live OpenCode / Superpowers validation remains unverified**, not a claimed pass. See [compatibility](docs/compatibility.md).
+Targets **`@opencode/plugin@2.0.29`**. The published SDK, official documentation, runner implementation, and upstream continuation test were inspected. The real 2.0.29 server and native TUI now pass [local verification with a synthetic provider](docs/validation/tui-2.0.29-2026-10-16.md); real-provider compaction and Superpowers validation remain unverified. See [compatibility](docs/compatibility.md).
 
 ## Install
 
@@ -49,7 +49,7 @@ A provider measurement refers to its **completed request**, not the next assembl
 
 Open `/context-guard` or **Open Context Guard** in the command palette for current prompt occupancy, effective input capacity, trigger/headroom, measurement freshness, compaction phase and nested agent status. A native sidebar section appears where the host mounts its sidebar; the panel also works on child routes and narrow terminals. Estimates, unknown values, stale measurements and uncertain compaction remain explicit.
 
-The TUI reads bounded snapshots over public OpenCode RPC, including when telemetry is disabled. Remote clients also need a client-side package registration in `cli.json`; see [the example](examples/cli.jsonc) and [controls, installation and bounds](docs/configuration.md#native-context-guard-view). It targets the inspected 2.0.29 API. Offline native-renderer tests pass; live host and terminal-environment validation remain unverified.
+The TUI reads bounded snapshots over public OpenCode RPC, including when telemetry is disabled. Remote clients also need a client-side package registration in `cli.json`; see [the example](examples/cli.jsonc) and [controls, installation and bounds](docs/configuration.md#native-context-guard-view). It targets the inspected 2.0.29 API. The actual local host passes wide root, child and narrow grandchild panel checks. Use **Context Guard: open panel** above a child composer, where the host hides its usual prompt and palette shortcut. tmux, Neovim and cross-machine remote validation remain open.
 
 ## Inspect
 

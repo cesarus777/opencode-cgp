@@ -54,7 +54,7 @@ The package exposes separate server, RPC and TUI entries. The same checkout regi
 
 The remote server needs its own registration in the owning location. The client path is local to that client; it is never used as a remote telemetry path. Server options remain in `opencode.jsonc`. The TUI does not change enforcement, model limits, or native Context display. There are no new server configuration keys.
 
-Open **Context Guard** from the command palette or `/context-guard`. Root sessions show a native sidebar section when the host mounts its sidebar. The inspected host suppresses that sidebar in child sessions; the command opens a session panel there and in narrow terminals. The host controls focus, Escape, fullscreen and resize. Panel keys apply while focused:
+Open **Context Guard** from the command palette or `/context-guard`. Root sessions show a native sidebar section when the host mounts its sidebar. The inspected host suppresses that sidebar in child sessions; the panel also works in narrow terminals. On child routes the host also hides its normal prompt and palette shortcut; click **Context Guard: open panel** above the child composer to open the panel without leaving that route. The host controls focus, Escape, fullscreen and resize. Panel keys apply while focused:
 
 | Key       | Action                                     |
 | --------- | ------------------------------------------ |
