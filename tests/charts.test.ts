@@ -10,7 +10,12 @@ import {
 import { renderChartReport } from "../src/chartreport.ts";
 import { PerformanceHistory, type HistoryRecord } from "../src/history.ts";
 import type { PerformanceSnapshot } from "../src/performance.ts";
-import { historyChartLines, sparkline } from "../src/tui/chartformat.ts";
+import {
+  chartMetrics,
+  historyChartLines,
+  metricPlot,
+  sparkline,
+} from "../src/tui/chartformat.ts";
 import { cells } from "../src/tui/format.ts";
 
 function observation(
@@ -178,8 +183,45 @@ test("terminal sparklines align timestamps and preserve missing data and explici
       10000,
     );
     expect(lines.every((line) => cells(line) <= width)).toBe(true);
-    expect(lines.join(" ")).toContain("TTFT");
+    expect(lines.join(" ")).toContain("Live TPS");
+    expect(lines.join(" ")).not.toContain("TTFT");
+    for (const [metric, definition] of chartMetrics.entries()) {
+      const selected = historyChartLines(
+        {
+          schemaVersion: 1,
+          generatedAt: 2000,
+          enabled: true,
+          truncated: false,
+          metadata,
+          data,
+        },
+        width,
+        0,
+        10000,
+        metric,
+      );
+      expect(selected.every((line) => cells(line) <= width)).toBe(true);
+      expect(selected.join("").replaceAll(" ", "")).toContain(
+        definition.label.replaceAll(" ", ""),
+      );
+    }
   }
+});
+test("metric plots preserve zero, missing samples and gaps without connecting observations", () => {
+  const lines = metricPlot(
+    [
+      { time: 0, value: 0 },
+      { time: 4000, value: 100 },
+    ],
+    0,
+    10000,
+    13,
+    [6000],
+  );
+  expect(lines[0]).toBe("│    █ ┆    │");
+  expect(lines[5]).toBe("│▁   █ ┆    │");
+  expect(lines[6]).toBe("└───────────┘");
+  expect(lines[7]).toBe("00:00   00:00");
 });
 test("HTML is self-contained, escapes script-breaking identities and embeds executable JavaScript", () => {
   const hostile = '</script><script>alert("secret")</script>';

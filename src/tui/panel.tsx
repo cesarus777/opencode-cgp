@@ -7,16 +7,21 @@ import {
   createEffect,
   onCleanup,
   Show,
+  For,
 } from "solid-js";
 import type { GuardState } from "./state.ts";
 import { HistoryCharts } from "./charts.tsx";
 import { GuardView } from "./sidebar.tsx";
+import { chartMetrics } from "./chartformat.ts";
+import { wrap } from "./format.ts";
 export function GuardPanel(props: {
   input: PanelInput;
   state: GuardState;
   context: Plugin.Context;
 }) {
   const [showCharts, setShowCharts] = createSignal(false);
+  const [metricIndex, setMetricIndex] = createSignal(0);
+  const width = () => Math.max(4, props.input.width - 4);
   const windows = [300000, 3600000, 86400000, 7 * 86400000];
   const [windowIndex, setWindowIndex] = createSignal(1);
   const [chartRefresh, setChartRefresh] = createSignal(0);
@@ -66,6 +71,32 @@ export function GuardPanel(props: {
   props.context.keymap.layer(() => ({
     enabled: () => props.input.focused,
     commands: [
+      {
+        id: "context-guard.close",
+        title: "Close Context Guard",
+        bind: "q",
+        run: () => props.input.close(),
+      },
+      {
+        id: "context-guard.chart-previous",
+        title: "Previous chart metric",
+        bind: "left",
+        run: () => {
+          if (showCharts())
+            setMetricIndex(
+              (i) => (i + chartMetrics.length - 1) % chartMetrics.length,
+            );
+        },
+      },
+      {
+        id: "context-guard.chart-next",
+        title: "Next chart metric",
+        bind: "right",
+        run: () => {
+          if (showCharts())
+            setMetricIndex((i) => (i + 1) % chartMetrics.length);
+        },
+      },
       {
         id: "context-guard.charts",
         title: "Toggle performance charts",
@@ -146,52 +177,71 @@ export function GuardPanel(props: {
       },
     ],
   }));
+  const hints = () =>
+    showCharts()
+      ? [
+          "c back · q close",
+          "← / → metric · ↑ / ↓ session",
+          `[ / ] window · ${["5 minutes", "1 hour", "24 hours", "7 days"][windowIndex()]}`,
+          "r refresh · Enter open session",
+        ]
+      : [
+          "c charts · q close",
+          `↑ / ↓ select ${offset() + 1} · Enter open`,
+          "space expand · i inspect",
+          "r refresh · l load more",
+        ];
   return (
-    <scrollbox
-      ref={(value) => {
-        scroll = value;
-      }}
+    <box
+      flexDirection="column"
       flexGrow={1}
+      paddingLeft={2}
+      paddingRight={2}
+      paddingTop={1}
+      paddingBottom={1}
     >
-      <box visible={!showCharts()} flexDirection="column">
-        <GuardView
-          sessionID={props.input.sessionID}
-          state={props.state}
-          context={props.context}
-          width={Math.max(10, props.input.width - 4)}
-          expanded
-          family={rows()}
-          selectedId={selected()}
-          inspectId={inspectId()}
-        />
+      <scrollbox
+        ref={(value) => {
+          scroll = value;
+        }}
+        flexGrow={1}
+        minHeight={0}
+      >
+        <box visible={!showCharts()} flexDirection="column">
+          <GuardView
+            sessionID={props.input.sessionID}
+            state={props.state}
+            context={props.context}
+            width={width()}
+            expanded
+            family={rows()}
+            selectedId={selected()}
+            inspectId={inspectId()}
+          />
+          <text fg={props.context.theme.text.muted}>
+            {wrap(
+              "Guard input = prompt + caches. Native Context uses different totals.",
+              width(),
+            ).join("\n")}
+          </text>
+        </box>
+        <Show when={showCharts()}>
+          <HistoryCharts
+            sessionId={selected()}
+            windowMs={windows[windowIndex()] ?? 3600000}
+            metricIndex={metricIndex()}
+            refresh={chartRefresh()}
+            width={width()}
+            state={props.state}
+            context={props.context}
+          />
+        </Show>
+      </scrollbox>
+      <box flexDirection="column" flexShrink={0} paddingTop={1}>
+        <For each={hints().flatMap((hint) => wrap(hint, width()))}>
+          {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
+        </For>
       </box>
-      <Show when={showCharts()}>
-        <HistoryCharts
-          sessionId={selected()}
-          windowMs={windows[windowIndex()] ?? 3600000}
-          refresh={chartRefresh()}
-          width={Math.max(4, props.input.width - 6)}
-          state={props.state}
-          context={props.context}
-        />
-        <text fg={props.context.theme.text.muted}>
-          [ / ] window ·{" "}
-          {["5 minutes", "1 hour", "24 hours", "7 days"][windowIndex()]}
-        </text>
-      </Show>
-      <text fg={props.context.theme.text.muted}>r refresh / l load more</text>
-      <text fg={props.context.theme.text.muted}>
-        up/down select {offset() + 1}; Enter open
-      </text>
-      <text fg={props.context.theme.text.muted}>
-        space expand / i inspect selected / c charts
-      </text>
-      <text fg={props.context.theme.text.muted}>
-        Guard input = prompt + caches.
-      </text>
-      <text fg={props.context.theme.text.muted}>
-        Native Context uses different totals.
-      </text>
-    </scrollbox>
+    </box>
   );
 }

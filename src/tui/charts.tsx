@@ -7,6 +7,7 @@ import { wrap } from "./format.ts";
 export function HistoryCharts(props: {
   sessionId: string;
   windowMs: number;
+  metricIndex: number;
   refresh: number;
   width: number;
   state: GuardState;
@@ -68,6 +69,7 @@ export function HistoryCharts(props: {
           Math.max(4, props.width),
           range().from,
           range().to,
+          props.metricIndex,
         )
       : [];
   };
@@ -79,11 +81,13 @@ export function HistoryCharts(props: {
       <For each={wrap(status(), props.width)}>
         {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
       </For>
-      <For each={lines()}>
-        {(line) => (
-          <text fg={props.context.theme.text.base}>{line || " "}</text>
-        )}
-      </For>
+      <box flexDirection="column" paddingTop={1}>
+        <For each={lines()}>
+          {(line) => (
+            <text fg={props.context.theme.text.base}>{line || " "}</text>
+          )}
+        </For>
+      </box>
     </box>
   );
 }

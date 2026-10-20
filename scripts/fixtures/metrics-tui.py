@@ -80,6 +80,13 @@ try:
     expect("Performance charts")
     expect("Live TPS")
     expect("1 hour")
+    expect("c back")
+    expect("q close")
+    key("\x1b[C")
+    expect("Avg model")
+    assert "Live TPS" not in frame(), "one metric at a time"
+    key("\x1b[D")
+    expect("Live TPS")
     key("[")
     expect("5 minutes")
     key("]")
@@ -111,9 +118,9 @@ try:
     urllib.request.urlopen(connection["url"] + "/__validation_delay").close()
     cancelled = counts()["cancelled"]
     key("r")
-    key("\r")
+    key("q")
     pump(1)
-    assert "Performance charts" not in frame(), "Enter closes the panel"
+    assert "Performance charts" not in frame(), "q closes the panel"
     assert counts()["cancelled"] > cancelled, "close aborts outstanding history request"
     before = counts()
     pump(16)

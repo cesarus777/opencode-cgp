@@ -145,6 +145,14 @@ try {
   await host.renderOnce();
   assert.equal(consumers, 1);
   assert.match(host.captureCharFrame(), /Context Guard/);
+  assert.ok(
+    host
+      .captureCharFrame()
+      .split("\n")
+      .some((line) => line.startsWith("  Context Guard")),
+    "panel has horizontal padding",
+  );
+  assert.match(host.captureCharFrame(), /q close/);
   const run = (id: string) => {
     const command = layer?.().commands?.find((command) => command.id === id);
     assert.ok(command);
@@ -154,11 +162,35 @@ try {
   await host.renderOnce();
   assert.match(host.captureCharFrame(), /agent120/);
   assert.doesNotMatch(host.captureCharFrame(), /agent0 RUN/);
+  assert.match(
+    host.captureCharFrame(),
+    /q close/,
+    "close hint stays visible after scrolling",
+  );
+  host.resize(40, 28);
   run("context-guard.charts");
   await Bun.sleep(5);
   await host.renderOnce();
   assert.match(host.captureCharFrame(), /Performance charts/);
   assert.match(host.captureCharFrame(), /Live TPS/);
+  assert.doesNotMatch(host.captureCharFrame(), /Avg model/);
+  assert.match(host.captureCharFrame(), /c back · q close/);
+  assert.match(host.captureCharFrame(), /← \/ → metric/);
+  const readsBeforeMetric = historyReads.length;
+  run("context-guard.chart-next");
+  await host.renderOnce();
+  assert.match(host.captureCharFrame(), /Avg model/);
+  assert.doesNotMatch(host.captureCharFrame(), /Live TPS/);
+  assert.equal(
+    historyReads.length,
+    readsBeforeMetric,
+    "metric changes reuse retained history",
+  );
+  run("context-guard.chart-previous");
+  run("context-guard.chart-previous");
+  await host.renderOnce();
+  assert.match(host.captureCharFrame(), /Cumulative output/);
+  run("context-guard.chart-next");
   assert.equal(consumers, 1);
   assert.equal(historyReads.at(-1)?.sessionId, "s120");
   run("context-guard.chart-longer");
@@ -167,6 +199,10 @@ try {
   assert.equal(historyReads.at(-1)?.windowMs, 86400000);
   run("context-guard.charts");
   await host.renderOnce();
+  assert.doesNotMatch(host.captureCharFrame(), /Performance charts/);
+  run("context-guard.close");
+  assert.equal(closed, true);
+  closed = false;
   run("context-guard.open");
   assert.equal(destination, "s120");
   assert.equal(closed, true);

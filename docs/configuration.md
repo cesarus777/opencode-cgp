@@ -63,14 +63,18 @@ The remote server needs its own registration in the owning location. The client 
 
 Open **Context Guard** from the command palette or `/context-guard`. Root sessions show a native sidebar section when the host mounts its sidebar. The inspected host suppresses that sidebar in child sessions; the panel also works in narrow terminals. On child routes the host also hides its normal prompt and palette shortcut; click **Context Guard: open panel** above the child composer to open the panel without leaving that route. The host controls focus, Escape, fullscreen and resize. Panel keys apply while focused:
 
-| Key       | Action                                     |
-| --------- | ------------------------------------------ |
-| Up / Down | Select a family row; keep sibling order    |
-| Enter     | Close this panel and navigate to selection |
-| Space     | Expand/collapse a completed branch         |
-| i         | Inspect selected session details           |
-| r         | Refresh inventory and measurements         |
-| l         | Resume partial inventory discovery         |
+| Key          | Action                                     |
+| ------------ | ------------------------------------------ |
+| Up / Down    | Select a family row; keep sibling order    |
+| Enter        | Close this panel and navigate to selection |
+| Space        | Expand/collapse a completed branch         |
+| i            | Inspect selected session details           |
+| r            | Refresh inventory and measurements         |
+| l            | Resume partial inventory discovery         |
+| c            | Toggle performance charts                  |
+| Left / Right | Previous/next chart metric (wraps)         |
+| [ / ]        | Shorter/longer chart time window           |
+| q            | Close the panel                            |
 
 The sidebar shows six descendants plus the family root. The panel renders a moving window of at most 25 rows. Completed branches collapse unless they contain the current ancestry, running work, crossed pressure, or blocked/uncertain compaction. Expanded-branch preferences are persisted as at most 1024 IDs; measurements and execution caches are transient.
 
@@ -113,7 +117,9 @@ Both chart surfaces display live TPS estimates, model-time and session-time aver
 
 ### Terminal panel
 
-Open `/context-guard` and press **c** to toggle charts for the selected session. **Up / Down** chooses another family instance; **[ / ]** changes the window between five minutes, one hour (default), 24 hours and seven days. **r** refreshes; history also refreshes every five seconds while chart mode is mounted. Blank sparkline cells mean no sample; **┆** marks an explicit gap. Each occupied cell shows an observed peak, with the observed min/max printed above it. Narrow terminals wrap labels and retain the chart bounds. Close/toggle chart mode to cancel its reads and polling.
+Open `/context-guard` and press **c** to show charts for the selected session. The padded panel shows one metric at a time: **Left / Right** cycles through live TPS, model/session averages, TTFT, request throughput and cumulative output. **Up / Down** chooses another family instance; **[ / ]** changes the window between five minutes, one hour (default), 24 hours and seven days. **c** returns to the monitor; **q** closes the panel. Controls stay visible in a fixed footer while content scrolls. **r** refreshes; history also refreshes every five seconds while chart mode is mounted. Switching metrics reuses the current history without another read.
+
+Charts use a six-row block plot with a zero baseline, a value scale where space permits, and UTC time labels. Blank columns mean no sample; **┆** marks an explicit gap. Each occupied column shows an observed peak, with the observed min/max printed above it. Missing measurements are never connected or filled with zero. Narrow terminals wrap labels and retain the chart bounds. Returning from chart mode or closing the panel cancels its reads and polling.
 
 The read-only `context-guard.history.v1` RPC accepts a session ID, from/to timestamps and a point bound. The owning server validates session location, limits windows to seven days, permits one archive read at a time, and caps responses at 500 points/requests and 128 gap markers. The TUI requests 240 points and shows bounded/downsampled and incomplete-data notices. It reads the server's configured archive, including for remote sessions; clients cannot choose server filesystem paths. Disabled recording and unavailable/older servers are shown explicitly. Monitoring/enforcement do not depend on this service.
 
