@@ -3,6 +3,11 @@ import type { Plugin } from "@opencode/plugin/tui";
 import type { GuardState } from "./state.ts";
 import type { GuardRow } from "../family.ts";
 import { detailLines, rowLines, clip, wrap } from "./format.ts";
+import {
+  contextChart,
+  updateContextTrace,
+  type ContextTrace,
+} from "./contextchart.ts";
 import { CompactSidebar } from "./compact.tsx";
 export function GuardView(props: {
   sessionID: string;
@@ -22,6 +27,17 @@ export function GuardView(props: {
   );
   const current = createMemo(() =>
     rows().find((row) => row.node.sessionId === props.sessionID),
+  );
+  const trace = createMemo<ContextTrace>((previous) =>
+    updateContextTrace(previous, props.expanded ? current() : undefined),
+  );
+  const chart = createMemo(() =>
+    contextChart(
+      trace().samples,
+      current()?.snapshot?.capacityTokens,
+      current()?.snapshot?.policy.triggerTokens,
+      props.width,
+    ),
   );
   const detail = createMemo(() => {
     const lines = detailLines(
@@ -97,6 +113,24 @@ export function GuardView(props: {
             props.width,
           )}
         </text>
+        <For each={chart()}>
+          {(item) => (
+            <text
+              fg={
+                item.threshold
+                  ? props.context.theme.text.feedback.warning.base
+                  : props.context.theme.text.muted
+              }
+            >
+              {item.line}
+            </text>
+          )}
+        </For>
+        <For
+          each={wrap("Recent context samples → now · ┄ trigger", props.width)}
+        >
+          {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
+        </For>
         <For each={detail()}>
           {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
         </For>

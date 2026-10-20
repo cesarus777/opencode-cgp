@@ -96,7 +96,7 @@ A provider measurement refers to its **completed request**, not the next assembl
 
 ## Native TUI
 
-Open `/context-guard` or **Open Context Guard** in the command palette for current prompt occupancy, effective input capacity, trigger/headroom, measurement freshness, compaction phase and nested agent status. A native sidebar section appears where the host mounts its sidebar; the panel also works on child routes and narrow terminals. Estimates, unknown values, stale measurements and uncertain compaction remain explicit.
+Open `/context-guard` or **Open Context Guard** in the command palette for current prompt occupancy, effective input capacity, trigger/headroom, measurement freshness, compaction phase and nested agent status. A native sidebar section appears where the host mounts its sidebar; the panel also works on child routes and narrow terminals. The main session includes a live context chart scaled to its full effective input capacity, with a horizontal compaction threshold and recent usage samples. Key values stay visible as text. Estimates, unknown values, stale measurements and uncertain compaction remain explicit.
 
 The TUI reads bounded snapshots over public OpenCode RPC, including when telemetry is disabled. Remote clients also need a client-side package registration in `cli.json`; see [the example](examples/cli.jsonc) and [controls, installation and bounds](docs/configuration.md#native-context-guard-view). It targets the inspected 2.0.29 API. The actual local host passes wide root, child and narrow grandchild panel checks. Use **Context Guard: open panel** above a child composer, where the host hides its usual prompt and palette shortcut. tmux, Neovim and cross-machine remote validation remain open.
 

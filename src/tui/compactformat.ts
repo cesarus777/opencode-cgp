@@ -1,3 +1,4 @@
+import { contextChart, type ContextSample } from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
 import { cells, clip, wrap, performanceLines } from "./format.ts";
 
@@ -27,7 +28,12 @@ export function progress(ratio: number | undefined, width: number): string {
 }
 
 export interface MainSection {
-  readonly tone: "base" | "execution" | "pressure" | "measurement";
+  readonly tone:
+    | "base"
+    | "execution"
+    | "pressure"
+    | "measurement"
+    | "threshold";
   readonly lines: readonly string[];
 }
 
@@ -35,6 +41,7 @@ export function mainSections(
   row: GuardRow | undefined,
   width: number,
   age: number,
+  samples?: readonly ContextSample[],
 ): MainSection[] {
   if (!row)
     return [{ tone: "base", lines: wrap("Loading session family...", width) }];
@@ -73,7 +80,24 @@ export function mainSections(
         ),
       ],
     },
-    { tone: "pressure", lines: [progress(ratio(s?.capacityTokens), width)] },
+    ...contextChart(
+      samples ?? (m && valid ? [{ at: m.at, tokens: m.tokens }] : []),
+      s?.capacityTokens,
+      s?.policy.triggerTokens,
+      width,
+    ).map(
+      ({ line, threshold }): MainSection => ({
+        tone: threshold ? "threshold" : "pressure",
+        lines: [line],
+      }),
+    ),
+    {
+      tone: "base",
+      lines: wrap(
+        `${ratio(s?.capacityTokens) === undefined ? "?" : Math.round((ratio(s?.capacityTokens) ?? 0) * 100)}% used · recent samples → now`,
+        width,
+      ),
+    },
     {
       tone: "base",
       lines: [
@@ -88,7 +112,15 @@ export function mainSections(
     {
       tone: "pressure",
       lines: [
-        progress(ratio(s?.policy.triggerTokens), width),
+        ...wrap(
+          `${ratio(s?.policy.triggerTokens) === undefined ? "?" : Math.round((ratio(s?.policy.triggerTokens) ?? 0) * 100)}% of threshold · ┄ trigger`,
+          width,
+        ),
+        ...(s?.capacityTokens !== undefined &&
+        s.policy.triggerTokens !== undefined &&
+        s.policy.triggerTokens > s.capacityTokens
+          ? wrap("Threshold above chart capacity", width)
+          : []),
         ...wrap(
           remaining === undefined
             ? "Compaction distance unknown"

@@ -7,6 +7,7 @@ import {
   createSignal,
 } from "solid-js";
 import type { Plugin } from "@opencode/plugin/tui";
+import { updateContextTrace, type ContextTrace } from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
 import type { GuardState } from "./state.ts";
 import { cells, clip, wrap } from "./format.ts";
@@ -38,6 +39,9 @@ export function CompactSidebar(props: {
   });
   const current = createMemo(() =>
     props.rows.find((r) => r.node.sessionId === props.sessionID),
+  );
+  const trace = createMemo<ContextTrace>((previous) =>
+    updateContextTrace(previous, current()),
   );
   const tree = createMemo(() =>
     subagentTree(
@@ -171,6 +175,7 @@ export function CompactSidebar(props: {
           current(),
           width(),
           props.state.age(props.sessionID),
+          trace().samples,
         )}
       >
         {(section) => (
@@ -180,13 +185,15 @@ export function CompactSidebar(props: {
                 fg={
                   section().tone === "execution"
                     ? executionColor(current())
-                    : section().tone === "pressure"
-                      ? pressureColor(current())
-                      : section().tone === "measurement"
-                        ? current()?.freshness === "fresh"
-                          ? colors().muted
-                          : colors().feedback.warning.base
-                        : colors().base
+                    : section().tone === "threshold"
+                      ? colors().feedback.warning.base
+                      : section().tone === "pressure"
+                        ? pressureColor(current())
+                        : section().tone === "measurement"
+                          ? current()?.freshness === "fresh"
+                            ? colors().muted
+                            : colors().feedback.warning.base
+                          : colors().base
                 }
               >
                 {line() || " "}

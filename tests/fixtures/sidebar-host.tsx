@@ -107,25 +107,35 @@ function assertColor(text: string, expected: RGBA, within?: string) {
     `Expected ${text} in ${expected.toString()}${within ? ` within ${within}` : ""}`,
   );
 }
-function assertMainBars(expected: RGBA) {
-  const bars = host
-    .captureSpans()
-    .lines.filter((line) => line.spans.some((span) => span.text.includes("█")))
-    .slice(0, 2);
-  assert.equal(bars.length, 2);
-  for (const line of bars)
-    assert.ok(
+function assertMainChart(expected: RGBA) {
+  const lines = host.captureSpans().lines;
+  const end = lines.findIndex((line) =>
+    line.spans.some((span) => span.text.includes("Compact threshold")),
+  );
+  const chart = lines.slice(0, end);
+  assert.ok(
+    chart.some((line) =>
       line.spans.some(
-        (span) => span.text.includes("█") && span.fg.equals(expected),
+        (span) => /[▁▂▃▄▅▆▇█]/.test(span.text) && span.fg.equals(expected),
       ),
-      "Main bar foreground must reflect current pressure",
-    );
+    ),
+    "Context trace reflects current pressure",
+  );
+  assert.ok(
+    chart.some((line) =>
+      line.spans.some(
+        (span) => span.text.includes("┄") && span.fg.equals(palette.warning),
+      ),
+    ),
+    "Threshold has a separate warning color",
+  );
 }
+
 try {
   await host.renderOnce();
   await host.renderOnce();
   assert.equal(consumers, 1);
-  assertMainBars(palette.success);
+  assertMainChart(palette.success);
   assertColor("RUNNING", palette.success, "Main");
   assertColor("●", palette.success, "explore");
   assertColor("explore", palette.error);
@@ -167,7 +177,7 @@ try {
   assert.ok(before?.snapshot?.measurement);
   const snapshot = {
     ...before.snapshot,
-    measurement: { ...before.snapshot.measurement, tokens: 144000 },
+    measurement: { ...before.snapshot.measurement, at: 2000, tokens: 144000 },
     compaction: {
       ...before.snapshot.compaction,
       phase: "awaiting-measurement" as const,
@@ -180,12 +190,14 @@ try {
   await host.renderOnce();
   assert.match(frame(), /144K \/ 500K/);
   assert.match(frame(), /90%/);
-  assertMainBars(palette.warning);
+  assert.match(frame(), /recent samples → now/);
+  assert.match(frame(), /██│/, "new measurements keep the earlier sample");
+  assertMainChart(palette.warning);
   assert.match(frame(), /awaiting-measurement/);
   const nearRows = rows();
   const criticalSnapshot = {
     ...snapshot,
-    measurement: { ...snapshot.measurement, tokens: 176000 },
+    measurement: { ...snapshot.measurement, at: 3000, tokens: 176000 },
   };
   setRows([
     {
@@ -196,8 +208,23 @@ try {
     ...nearRows.slice(1),
   ]);
   await host.renderOnce();
-  assertMainBars(palette.error);
+  assertMainChart(palette.error);
   assertColor("RUNNING", palette.success, "Main");
+  const compacted = {
+    ...criticalSnapshot,
+    measurement: { ...criticalSnapshot.measurement, at: 4000, tokens: 20000 },
+  };
+  setRows([
+    { ...before, snapshot: compacted, ...metric(compacted, 4000, 300000) },
+    ...nearRows.slice(1),
+  ]);
+  await host.renderOnce();
+  assert.match(frame(), /20K \/ 500K/);
+  assert.match(
+    frame(),
+    /█▃│/,
+    "post-compaction measurement drops while keeping history",
+  );
   setRows([
     {
       ...before,
@@ -207,7 +234,7 @@ try {
     ...nearRows.slice(1),
   ]);
   await host.renderOnce();
-  assertMainBars(palette.muted);
+  assertMainChart(palette.muted);
   assertColor("STALE", palette.warning);
   setRows([
     {

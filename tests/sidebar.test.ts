@@ -11,7 +11,7 @@ import { cells, rowLines, detailLines } from "../src/tui/format.ts";
 import { metric, type GuardRow } from "../src/family.ts";
 import { sidebarFamily } from "./fixtures/sidebar.ts";
 
-test("sidebar renders independent occupancy and threshold bars, unknown and stale measurements", () => {
+test("sidebar preserves occupancy and threshold text with a capacity-scaled chart, unknown and stale measurements", () => {
   const row = sidebarFamily()[0];
   expect(row).toBeDefined();
   if (!row?.snapshot) throw new Error("Missing fixture");
@@ -21,6 +21,9 @@ test("sidebar renders independent occupancy and threshold bars, unknown and stal
     expect(lines.join(" ")).toContain("22%");
     expect(lines.join(" ")).toContain("70%");
     expect(lines.join(" ")).toContain("48K");
+    expect(lines.join(" ")).toContain("100%");
+    expect(lines.join(" ")).toContain("┄");
+    expect(lines.join(" ")).not.toContain("░");
   }
   const stale: GuardRow = { ...row, ...metric(row.snapshot, 400000, 300000) };
   expect(mainLines(stale, 35, 399000).join(" ")).toContain("STALE");
