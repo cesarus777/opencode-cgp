@@ -1,7 +1,13 @@
 import type { Plugin } from "@opencode/plugin/tui";
 import type { SessionInfo } from "@opencode/client";
 import { createSignal } from "solid-js";
-import { monitorRpc } from "../rpc.ts";
+import {
+  monitorRpc,
+  performanceRpc,
+  isPerformanceResult,
+  historyRpc,
+  isHistoryResult,
+} from "../rpc.ts";
 import {
   executionStatus,
   familyRows,
@@ -17,6 +23,7 @@ export function createGuardState(context: Plugin.Context) {
     scheduleExpiry();
   };
   const rpc = context.client.rpc(monitorRpc);
+  const liveRpc = context.client.rpc(performanceRpc);
   const clients = new Map<string, SnapshotClient>();
   let inventory: Inventory | undefined,
     currentId = "",
@@ -114,15 +121,28 @@ export function createGuardState(context: Plugin.Context) {
         let c = clients.get(key);
         if (!c) {
           const location = sample.location;
+          // Probe once per location. A failed v2 probe falls back to the unchanged v1 contract.
+          let selectedRpc: typeof rpc | typeof liveRpc = rpc;
+          try {
+            const probe = await liveRpc.read(
+              { schemaVersion: 1, sessionIds: [] },
+              { location, signal },
+            );
+            if (isPerformanceResult(probe)) selectedRpc = liveRpc;
+          } catch {
+            /* Older servers expose only v1. */
+          }
+          if (signal.aborted || generation !== scanGeneration) return;
+          const source = selectedRpc;
           c = new SnapshotClient(
             {
               read: (_key, ids, requestSignal) =>
-                rpc.read(
+                source.read(
                   { schemaVersion: 1, sessionIds: ids },
                   { location, signal: requestSignal },
                 ),
               subscribe: async function* (_key, requestSignal) {
-                for await (const event of rpc.events.subscribe("changed", {
+                for await (const event of source.events.subscribe("changed", {
                   signal: requestSignal,
                 })) {
                   if (event.location && sameLocation(event.location, location))
@@ -295,6 +315,19 @@ export function createGuardState(context: Plugin.Context) {
   return {
     version,
     acquire,
+    async history(id: string, from: number, to: number, signal: AbortSignal) {
+      const info = inventory?.sessions.get(id);
+      if (!info) throw new Error("Session location unavailable");
+      const result = await context.client
+        .rpc(historyRpc)
+        .read(
+          { schemaVersion: 1, sessionId: id, from, to, maxPoints: 240 },
+          { location: info.location, signal },
+        );
+      if (!isHistoryResult(result))
+        throw new Error("Incompatible history service");
+      return result;
+    },
     rows,
     dispose: stop,
     age(id: string) {

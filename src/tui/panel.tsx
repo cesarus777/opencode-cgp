@@ -1,14 +1,25 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { PanelInput } from "@opencode/plugin/tui/context";
-import { createSignal, createMemo, createEffect, onCleanup } from "solid-js";
+import {
+  createSignal,
+  createMemo,
+  createEffect,
+  onCleanup,
+  Show,
+} from "solid-js";
 import type { GuardState } from "./state.ts";
+import { HistoryCharts } from "./charts.tsx";
 import { GuardView } from "./sidebar.tsx";
 export function GuardPanel(props: {
   input: PanelInput;
   state: GuardState;
   context: Plugin.Context;
 }) {
+  const [showCharts, setShowCharts] = createSignal(false);
+  const windows = [300000, 3600000, 86400000, 7 * 86400000];
+  const [windowIndex, setWindowIndex] = createSignal(1);
+  const [chartRefresh, setChartRefresh] = createSignal(0);
   const [inspectId, setInspectId] = createSignal<string>();
   const [selected, setSelected] = createSignal(props.input.sessionID);
   const [order, setOrder] = createSignal<readonly string[]>([]);
@@ -49,12 +60,35 @@ export function GuardPanel(props: {
       rows()[Math.max(0, Math.min(rows().length - 1, offset() + delta))];
     if (row) {
       setSelected(row.node.sessionId);
-      revealSelection();
+      if (!showCharts()) revealSelection();
     }
   }
   props.context.keymap.layer(() => ({
     enabled: () => props.input.focused,
     commands: [
+      {
+        id: "context-guard.charts",
+        title: "Toggle performance charts",
+        bind: "c",
+        run: () => setShowCharts((v) => !v),
+      },
+      {
+        id: "context-guard.chart-shorter",
+        title: "Shorter chart window",
+        bind: "[",
+        run: () => {
+          if (showCharts()) setWindowIndex((i) => Math.max(0, i - 1));
+        },
+      },
+      {
+        id: "context-guard.chart-longer",
+        title: "Longer chart window",
+        bind: "]",
+        run: () => {
+          if (showCharts())
+            setWindowIndex((i) => Math.min(windows.length - 1, i + 1));
+        },
+      },
       {
         id: "context-guard.inspect",
         title: "Inspect selected session",
@@ -69,6 +103,7 @@ export function GuardPanel(props: {
         run: () => {
           setOrder([]);
           props.state.refresh();
+          setChartRefresh((n) => n + 1);
         },
       },
       {
@@ -118,22 +153,38 @@ export function GuardPanel(props: {
       }}
       flexGrow={1}
     >
-      <GuardView
-        sessionID={props.input.sessionID}
-        state={props.state}
-        context={props.context}
-        width={Math.max(10, props.input.width - 4)}
-        expanded
-        family={rows()}
-        selectedId={selected()}
-        inspectId={inspectId()}
-      />
+      <box visible={!showCharts()} flexDirection="column">
+        <GuardView
+          sessionID={props.input.sessionID}
+          state={props.state}
+          context={props.context}
+          width={Math.max(10, props.input.width - 4)}
+          expanded
+          family={rows()}
+          selectedId={selected()}
+          inspectId={inspectId()}
+        />
+      </box>
+      <Show when={showCharts()}>
+        <HistoryCharts
+          sessionId={selected()}
+          windowMs={windows[windowIndex()] ?? 3600000}
+          refresh={chartRefresh()}
+          width={Math.max(4, props.input.width - 6)}
+          state={props.state}
+          context={props.context}
+        />
+        <text fg={props.context.theme.text.muted}>
+          [ / ] window ·{" "}
+          {["5 minutes", "1 hour", "24 hours", "7 days"][windowIndex()]}
+        </text>
+      </Show>
       <text fg={props.context.theme.text.muted}>r refresh / l load more</text>
       <text fg={props.context.theme.text.muted}>
         up/down select {offset() + 1}; Enter open
       </text>
       <text fg={props.context.theme.text.muted}>
-        space expand / i inspect selected
+        space expand / i inspect selected / c charts
       </text>
       <text fg={props.context.theme.text.muted}>
         Guard input = prompt + caches.

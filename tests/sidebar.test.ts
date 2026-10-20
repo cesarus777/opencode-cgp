@@ -7,7 +7,7 @@ import {
   statistics,
   subagentTree,
 } from "../src/tui/compactformat.ts";
-import { cells } from "../src/tui/format.ts";
+import { cells, rowLines, detailLines } from "../src/tui/format.ts";
 import { metric, type GuardRow } from "../src/family.ts";
 import { sidebarFamily } from "./fixtures/sidebar.ts";
 
@@ -138,4 +138,44 @@ test("native sidebar matches the reviewed frame and supports reactive controls",
   expect(stderr).toBe("");
   expect(code).toBe(0);
   expect(stdout).toContain("PASS: sidebar layout");
+});
+
+test("performance labels preserve estimates, independent averages and partial timing in narrow rows", () => {
+  const original = sidebarFamily()[0];
+  if (!original?.snapshot) throw new Error("Missing fixture");
+  const row: GuardRow = {
+    ...original,
+    snapshot: {
+      ...original.snapshot,
+      performance: {
+        sessionCreatedAt: 1000,
+        observedSince: 1000,
+        at: 2000,
+        status: "streaming",
+        partial: true,
+        liveTps: 12.3,
+        averageModelTps: 45,
+        averageSessionTps: 2,
+        ttftMs: 200,
+        estimatedOutputTokens: 12.3,
+        modelOutputTokens: 45,
+        modelDurationMs: 1000,
+        completedRequests: 1,
+        tokenSource: "estimated",
+      },
+    },
+  };
+  for (const width of [16, 20, 35, 80]) {
+    const lines = [
+      ...agentLines(row, width),
+      ...rowLines(row, width),
+      ...detailLines(row, width, true),
+    ];
+    expect(lines.every((line) => cells(line) <= width)).toBe(true);
+    const text = lines.join(" ");
+    expect(text).toContain("~12.3");
+    expect(text).toContain("partial");
+    expect(text).toContain("Avg model 45.0");
+    expect(text).toContain("TTFT ~0.20s");
+  }
 });

@@ -80,6 +80,7 @@ export function rowLines(row: GuardRow, width: number) {
   );
   return [
     clip(`${label}${suffix}`, width),
+    ...performanceLines(row, width),
     ...wrap(
       `${quantity(m?.tokens)}/${quantity(s?.capacityTokens)} input; to ${quantity(row.triggerDeltaTokens)}`,
       width,
@@ -112,6 +113,7 @@ export function detailLines(
   const headroom = row.triggerDeltaTokens;
   const lines = [
     `${s.agent ?? "?"} / ${s.model ?? "?"}`,
+    ...performanceLines(row, width),
     `${m?.confidence === "approximate" ? "~" : ""}${quantity(m?.tokens)} / ${quantity(s.capacityTokens)} input`,
     `${row.utilizationPercent?.toFixed(1) ?? "?"}% ${row.pressure === "crossed" ? "!! crossed" : row.pressure === "near" ? "! near" : row.freshness.toUpperCase()}`,
     `Trigger ${threshold.type === "ratio" ? `${threshold.value * 100}%` : `${threshold.value} ${threshold.type}`} (${s.policy.comparison})`,
@@ -160,4 +162,25 @@ export function wrap(value: string, width: number): string[] {
   }
   if (part) result.push(part);
   return result;
+}
+
+export function performanceLines(row: GuardRow, width: number): string[] {
+  const p = row.snapshot?.performance;
+  if (!p) return [];
+  const value = (n: number | undefined) =>
+    n === undefined ? "?" : n.toFixed(1);
+  return [
+    ...wrap(
+      `TPS ${p.status === "waiting" ? "waiting" : `${p.status === "streaming" ? "~" : ""}${value(p.liveTps)}`} · ${p.status}${p.partial ? " · partial" : ""}`,
+      width,
+    ),
+    ...wrap(
+      `Avg model ${value(p.averageModelTps)} · Avg session ${value(p.averageSessionTps)}`,
+      width,
+    ),
+    ...wrap(
+      `TTFT ${p.ttftMs === undefined ? "?" : `~${(p.ttftMs / 1000).toFixed(2)}s`}${p.latestRequestTps === undefined ? "" : ` · Last ${value(p.latestRequestTps)} t/s`}`,
+      width,
+    ),
+  ];
 }

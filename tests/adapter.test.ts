@@ -1,4 +1,4 @@
-import { isBatch, isResult } from "../src/rpc.ts";
+import { isBatch, isResult, isPerformanceResult } from "../src/rpc.ts";
 import type { SnapshotBatch } from "../src/snapshot.ts";
 import { test, expect } from "bun:test";
 import type { OpenCodeEvent, SessionInfo } from "@opencode/client";
@@ -71,10 +71,16 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
     });
   let readSnapshot: ((ids: string[]) => Promise<unknown>) | undefined;
   const snapshots: SnapshotBatch[] = [];
+  let readPerformance: ((ids: string[]) => Promise<unknown>) | undefined;
+  const performanceSnapshots: SnapshotBatch[] = [];
+  const storage = new Map<
+    string,
+    Awaited<ReturnType<Host["storage"]["get"]>>
+  >();
   const host: Host = {
     rpc: {
-      register: async (_definition, handlers) => {
-        readSnapshot = (ids) =>
+      register: async (definition, handlers) => {
+        const read = (ids: string[]) =>
           handlers.read(
             { schemaVersion: 1, sessionIds: ids },
             {
@@ -84,10 +90,25 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
               },
             },
           );
+        if (definition.id === "context-guard.monitor.v1") readSnapshot = read;
+        else if (definition.id === "context-guard.monitor.v2")
+          readPerformance = read;
         return {
           events: {
             emit: async (_name, batch) => {
-              if (isBatch(batch)) snapshots.push(batch);
+              if (
+                definition.id === "context-guard.monitor.v1" &&
+                isBatch(batch)
+              )
+                snapshots.push(batch);
+              if (definition.id === "context-guard.monitor.v2") {
+                const value: unknown = {
+                  ...(batch && typeof batch === "object" ? batch : {}),
+                  unavailable: [],
+                };
+                if (isPerformanceResult(value))
+                  performanceSnapshots.push(value);
+              }
             },
           },
           dispose: async () => {
@@ -98,11 +119,16 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
     },
     app: { version: "2.0.29" },
     location: { directory: "/test" },
-    options: { mode, telemetry: { enabled: false } },
+    options: {
+      mode,
+      telemetry: { enabled: false },
+      history: { enabled: false },
+    },
     storage: {
-      get: async () => state,
-      set: async (_k, value) => {
-        state = structuredClone(value);
+      get: async (key) => storage.get(key),
+      set: async (key, value) => {
+        storage.set(key, structuredClone(value));
+        if (key === "safety") state = structuredClone(value);
       },
     },
     model: {
@@ -182,6 +208,12 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
       return readSnapshot(ids);
     },
     snapshots,
+    performanceSnapshots,
+    readPerformance: (ids: string[]) => {
+      if (!readPerformance) throw new Error("Performance RPC not registered");
+      return readPerformance(ids);
+    },
+    sessions,
     disposed: () => disposed,
     state: () => state,
   };
@@ -311,8 +343,8 @@ test("storage read failure does not overwrite unknown durable safety state or ad
     get: async () => {
       throw new Error("storage offline");
     },
-    set: async () => {
-      writes++;
+    set: async (key) => {
+      if (key === "safety") writes++;
     },
   };
   const cleanup = await setup(f.host, f.sink);
@@ -341,8 +373,8 @@ test("malformed stored safety state disables admission without overwriting it", 
   let writes = 0;
   f.host.storage = {
     get: async () => [{ sessionId: "ses_child", compaction: {} }],
-    set: async () => {
-      writes++;
+    set: async (key) => {
+      if (key === "safety") writes++;
     },
   };
   const cleanup = await setup(f.host, f.sink);
@@ -441,5 +473,184 @@ test("a catalog populated after startup repairs resident capacity without admitt
     await until(() => f.calls.length === 1);
   } finally {
     await cleanup();
+  }
+});
+
+test("streaming metrics reconcile per child, avoid delta metadata reads and keep v1 rows unchanged", async () => {
+  const f = fixture("observe");
+  f.add("child", "parent");
+  f.add("sibling", "parent");
+  let gets = 0,
+    writes = 0;
+  const get = f.host.session.get,
+    set = f.host.storage.set;
+  f.host.session.get = async (...args) => {
+    gets++;
+    return get(...args);
+  };
+  f.host.storage = {
+    get: f.host.storage.get,
+    set: async (...args) => {
+      writes++;
+      return set(...args);
+    },
+  };
+  const stop = await setup(f.host, f.sink);
+  try {
+    const started = Date.now() - 1000;
+    for (const id of ["child", "sibling"])
+      f.events.push({
+        ...f.base(id),
+        type: "session.step.started",
+        data: {
+          sessionID: id,
+          assistantMessageID: id,
+          agent: "build",
+          model: { providerID: "local", id: "deepseek" },
+          started,
+        },
+      });
+    await until(
+      () => f.logs.filter((e) => e.type === "session-state").length >= 2,
+    );
+    const before = gets,
+      beforeWrites = writes;
+    const delta = {
+      id: "delta",
+      created: started + 200,
+      location: { directory: "/test" },
+      type: "session.reasoning.delta" as const,
+      data: {
+        sessionID: "child",
+        assistantMessageID: "child",
+        ordinal: 0,
+        delta: "SECRET THOUGHT",
+      },
+    };
+    f.events.push(delta);
+    f.events.push(delta);
+    f.events.push({
+      ...delta,
+      id: "foreign",
+      location: { directory: "/foreign" },
+    });
+    await Bun.sleep(30);
+    expect(gets).toBe(before);
+    expect(writes).toBe(beforeWrites);
+    const live = await f.readPerformance(["child", "sibling"]);
+    expect(isPerformanceResult(live)).toBe(true);
+    if (!isPerformanceResult(live)) throw new Error("Invalid v2");
+    const child = live.upserts.find(
+      (r) => r.sessionId === "child",
+    )?.performance;
+    expect(child).toMatchObject({
+      ttftMs: 200,
+      estimatedOutputTokens: "SECRET THOUGHT".length / 4,
+      status: "streaming",
+    });
+    expect(
+      live.upserts.find((r) => r.sessionId === "sibling")?.performance
+        ?.estimatedOutputTokens,
+    ).toBe(0);
+    expect(JSON.stringify(live)).not.toContain("SECRET");
+    const old = await f.read(["child"]);
+    expect(isResult(old)).toBe(true);
+    if (!isResult(old)) throw new Error("Invalid v1");
+    expect(old.upserts[0]).not.toHaveProperty("performance");
+    f.events.push({
+      ...f.base("child"),
+      created: started + 1000,
+      type: "session.step.streamed",
+      data: { sessionID: "child", assistantMessageID: "child" },
+    });
+    f.events.push({
+      ...f.base("child"),
+      created: started + 9000,
+      type: "session.step.ended",
+      data: {
+        sessionID: "child",
+        assistantMessageID: "child",
+        finish: "stop",
+        cost: 0,
+        tokens: { ...zero, input: 100, output: 60, reasoning: 40 },
+      },
+    });
+    await until(() =>
+      f.logs.some((e) => e.session?.usage.current?.requestId === "child"),
+    );
+    const ended = await f.readPerformance(["child"]);
+    if (!isPerformanceResult(ended)) throw new Error("Invalid ended v2");
+    expect(ended.upserts[0]?.performance).toMatchObject({
+      averageModelTps: 100,
+      latestRequestTps: 100,
+      modelDurationMs: 1000,
+      modelOutputTokens: 100,
+      completedRequests: 1,
+      tokenSource: "reported",
+      liveTps: 0,
+    });
+  } finally {
+    await stop();
+  }
+});
+
+test("performance checkpoints restore aggregates independently of safety storage", async () => {
+  const f = fixture("observe");
+  f.add("root");
+  let stop = await setup(f.host, f.sink);
+  const started = Date.now() - 2000;
+  f.events.push({
+    ...f.base("root"),
+    type: "session.step.started",
+    data: {
+      sessionID: "root",
+      assistantMessageID: "r",
+      agent: "build",
+      model: { providerID: "local", id: "deepseek" },
+      started,
+    },
+  });
+  f.events.push({
+    ...f.base("root"),
+    created: started + 1000,
+    type: "session.step.streamed",
+    data: { sessionID: "root", assistantMessageID: "r" },
+  });
+  f.events.push({
+    ...f.base("root"),
+    type: "session.step.ended",
+    data: {
+      sessionID: "root",
+      assistantMessageID: "r",
+      finish: "stop",
+      cost: 0,
+      tokens: { ...zero, input: 100, output: 50 },
+    },
+  });
+  await until(() =>
+    f.logs.some((e) => e.session?.usage.current?.requestId === "r"),
+  );
+  await stop();
+  stop = await setup(f.host, f.sink);
+  try {
+    f.events.push({
+      ...f.base("root"),
+      type: "session.execution.started",
+      data: { sessionID: "root" },
+    });
+    await until(() =>
+      f.performanceSnapshots.some((b) =>
+        b.upserts.some((r) => r.performance?.partial),
+      ),
+    );
+    const restored = await f.readPerformance(["root"]);
+    if (!isPerformanceResult(restored)) throw new Error("Invalid restored v2");
+    expect(restored.upserts[0]?.performance).toMatchObject({
+      averageModelTps: 50,
+      partial: true,
+      completedRequests: 1,
+    });
+  } finally {
+    await stop();
   }
 });

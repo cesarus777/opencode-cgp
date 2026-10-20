@@ -23,8 +23,49 @@ const family: GuardRow[] = Array.from({ length: 150 }, (_, i) => ({
   pressure: "unknown",
   hidden: 0,
 }));
+const historyReads: { sessionId: string; windowMs: number }[] = [];
 const state: GuardState = {
   version: () => 0,
+  history: async (id, from, to) => {
+    historyReads.push({ sessionId: id, windowMs: to - from });
+    return {
+      schemaVersion: 1,
+      generatedAt: to,
+      enabled: true,
+      truncated: false,
+      metadata: {
+        schema: 1,
+        retainedBytes: 100,
+        skippedBytes: 0,
+        malformedRecords: 0,
+        completeness: "bounded-retention",
+      },
+      data: {
+        schema: 1,
+        maxPoints: 240,
+        omittedSessions: 0,
+        gaps: [],
+        series: [
+          {
+            sessionId: id,
+            agents: ["build"],
+            models: ["p/m"],
+            points: [
+              {
+                time: to - 1000,
+                liveTps: 10,
+                averageModelTps: 15,
+                partial: false,
+                breakBefore: true,
+              },
+            ],
+            requests: [],
+            originalPoints: 1,
+          },
+        ],
+      },
+    };
+  },
   acquire: () => {
     consumers++;
     return {
@@ -113,6 +154,19 @@ try {
   await host.renderOnce();
   assert.match(host.captureCharFrame(), /agent120/);
   assert.doesNotMatch(host.captureCharFrame(), /agent0 RUN/);
+  run("context-guard.charts");
+  await Bun.sleep(5);
+  await host.renderOnce();
+  assert.match(host.captureCharFrame(), /Performance charts/);
+  assert.match(host.captureCharFrame(), /Live TPS/);
+  assert.equal(consumers, 1);
+  assert.equal(historyReads.at(-1)?.sessionId, "s120");
+  run("context-guard.chart-longer");
+  await Bun.sleep(5);
+  await host.renderOnce();
+  assert.equal(historyReads.at(-1)?.windowMs, 86400000);
+  run("context-guard.charts");
+  await host.renderOnce();
   run("context-guard.open");
   assert.equal(destination, "s120");
   assert.equal(closed, true);

@@ -4,22 +4,29 @@ The TypeScript schema is `Config` in `src/types.ts`; `parseConfig(unknown)` in `
 
 Defaults:
 
-| Setting                       | Default                                 |
-| ----------------------------- | --------------------------------------- |
-| enabled / mode                | true / observe                          |
-| defaults.threshold            | tokens: 131072                          |
-| policies                      | []                                      |
-| safety.cooldownMs             | 60000                                   |
-| safety.minReclaimTokens       | 8192                                    |
-| safety.maxConsecutiveFailures | 3                                       |
-| safety.pendingTimeoutMs       | 300000                                  |
-| safety.staleMs                | 300000                                  |
-| safety.maxSessions            | 1024                                    |
-| safety.sessionTtlMs           | 86400000                                |
-| safety.outputReserveTokens    | positive model output limit             |
-| telemetry.enabled / jsonl     | true / true                             |
-| telemetry.maxBytes            | 8388608 per file, two files retained    |
-| telemetry.path                | location hash in user's state directory |
+| Setting                       | Default                                      |
+| ----------------------------- | -------------------------------------------- |
+| enabled / mode                | true / observe                               |
+| defaults.threshold            | tokens: 131072                               |
+| policies                      | []                                           |
+| safety.cooldownMs             | 60000                                        |
+| safety.minReclaimTokens       | 8192                                         |
+| safety.maxConsecutiveFailures | 3                                            |
+| safety.pendingTimeoutMs       | 300000                                       |
+| safety.staleMs                | 300000                                       |
+| safety.maxSessions            | 1024                                         |
+| safety.sessionTtlMs           | 86400000                                     |
+| safety.outputReserveTokens    | positive model output limit                  |
+| metrics.enabled               | true                                         |
+| metrics.sampleIntervalMs      | 500                                          |
+| metrics.rollingWindowMs       | 2000                                         |
+| history.enabled               | true                                         |
+| history.retentionDays         | 7                                            |
+| history.maxBytes              | 67108864 total                               |
+| history.path                  | location journal path + `.metrics` directory |
+| telemetry.enabled / jsonl     | true / true                                  |
+| telemetry.maxBytes            | 8388608 per file, two files retained         |
+| telemetry.path                | location hash in user's state directory      |
 
 All safety/time/size values are safe integers; cooldown, reclaim and explicit reservation may be zero. Positive bounds are required for other fields. Reclaim must be smaller than every absolute threshold. `policies` has at most 256 entries. Selectors are case-sensitive, at most 256 characters, with `*` and `?` wildcards only; other regex characters are literal. Model selectors contain a slash and match the complete `providerID/modelID`. Role `main` means no parentID; any depth with a parentID is `subagent`. There is no inferred specificity: last matching policy wins in array order.
 
@@ -52,7 +59,7 @@ The package exposes separate server, RPC and TUI entries. The same package or ch
 }
 ```
 
-The remote server needs its own registration in the owning location. The client path is local to that client; it is never used as a remote telemetry path. Server options remain in `opencode.jsonc`. The TUI does not change enforcement, model limits, or native Context display. There are no new server configuration keys.
+The remote server needs its own registration in the owning location. The client path is local to that client; it is never used as a remote telemetry path. Server options remain in `opencode.jsonc`. The TUI does not change enforcement, model limits, or native Context display. Performance collection and history use the server-side `metrics` and `history` options.
 
 Open **Context Guard** from the command palette or `/context-guard`. Root sessions show a native sidebar section when the host mounts its sidebar. The inspected host suppresses that sidebar in child sessions; the panel also works in narrow terminals. On child routes the host also hides its normal prompt and palette shortcut; click **Context Guard: open panel** above the child composer to open the panel without leaving that route. The host controls focus, Escape, fullscreen and resize. Panel keys apply while focused:
 
@@ -72,3 +79,56 @@ Occupancy is prompt input plus cache reads/writes divided by Guard's effective i
 Snapshots work with telemetry disabled. Public RPC reads and live events carry only allowlisted scalar metadata and numeric usage. Reads cannot discover monitor sessions, admit compaction, restore suspended enforcement, or read transcripts. Native inventory discovers ancestors and paginated descendants outside rendering; discovered but unmonitored sessions retain unknown Guard values.
 
 Automatic inventory is bounded to 1024 nodes, depth 64 and 100 list pages per scan, with one list request at a time. `l` resumes pending pages and permits up to 2048 resident client nodes, still with 100 pages per action. A partial marker remains when a bound, cycle, missing parent or failed branch prevents completeness. A visible family rescan runs every 30 seconds. Each owning location has a separate cancellable transport, reads at most 128 IDs per call with concurrency two, and reconciles every 15 seconds with a 5-second deadline. Live batches coalesce on the existing 100 ms worker. Gaps, reconnects, incompatible payloads and missing services are visible; transient errors retain last-known measurements. Hiding the last consumer aborts requests, streams, listeners and timers.
+
+## Live performance and retained history
+
+Each root/child session instance has separate metrics, even when agent names match. `TPS` is a rolling estimate of text plus reasoning characters / 4 per second; it is language/tokenizer dependent and marked `~`. The window defaults to two seconds and publication to 500 ms. Both intervals are integer milliseconds, at least 100; the window must be >= the publication interval and <= 60000.
+
+`Avg model` divides matched completed-request output + reasoning tokens by accumulated request time (request start through stream completion). It includes TTFT and excludes subsequent tool execution, backoff and idle time. It is a duration-weighted rate, not an average of individual rates. `Avg session` divides authoritative cumulative session output + reasoning by wall time since session creation; it includes idle/tool time and auxiliary work counted by the harness. Its denominator continues increasing while idle. In-flight usage is not added to either reported average. Provider omissions propagate; normalized zeros cannot always distinguish omitted usage from an actual zero.
+
+`TTFT` measures request start to the first nonempty text or reasoning delta, including publication/batching delay. It is marked `~` because it is observed output timing, not a direct provider token timestamp. Tool-only requests have unknown text/reasoning TTFT. Provider output may include generated tool arguments, so final reported rates may differ from the text/reasoning live estimate. Live TPS becomes zero after streaming stops; latest completed request TPS/TTFT remain in details until replaced by a new request. Waiting requests have no TTFT yet.
+
+`partial` means model timing coverage is incomplete: late observation of a session with existing output, an unmatched request, retry replacement, missing timing/usage, restart, eviction/recreation, or event gap. No transcript reconstruction occurs. Performance checkpoints retain matched counts/durations and durable event deduplication under `performance.v1`, separately from compaction safety. Restarts invalidate live timing and label retained aggregates partial. Unknown rates display `?` rather than zero. Metrics do not affect compaction policy.
+
+History is independent of diagnostic telemetry. `history.enabled:false` disables the archive; `metrics.enabled:false` also disables collection, checkpoints and archive writes. `history.path` is an absolute directory (not a file). Defaults use a location-hashed directory beside the default diagnostic journal; a custom `telemetry.path` does not redirect metrics. Use a dedicated history directory per location/process. History records contain scalar metadata only, never output text, reasoning, tool arguments/results, prompts or credentials.
+
+The archive stores active-session samples at most once per second, request summaries, lifecycle/terminal records and gaps. Idle sessions are not sampled continuously. Version 1 JSONL records have unique record IDs, timestamps, session/parent/agent/model identity and optional performance snapshots. Snapshots include session creation/output totals, request timing/identity, matched token/duration totals, rates, completeness and provenance. Request summaries supersede live estimates; never add their totals to sampled totals. Model averages can be recomputed from aggregate count/duration differences; preserve gaps when downsampling.
+
+Files rotate at 4 MiB or one hour, whichever comes first, and the configurable total byte cap takes precedence. Age retention uses segment start times and may remove a partly expired segment. Startup and writes prune expired/excess segments. Files are created 0600 in a 0700 directory. The bounded writer reports dropped samples and writes a gap marker when it can resume. Disk failures disable the archive and emit `history-unavailable`; live monitoring and compaction continue. `history-truncated` reports age/cap pruning. Archive completeness is always bounded by retention.
+
+Export metrics as JSON or CSV:
+
+```sh
+bun run inspect metrics /absolute/history-directory --session ses_example --from 2026-10-20T00:00:00Z --to 2026-10-21T00:00:00Z
+bun run inspect metrics /absolute/history-directory --csv > metrics.csv
+```
+
+Timestamps accept ISO dates or epoch milliseconds. JSON includes retention/read-limit metadata; CSV sends that metadata to stderr. Readers skip malformed/partial records, report them, and read at most 64 MiB of recent whole segments. Charts use the same timestamped records and preserve explicit observation gaps; see the chart commands below.
+
+The new `context-guard.monitor.v2` RPC adds optional performance snapshots while retaining the version-1 batch envelope and revision protocol. The original v1 endpoint strips performance fields. Updated clients probe v2 per location and fall back to v1; older servers show context monitoring without performance metrics.
+
+## Performance charts
+
+Both chart surfaces display live TPS estimates, model-time and session-time average TPS, per-request TTFT, completed request throughput, and cumulative output. Each session instance keeps its own series, even when agent names match. Curves break across missing samples longer than 2.5 seconds, recorded gaps, model/agent changes, counter resets, or observation epochs. Missing observations are never filled with zero. Request TTFT/throughput use one scatter observation per completed request, deduplicated by session, request ID, and start time.
+
+### Terminal panel
+
+Open `/context-guard` and press **c** to toggle charts for the selected session. **Up / Down** chooses another family instance; **[ / ]** changes the window between five minutes, one hour (default), 24 hours and seven days. **r** refreshes; history also refreshes every five seconds while chart mode is mounted. Blank sparkline cells mean no sample; **┆** marks an explicit gap. Each occupied cell shows an observed peak, with the observed min/max printed above it. Narrow terminals wrap labels and retain the chart bounds. Close/toggle chart mode to cancel its reads and polling.
+
+The read-only `context-guard.history.v1` RPC accepts a session ID, from/to timestamps and a point bound. The owning server validates session location, limits windows to seven days, permits one archive read at a time, and caps responses at 500 points/requests and 128 gap markers. The TUI requests 240 points and shows bounded/downsampled and incomplete-data notices. It reads the server's configured archive, including for remote sessions; clients cannot choose server filesystem paths. Disabled recording and unavailable/older servers are shown explicitly. Monitoring/enforcement do not depend on this service.
+
+### Interactive offline report
+
+```sh
+bun run charts /absolute/history-directory --output report.html
+bun run charts /absolute/history-directory --session ses_example --from 2026-10-20T00:00:00Z --to 2026-10-21T00:00:00Z --output day.html
+bun run inspect metrics /absolute/history-directory --chart report.html
+# Installed npm package, with Bun available:
+context-guard charts /absolute/history-directory --output report.html
+```
+
+Open the generated HTML file in a browser. It embeds its data and SVG renderer and makes no network requests. Select a session or compare up to 12 instances; filter by agent, model and UTC time; hover/focus points to see exact timestamps/values; save individual SVG charts or print the report. The four summary cards show matched/observed request counts, duration-weighted throughput, and median/p95 observed TTFT using the nearest-rank definition. Requests with missing reported usage or duration are excluded from throughput calculations, not assigned zero.
+
+CLI `--session`, `--agent`, `--model`, `--from` and `--to` restrict the data embedded in the file. Browser filters can narrow that retained subset. Agent/model filters select observations with that captured request identity; the session average curves still describe the original session's cumulative totals. The summary throughput is recomputed from retained matching request tokens and durations, so it may differ from a session's lifetime model average. Repeated lifecycle snapshots never add output or inflate request counts.
+
+`--max-points` defaults to 1000 per session (16–5000); `--max-sessions` defaults to the 128 most recently observed sessions (1–1024). Downsampling retains original timestamps, bucket endpoints and metric extrema, propagating gaps instead of averaging rates. Up to 1024 recent explicit gap markers are embedded; older discontinuities remain in curve boundaries. Full request records remain available for filtered summary calculations; request scatter drawing is separately bounded. Reports show retention, malformed-record, read-limit, omitted-session/gap and partial-coverage notices. Generation reads at most 64 MiB of history. Use `--session` to inspect an instance omitted by the report session bound. Existing output files require explicit `--force`; new reports are created 0600. Reports are snapshots: regenerate them to include new measurements.

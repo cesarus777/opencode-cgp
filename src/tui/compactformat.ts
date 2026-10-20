@@ -1,5 +1,5 @@
 import type { GuardRow } from "../family.ts";
-import { cells, clip, wrap } from "./format.ts";
+import { cells, clip, wrap, performanceLines } from "./format.ts";
 
 export function tokens(value: number | undefined): string {
   if (value === undefined || !Number.isFinite(value)) return "?";
@@ -51,6 +51,9 @@ export function mainSections(
       ? s.policy.triggerTokens - measured
       : undefined;
   return [
+    ...(row.snapshot?.performance
+      ? [{ tone: "base" as const, lines: performanceLines(row, width) }]
+      : []),
     {
       tone: "execution",
       lines: columns(
@@ -155,6 +158,7 @@ export function agentLines(row: GuardRow, width: number) {
         ? "WARNING"
         : "";
   return [
+    ...performanceLines(row, width),
     progress(
       measured !== undefined && capacity !== undefined && capacity > 0
         ? measured / capacity

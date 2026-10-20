@@ -6,7 +6,13 @@ import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin";
 // V2 host can supply its own SDK, Solid owner graph and OpenTUI renderer.
 await rm("dist", { recursive: true, force: true });
 const result = await Bun.build({
-  entrypoints: ["src/index.ts", "src/core.ts", "src/rpc.ts", "src/tui.tsx"],
+  entrypoints: [
+    "src/index.ts",
+    "src/core.ts",
+    "src/rpc.ts",
+    "src/tui.tsx",
+    "src/cli.ts",
+  ],
   outdir: "dist",
   target: "bun",
   format: "esm",
@@ -37,4 +43,4 @@ async function rewriteDeclarations(directory: string): Promise<void> {
   }
 }
 await rewriteDeclarations("dist/types");
-console.log("Built server, core, RPC, Solid TUI and declarations.");
+console.log("Built server, core, RPC, CLI, Solid TUI and declarations.");

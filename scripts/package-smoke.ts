@@ -137,6 +137,49 @@ try {
     .replace(/import type \{[^}]*\} from "\.\.\/src\/[^";]+";/g, "");
   await writeFile(join(consumer, "adapter.test.ts"), adapter);
   console.log(await run(["bun", "test", "adapter.test.ts"], consumer));
+  // The shipped CLI can generate offline charts without renderer peers.
+  const archive = join(consumer, "chart-history");
+  await mkdir(archive);
+  await writeFile(
+    join(archive, "1000-12345678-abcd.jsonl"),
+    JSON.stringify({
+      schema: 1,
+      recordId: "sample",
+      type: "sample",
+      sessionId: "chart-session",
+      time: 1000,
+      performance: {
+        sessionCreatedAt: 0,
+        observedSince: 0,
+        at: 1000,
+        status: "streaming",
+        partial: false,
+        liveTps: 10,
+        estimatedOutputTokens: 10,
+        modelOutputTokens: 0,
+        modelDurationMs: 0,
+        completedRequests: 0,
+        tokenSource: "estimated",
+      },
+    }) + "\n",
+  );
+  const report = join(consumer, "charts.html");
+  console.log(
+    await run(
+      [
+        "bun",
+        join(installed, "dist/cli.js"),
+        "charts",
+        archive,
+        "--output",
+        report,
+      ],
+      consumer,
+    ),
+  );
+  assert.ok(
+    (await readFile(report, "utf8")).includes('"sessionId":"chart-session"'),
+  );
   // Install host modules only after verifying the renderer-free server. Keep
   // host module versions aligned with the repository's tested V2 fixture.
   await run(

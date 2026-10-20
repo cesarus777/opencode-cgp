@@ -4,25 +4,45 @@ import type {
 } from "@opencode/plugin/promise/rpc";
 export interface SnapshotRpcPort {
   register(
-    definition: typeof monitorRpc,
+    definition: typeof monitorRpc | typeof performanceRpc,
     handlers: RpcHandlers<typeof monitorRpc>,
   ): Promise<RpcRegistration<typeof monitorRpc>>;
 }
-import { monitorRpc, isRead, isBatch, isResult } from "./rpc.ts";
+import {
+  monitorRpc,
+  performanceRpc,
+  isRead,
+  isBatch,
+  isResult,
+  isPerformanceBatch,
+  isPerformanceResult,
+} from "./rpc.ts";
 import type { SnapshotStore, SnapshotBatch } from "./snapshot.ts";
 export async function serveSnapshots(
   rpc: SnapshotRpcPort | undefined,
   store: SnapshotStore,
+  performance = false,
 ) {
   if (!rpc) return () => {};
-  const registration = await rpc.register(monitorRpc, {
-    read: async (input) => {
-      if (!isRead(input)) throw new Error("Invalid snapshot request");
-      const result = store.read(input);
-      if (!isResult(result)) throw new Error("Invalid snapshot projection");
-      return result;
-    },
+  const stripPerformance = <T extends SnapshotBatch>(batch: T): T => ({
+    ...batch,
+    upserts: batch.upserts.map(({ performance: _performance, ...row }) => row),
   });
+  const batchValid = performance ? isPerformanceBatch : isBatch;
+  const resultValid = performance ? isPerformanceResult : isResult;
+  const registration = await rpc.register(
+    performance ? performanceRpc : monitorRpc,
+    {
+      read: async (input) => {
+        if (!isRead(input)) throw new Error("Invalid snapshot request");
+        const raw = store.read(input);
+        const result = performance ? raw : stripPerformance(raw);
+        if (!resultValid(result))
+          throw new Error("Invalid snapshot projection");
+        return result;
+      },
+    },
+  );
   const queue: SnapshotBatch[] = [];
   const capacity = Math.ceil(store.health().maxSessions / 128) + 2;
   let busy = false,
@@ -50,8 +70,9 @@ export async function serveSnapshots(
         if (!retry && !stopped) send();
       });
   }
-  const unlisten = store.listen((batch) => {
-    if (!isBatch(batch)) return;
+  const unlisten = store.listen((raw) => {
+    const batch = performance ? raw : stripPerformance(raw);
+    if (!batchValid(batch)) return;
     queue.push(batch);
     if (queue.length > capacity) queue.shift();
     if (!retry) send();

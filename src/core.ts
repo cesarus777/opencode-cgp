@@ -7,3 +7,7 @@ export * from "./estimate.ts";
 
 export * from "./snapshot.ts";
 export * from "./family.ts";
+
+export * from "./performance.ts";
+
+export * from "./charts.ts";

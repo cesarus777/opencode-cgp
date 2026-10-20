@@ -4,7 +4,10 @@ import type {
   SnapshotReadResult,
   MonitorHealth,
 } from "../snapshot.ts";
-import { isBatch, isResult } from "../rpc.ts";
+import {
+  isPerformanceBatch as isBatch,
+  isPerformanceResult as isResult,
+} from "../rpc.ts";
 export interface SnapshotTransport {
   read(
     location: string,

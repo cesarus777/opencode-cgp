@@ -26,6 +26,17 @@ export interface Config {
     sessionTtlMs: number;
     outputReserveTokens?: number;
   };
+  metrics: {
+    enabled: boolean;
+    sampleIntervalMs: number;
+    rollingWindowMs: number;
+  };
+  history: {
+    enabled: boolean;
+    retentionDays: number;
+    maxBytes: number;
+    path?: string;
+  };
   telemetry: {
     enabled: boolean;
     jsonl: boolean;

@@ -1,3 +1,4 @@
+import type { PerformanceSnapshot } from "./performance.ts";
 import { PolicyResolver, evaluateThreshold } from "./policy.ts";
 import type {
   Config,
@@ -9,6 +10,7 @@ import type {
   CompactionPhase,
 } from "./types.ts";
 export interface ContextSnapshot {
+  readonly performance?: PerformanceSnapshot;
   readonly sessionId: string;
   readonly revision: number;
   readonly observedAt: number;
@@ -188,6 +190,9 @@ export class SnapshotStore {
     private readonly sessions: () => ReadonlyMap<string, SessionState>,
     private readonly now = Date.now,
     epoch: string = crypto.randomUUID(),
+    private readonly performanceSnapshot?: (
+      id: string,
+    ) => PerformanceSnapshot | undefined,
   ) {
     this.epoch = epoch;
   }
@@ -264,7 +269,11 @@ export class SnapshotStore {
     for (const id of this.dirty) {
       const s = resident.get(id);
       if (!s) continue;
-      const next = project(s, this.config, this.now());
+      const performance = this.performanceSnapshot?.(id);
+      const next = freezeSnapshot({
+        ...project(s, this.config, this.now()),
+        ...(performance ? { performance } : {}),
+      });
       const old = this.rows.get(id);
       if (
         old &&
@@ -333,6 +342,7 @@ export class SnapshotStore {
 }
 
 function freezeSnapshot(row: ContextSnapshot): ContextSnapshot {
+  if (row.performance) Object.freeze(row.performance);
   if (row.measurement) Object.freeze(row.measurement);
   if (row.limits) Object.freeze(row.limits);
   Object.freeze(row.policy.configured);

@@ -100,6 +100,10 @@ Open `/context-guard` or **Open Context Guard** in the command palette for curre
 
 The TUI reads bounded snapshots over public OpenCode RPC, including when telemetry is disabled. Remote clients also need a client-side package registration in `cli.json`; see [the example](examples/cli.jsonc) and [controls, installation and bounds](docs/configuration.md#native-context-guard-view). It targets the inspected 2.0.29 API. The actual local host passes wide root, child and narrow grandchild panel checks. Use **Context Guard: open panel** above a child composer, where the host hides its usual prompt and palette shortcut. tmux, Neovim and cross-machine remote validation remain open.
 
+Per-session live TPS, average model throughput, average session throughput and observed TTFT appear in the selected session and child rows. Live TPS and TTFT use `~` to mark estimates; completed rates use provider totals. Configurable local history defaults to seven days with a 64 MiB total cap, independently of diagnostic telemetry. See [metric definitions and history exports](docs/configuration.md#live-performance-and-retained-history).
+
+Press **c** in the Context Guard panel for retained-history terminal charts; use **[ / ]** to change the time window and **Up / Down** to select an agent instance. Generate a self-contained interactive browser report with `bun run charts /absolute/history-directory --output report.html`. It includes filters, UTC timestamp tooltips, request statistics and SVG export. Installed packages expose the same command as `context-guard charts ...` (Bun required). See [chart controls and limits](docs/configuration.md#performance-charts).
+
 ## Inspect
 
 The startup message reports a location-specific JSONL file under `$XDG_STATE_HOME/opencode-context-guard/` (default `~/.local/state/opencode-context-guard/`). A custom absolute `telemetry.path` is supported. Use a distinct file per plugin location/process.

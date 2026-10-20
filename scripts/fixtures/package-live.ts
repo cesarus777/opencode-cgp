@@ -3,7 +3,14 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { OpenCode } from "@opencode/client";
-import { monitorRpc, isResult } from "@cesarus777/opencode-cgp/rpc";
+import {
+  monitorRpc,
+  performanceRpc,
+  historyRpc,
+  isResult,
+  isPerformanceResult,
+  isHistoryResult,
+} from "@cesarus777/opencode-cgp/rpc";
 const root = process.cwd();
 for (const mode of ["observe", "enforce"] as const) {
   const isolated = join(root, `host-${mode}`);
@@ -81,8 +88,31 @@ for (const mode of ["observe", "enforce"] as const) {
     );
     assert.ok(isResult(snapshot));
     assert.equal(snapshot.health.mode, mode);
+    const performance = await client.rpc(performanceRpc).read(
+      { schemaVersion: 1, sessionIds: [] },
+      {
+        location: { directory: project },
+        signal: AbortSignal.timeout(10000),
+      },
+    );
+    assert.ok(isPerformanceResult(performance));
+    const session = await client.session.create({
+      location: { directory: project },
+    });
+    const history = await client.rpc(historyRpc).read(
+      {
+        schemaVersion: 1,
+        sessionId: session.id,
+        from: Date.now() - 60000,
+        to: Date.now(),
+        maxPoints: 16,
+      },
+      { location: { directory: project }, signal: AbortSignal.timeout(10000) },
+    );
+    assert.ok(isHistoryResult(history));
+    await client.session.remove({ sessionID: session.id });
     console.log(
-      `PASS: actual OpenCode server registers packed JavaScript and serves RPC in ${mode} mode`,
+      `PASS: actual OpenCode server registers packed JavaScript and serves monitor v1/v2 and history v1 RPC in ${mode} mode`,
     );
   } finally {
     child.kill("SIGTERM");

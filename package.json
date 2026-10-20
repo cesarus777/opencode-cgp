@@ -42,7 +42,10 @@
     "prepack": "bun run build",
     "prepare": "bun run build",
     "test:package": "bun scripts/package-smoke.ts",
-    "validate": "bun run format:check && bun run typecheck && bun test && bun run test:package"
+    "validate": "bun run format:check && bun run typecheck && bun test && bun run test:package",
+    "test:metrics-live": "bun scripts/metrics-live.ts",
+    "charts": "bun src/cli.ts charts",
+    "test:metrics-server-live": "bun scripts/metrics-server-live.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.0.29",
@@ -102,5 +105,8 @@
     "dist",
     "LICENSE",
     "README.md"
-  ]
+  ],
+  "bin": {
+    "context-guard": "./dist/cli.js"
+  }
 }

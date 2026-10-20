@@ -169,6 +169,191 @@ export const monitorRpc = Rpc.define({
   methods: { read: { input: readSchema, output: resultSchema } },
   events: { changed: { schema: batchSchema } },
 });
+const nonnegative = { type: "number", minimum: 0 } as const;
+export const performanceSchema = object(
+  {
+    observedSince: count,
+    at: count,
+    sessionCreatedAt: count,
+    sessionOutputTokens: count,
+    status: enumeration("waiting", "streaming", "idle", "unavailable"),
+    partial: { type: "boolean" },
+    liveTps: nonnegative,
+    averageModelTps: nonnegative,
+    averageSessionTps: nonnegative,
+    ttftMs: nonnegative,
+    latestRequestTps: nonnegative,
+    requestId: text,
+    requestAgent: text,
+    requestModel: text,
+    requestOutputTokens: count,
+    requestStartedAt: count,
+    firstOutputAt: count,
+    streamEndedAt: count,
+    estimatedOutputTokens: nonnegative,
+    modelOutputTokens: nonnegative,
+    modelDurationMs: nonnegative,
+    completedRequests: count,
+    tokenSource: enumeration("estimated", "reported", "unavailable"),
+  },
+  [
+    "sessionCreatedAt",
+    "observedSince",
+    "at",
+    "status",
+    "partial",
+    "estimatedOutputTokens",
+    "modelOutputTokens",
+    "modelDurationMs",
+    "completedRequests",
+    "tokenSource",
+  ],
+);
+// The batch envelope remains version 1; the distinct RPC ID versions its row contract.
+const performanceRow = {
+  ...row,
+  properties: { ...row.properties, performance: performanceSchema },
+};
+export const performanceBatchSchema = object({
+  ...batchFields,
+  upserts: array(performanceRow),
+});
+export const performanceResultSchema = object({
+  ...batchFields,
+  upserts: array(performanceRow),
+  unavailable: resultSchema.properties.unavailable ?? {},
+});
+export const performanceRpc = Rpc.define({
+  id: "context-guard.monitor.v2",
+  methods: { read: { input: readSchema, output: performanceResultSchema } },
+  events: { changed: { schema: performanceBatchSchema } },
+});
+export function isPerformanceBatch(value: unknown): value is SnapshotBatch {
+  return valid(value, performanceBatchSchema) && uniqueRows(value);
+}
+export function isPerformanceResult(
+  value: unknown,
+): value is SnapshotReadResult {
+  return valid(value, performanceResultSchema) && uniqueRows(value);
+}
+export function isPerformanceSnapshot(
+  value: unknown,
+): value is import("./performance.ts").PerformanceSnapshot {
+  return valid(value, performanceSchema);
+}
+const chartPointSchema = object(
+  {
+    time: count,
+    agent: text,
+    model: text,
+    breakBefore: { type: "boolean" },
+    partial: { type: "boolean" },
+    liveTps: nonnegative,
+    averageModelTps: nonnegative,
+    averageSessionTps: nonnegative,
+    sessionOutputTokens: count,
+  },
+  ["time", "breakBefore", "partial"],
+);
+const chartRequestSchema = object(
+  {
+    time: count,
+    requestId: text,
+    started: count,
+    agent: text,
+    model: text,
+    ttftMs: nonnegative,
+    outputTokens: count,
+    durationMs: nonnegative,
+    tps: nonnegative,
+    partial: { type: "boolean" },
+  },
+  ["time", "requestId", "started", "partial"],
+);
+export const historyReadSchema = object({
+  schemaVersion: { const: 1 },
+  sessionId: text,
+  from: count,
+  to: count,
+  maxPoints: { type: "integer", minimum: 16, maximum: 500 },
+});
+const historyResultSchema = object({
+  schemaVersion: { const: 1 },
+  generatedAt: count,
+  enabled: { type: "boolean" },
+  truncated: { type: "boolean" },
+  metadata: object(
+    {
+      schema: { const: 1 },
+      retainedFrom: count,
+      retainedBytes: count,
+      skippedBytes: count,
+      malformedRecords: count,
+      completeness: enumeration("bounded-retention"),
+    },
+    [
+      "schema",
+      "retainedBytes",
+      "skippedBytes",
+      "malformedRecords",
+      "completeness",
+    ],
+  ),
+  data: object(
+    {
+      schema: { const: 1 },
+      omittedSessions: count,
+      omittedGaps: count,
+      maxPoints: count,
+      gaps: array(object({ time: count, sessionId: text, reason: text }), 128),
+      series: array(
+        object(
+          {
+            sessionId: text,
+            parentId: text,
+            agents: array(text, 1024),
+            models: array(text, 1024),
+            points: array(chartPointSchema, 500),
+            requests: array(chartRequestSchema, 500),
+            originalPoints: count,
+          },
+          [
+            "sessionId",
+            "agents",
+            "models",
+            "points",
+            "requests",
+            "originalPoints",
+          ],
+        ),
+        1,
+      ),
+    },
+    ["schema", "omittedSessions", "maxPoints", "gaps", "series"],
+  ),
+});
+export const historyRpc = Rpc.define({
+  id: "context-guard.history.v1",
+  methods: { read: { input: historyReadSchema, output: historyResultSchema } },
+  events: {},
+});
+export function isHistoryRead(
+  value: unknown,
+): value is import("./historycharts.ts").HistoryChartRead {
+  return (
+    valid(value, historyReadSchema) &&
+    record(value) &&
+    typeof value.from === "number" &&
+    typeof value.to === "number" &&
+    value.from <= value.to &&
+    value.to - value.from <= 7 * 86400000
+  );
+}
+export function isHistoryResult(
+  value: unknown,
+): value is import("./historycharts.ts").HistoryChartResult {
+  return valid(value, historyResultSchema);
+}
 function record(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null && !Array.isArray(x);
 }

@@ -48,7 +48,16 @@ export function parseConfig(value: unknown = {}): Config {
   const o = object(value, "options");
   keys(
     o,
-    ["enabled", "mode", "defaults", "policies", "safety", "telemetry"],
+    [
+      "enabled",
+      "mode",
+      "defaults",
+      "policies",
+      "safety",
+      "telemetry",
+      "metrics",
+      "history",
+    ],
     "options",
   );
   if (o.mode !== undefined && o.mode !== "observe" && o.mode !== "enforce")
@@ -70,6 +79,15 @@ export function parseConfig(value: unknown = {}): Config {
     ],
     "safety",
   );
+  const metrics = object(o.metrics ?? {}, "metrics");
+  keys(metrics, ["enabled", "sampleIntervalMs", "rollingWindowMs"], "metrics");
+  const history = object(o.history ?? {}, "history");
+  keys(history, ["enabled", "retentionDays", "maxBytes", "path"], "history");
+  if (
+    history.path !== undefined &&
+    (typeof history.path !== "string" || !history.path.startsWith("/"))
+  )
+    throw new Error("history.path: expected absolute directory path");
   const t = object(o.telemetry ?? {}, "telemetry");
   keys(t, ["enabled", "jsonl", "path", "maxBytes"], "telemetry");
   if (
@@ -143,6 +161,37 @@ export function parseConfig(value: unknown = {}): Config {
             ),
           }),
     },
+    metrics: {
+      enabled: bool(metrics.enabled, true, "metrics.enabled"),
+      sampleIntervalMs: number(
+        metrics.sampleIntervalMs,
+        500,
+        "metrics.sampleIntervalMs",
+        100,
+      ),
+      rollingWindowMs: number(
+        metrics.rollingWindowMs,
+        2000,
+        "metrics.rollingWindowMs",
+        100,
+      ),
+    },
+    history: {
+      enabled: bool(history.enabled, true, "history.enabled"),
+      retentionDays: number(
+        history.retentionDays,
+        7,
+        "history.retentionDays",
+        1,
+      ),
+      maxBytes: number(
+        history.maxBytes,
+        64 * 1024 * 1024,
+        "history.maxBytes",
+        4096,
+      ),
+      ...(typeof history.path === "string" ? { path: history.path } : {}),
+    },
     telemetry: {
       enabled: bool(t.enabled, true, "telemetry.enabled"),
       jsonl: bool(t.jsonl, true, "telemetry.jsonl"),
@@ -150,6 +199,13 @@ export function parseConfig(value: unknown = {}): Config {
       ...(typeof t.path === "string" ? { path: t.path } : {}),
     },
   };
+  if (
+    config.metrics.rollingWindowMs < config.metrics.sampleIntervalMs ||
+    config.metrics.rollingWindowMs > 60000
+  )
+    throw new Error(
+      "metrics.rollingWindowMs must be >= sampleIntervalMs and <= 60000",
+    );
   for (const policy of [config.defaults, ...config.policies]) {
     if (
       policy.threshold.type === "tokens" &&

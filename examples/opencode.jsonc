@@ -27,6 +27,16 @@
           "minReclaimTokens": 8192,
           "maxConsecutiveFailures": 3,
         },
+        "metrics": {
+          "enabled": true,
+          "sampleIntervalMs": 500,
+          "rollingWindowMs": 2000,
+        },
+        "history": {
+          "enabled": true,
+          "retentionDays": 7,
+          "maxBytes": 67108864,
+        },
         "telemetry": { "enabled": true, "jsonl": true },
       },
     },

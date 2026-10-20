@@ -1,3 +1,6 @@
+import { PerformanceTracker, outputTokens } from "./performance.ts";
+import { serveHistory, type HistoryRpcPort } from "./historyserver.ts";
+import { PerformanceHistory } from "./history.ts";
 import { SnapshotStore } from "./snapshot.ts";
 import { serveSnapshots, type SnapshotRpcPort } from "./snapshotserver.ts";
 import type { Plugin } from "@opencode/plugin";
@@ -13,6 +16,7 @@ import { JsonlTelemetrySink, defaultPath } from "./telemetry.ts";
 import type { Identity, ModelLimits, TelemetrySink } from "./types.ts";
 export interface Host {
   rpc?: SnapshotRpcPort;
+  historyRpc?: HistoryRpcPort;
   app: { version: string };
   options: unknown;
   location: { directory: string };
@@ -28,7 +32,17 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     config.telemetry,
   );
   const diagnostics = injectedSink ?? disk;
-  const store = new SnapshotStore(config, () => monitor?.sessions ?? new Map());
+  const performance = new PerformanceTracker(
+    config.safety.maxSessions,
+    config.metrics.rollingWindowMs,
+  );
+  const store = new SnapshotStore(
+    config,
+    () => monitor?.sessions ?? new Map(),
+    Date.now,
+    crypto.randomUUID(),
+    config.metrics.enabled ? (id) => performance.snapshot(id) : undefined,
+  );
   let monitor: ContextMonitor | undefined;
   const sink: TelemetrySink = {
     emit(event) {
@@ -57,13 +71,38 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       diagnostics.emit(event);
     },
   };
-  const stopSnapshots = await serveSnapshots(ctx.rpc, store).catch(() => {
+  const stopV1 = await serveSnapshots(ctx.rpc, store).catch(() => {
     diagnostics.emit({
       time: Date.now(),
       type: "snapshot-service-unavailable",
     });
     return () => {};
   });
+  const stopV2 = await serveSnapshots(ctx.rpc, store, true).catch(() => {
+    diagnostics.emit({
+      time: Date.now(),
+      type: "performance-service-unavailable",
+    });
+    return () => {};
+  });
+  const stopHistory = await serveHistory(
+    ctx.historyRpc,
+    config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
+    config.enabled && config.metrics.enabled && config.history.enabled,
+    Date.now,
+    async (sessionId, signal) => {
+      const info = await ctx.session.get({ sessionID: sessionId }, { signal });
+      return info.location.directory === ctx.location.directory;
+    },
+  ).catch(() => {
+    diagnostics.emit({ time: Date.now(), type: "history-service-unavailable" });
+    return () => {};
+  });
+  const stopSnapshots = async () => {
+    await stopHistory();
+    await stopV2();
+    await stopV1();
+  };
   if (!config.enabled) {
     sink.emit({ time: Date.now(), type: "disabled" });
     return async () => {
@@ -71,6 +110,58 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       await disk.flush();
     };
   }
+  const history = new PerformanceHistory(
+    config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
+    {
+      ...config.history,
+      enabled: config.history.enabled && config.metrics.enabled,
+    },
+    Date.now,
+    (type) => diagnostics.emit({ time: Date.now(), type }),
+  );
+  await history.initialize();
+  if (config.metrics.enabled) {
+    performance.restore(
+      await ctx.storage.get("performance.v1").catch(() => undefined),
+    );
+  }
+  const performanceResidents = new Set<string>();
+  const recordPerformance = (
+    id: string,
+    type: "sample" | "request" | "lifecycle" | "gap" | "terminal",
+    event?: string,
+  ) => {
+    if (!config.metrics.enabled) return;
+    const state = monitor?.sessions.get(id),
+      snapshot = performance.snapshot(id);
+    if (!state || !snapshot) return;
+    history.emit({
+      schema: 1,
+      recordId: crypto.randomUUID(),
+      time: Date.now(),
+      type,
+      sessionId: id,
+      ...(state.parentId ? { parentId: state.parentId } : {}),
+      ...(state.agent ? { agent: state.agent } : {}),
+      ...(state.model ? { model: state.model } : {}),
+      ...(event ? { event } : {}),
+      performance: snapshot,
+    });
+  };
+  const persistPerformance = async () => {
+    if (!config.metrics.enabled) return;
+    await ctx.storage
+      .set(
+        "performance.v1",
+        performance.checkpoint().map((row) => ({ ...row })),
+      )
+      .catch(() => {
+        diagnostics.emit({
+          time: Date.now(),
+          type: "performance-persistence-unavailable",
+        });
+      });
+  };
   const controller = new AbortController();
   let stopped = false,
     persistenceHealthy = true;
@@ -218,6 +309,23 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         s.sequence = recovery.sequence ?? -1;
         recoveries.delete(sessionId);
       }
+      if (config.metrics.enabled) {
+        if (
+          !performance.snapshot(sessionId) &&
+          [...performance.ids()].length >= config.safety.maxSessions
+        ) {
+          const dormant = [...performance.ids()].find(
+            (id) => !performanceResidents.has(id),
+          );
+          if (dormant) performance.remove(dormant);
+        }
+        performance.observe(
+          sessionId,
+          info.time.created,
+          outputTokens(info.tokens),
+        );
+        performanceResidents.add(sessionId);
+      }
       s.usage.cumulative = info.tokens;
       s.usage.cumulativeScope = "session";
       store.mark(s.sessionId);
@@ -316,12 +424,15 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     );
   } catch (error) {
     for (const r of registrations) await r.dispose();
+    await history.flush();
     await stopSnapshots();
     throw error;
   }
   const relevant = new Set([
+    "session.usage.updated",
     "session.created",
     "session.step.started",
+    "session.step.streamed",
     "session.step.ended",
     "session.step.failed",
     "session.compaction.started",
@@ -337,11 +448,31 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     "session.tool.called",
   ]);
   async function handle(event: OpenCodeEvent) {
+    if (event.location && event.location.directory !== ctx.location.directory)
+      return;
+    if (
+      event.type === "session.text.delta" ||
+      event.type === "session.reasoning.delta"
+    ) {
+      if (config.metrics.enabled)
+        performance.delta(
+          event.data.sessionID,
+          event.data.assistantMessageID,
+          event.id,
+          event.created,
+          event.data.delta.length,
+        );
+      return;
+    }
     if (!relevant.has(event.type) || !("sessionID" in event.data)) return;
     const id = event.data.sessionID;
     if (event.location && event.location.directory !== ctx.location.directory)
       return;
     if (event.type === "session.deleted") {
+      recordPerformance(id, "terminal", "session.deleted");
+      performance.remove(id);
+      performanceResidents.delete(id);
+      await persistPerformance();
       store.remove(id);
       requests.delete(id);
       activeMonitor.remove(id);
@@ -359,8 +490,21 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       !activeMonitor.accept(s, event.durable.seq)
     )
       return;
+    const perfAccepted =
+      config.metrics.enabled &&
+      (!("durable" in event) ||
+        !event.durable ||
+        performance.accept(id, event.durable.seq));
     switch (event.type) {
       case "session.step.started":
+        if (perfAccepted)
+          performance.start(
+            id,
+            event.data.assistantMessageID,
+            event.data.agent,
+            `${event.data.model.providerID}/${event.data.model.id}`,
+            event.data.started,
+          );
         activeMonitor.touch(
           {
             sessionId: id,
@@ -376,8 +520,22 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         s.usage.modelRequests++;
         s.active = true;
         break;
+      case "session.step.streamed":
+        if (perfAccepted)
+          performance.streamed(
+            id,
+            event.data.assistantMessageID,
+            event.created,
+          );
+        break;
       case "session.step.ended":
       case "session.step.failed": {
+        if (perfAccepted)
+          performance.settle(
+            id,
+            event.data.assistantMessageID,
+            event.data.tokens ? outputTokens(event.data.tokens) : undefined,
+          );
         const tokens = event.data.tokens && promptTokens(event.data.tokens);
         const request = requests.get(id);
         if (
@@ -420,6 +578,9 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       case "session.execution.failed":
       case "session.execution.interrupted":
         s.active = false;
+        // Terminal execution without settlement means request timing is incomplete.
+        if (performance.snapshot(id)?.tokenSource === "estimated")
+          performance.gap(id);
         s.lastExecutionEnd = event.created;
         break;
       case "session.tool.called":
@@ -427,9 +588,43 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         break;
     }
     sink.emit({ time: Date.now(), type: "session-state", session: s });
+    if (perfAccepted) {
+      recordPerformance(
+        id,
+        event.type === "session.step.ended" ||
+          event.type === "session.step.failed"
+          ? "request"
+          : event.type.startsWith("session.execution.") &&
+              event.type !== "session.execution.started"
+            ? "terminal"
+            : "lifecycle",
+        event.type,
+      );
+      await persistPerformance();
+    }
     await persist();
   }
+  let lastPerformanceSample = 0,
+    lastHistorySample = 0;
   const timer = setInterval(() => {
+    const now = Date.now();
+    if (
+      config.metrics.enabled &&
+      now - lastPerformanceSample >= config.metrics.sampleIntervalMs
+    ) {
+      lastPerformanceSample = now;
+      for (const id of performanceResidents) {
+        store.mark(id);
+        const snapshot = performance.snapshot(id);
+        if (
+          now - lastHistorySample >= 1000 &&
+          snapshot &&
+          (snapshot.status === "waiting" || snapshot.status === "streaming")
+        )
+          recordPerformance(id, "sample");
+      }
+      if (now - lastHistorySample >= 1000) lastHistorySample = now;
+    }
     store.flush();
     if (draining || stopped) return;
     draining = true;
@@ -441,6 +636,11 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         config.safety.maxSessions
       )
         store.recover("capacity-exceeded");
+      for (const id of performanceResidents)
+        if (!activeMonitor.sessions.has(id)) {
+          performance.remove(id);
+          performanceResidents.delete(id);
+        }
       for (const id of requests.keys())
         if (!activeMonitor.sessions.has(id)) requests.delete(id);
     }).catch(() => {
@@ -462,6 +662,12 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
         /* Stream errors and normal unexpected EOF both invalidate observation continuity. */
       }
       if (!stopped) {
+        performance.gap();
+        for (const id of performanceResidents) {
+          store.mark(id);
+          recordPerformance(id, "gap", "event-stream-gap");
+        }
+        await persistPerformance();
         sink.emit({
           time: Date.now(),
           type: "event-stream-gap",
@@ -488,11 +694,13 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       detail: "Enforcement disabled; safety state could not be read",
     });
   if (!injectedSink)
-    console.error(`context-guard: ${config.mode}; diagnostics ${disk.path}`);
+    console.error(
+      `context-guard: ${config.mode}; diagnostics ${disk.path}; metrics ${history.path}`,
+    );
   sink.emit({
     time: Date.now(),
     type: "ready",
-    detail: `SDK 2.0.29; runtime ${ctx.app.version}; ${config.mode}; active-subagent=step-boundary; next-request-barrier=false; journal=${disk.path}`,
+    detail: `SDK 2.0.29; runtime ${ctx.app.version}; ${config.mode}; active-subagent=step-boundary; next-request-barrier=false; journal=${disk.path}; metrics=${history.path}`,
   });
   return async () => {
     stopped = true;
@@ -509,6 +717,8 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     await work;
     await scheduler.flush();
     await persist();
+    await persistPerformance();
+    await history.flush();
     await stopSnapshots();
     await disk.flush();
   };

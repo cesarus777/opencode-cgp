@@ -6,6 +6,8 @@ Verified against published `@opencode/plugin@2.0.29` and `@opencode/client@2.0.2
 
 The source's `packages/core/test/session-runner.test.ts` includes “runs manual compaction before the continuation of an active tool turn”. It asserts the compaction message completes and the continuation runs. The corresponding runner consumes steer compaction controls on every iteration without excluding parented sessions. This is source evidence, not a claim that the upstream test suite was executed here.
 
+Actual local 2.0.29 host validation with synthetic streaming, metrics/history RPCs, restart/retention, chart controls and completed child compaction is recorded in the [2026-10-20 report](validation/metrics-2.0.29-2026-10-20.md). The packed artifact also serves all three RPC versions in observe and enforce modes. Genuine-provider accounting and reclaim remain separate validation gates.
+
 ## Capability matrix
 
 | Criterion                                                           | Status                                                                                       |
@@ -13,7 +15,7 @@ The source's `packages/core/test/session-runner.test.ts` includes “runs manual
 | Immutable model limits; three thresholds; role/model/agent policies | Implemented and unit-tested                                                                  |
 | Root, child and nested child monitoring                             | Implemented; mocked SDK integration tested                                                   |
 | Durable public V2 compaction and completion tracking                | Implemented; compiled against published SDK                                                  |
-| Active child can compact before task end                            | Supported by inspected runner; mocked plugin path tested; live host unverified               |
+| Active child can compact before task end                            | Supported by inspected runner; mocked and synthetic-provider live paths tested               |
 | Strict compaction before the immediately next request               | **Unsupported guarantee**; asynchronous event/admission race                                 |
 | Global session inventory before next activity                       | **Unavailable on plugin SessionContext**; lazy discovery via hooks/events                    |
 | Exact next-request size from public provider metrics                | **Unavailable**; reported previous request plus labeled fallback only                        |
@@ -51,3 +53,11 @@ The tarball has been installed into a temporary clean environment and checked in
 Actual **OpenCode 2.0.29** additionally registered the installed tarball's built directory and returned RPC health in **observe and enforce** modes on 2026-10-16. These isolated servers made no model requests. This establishes real-host initialization and RPC compatibility, not real-provider compaction. The 2.0.29 configured-local loader skips direct files despite newer live docs describing file paths; use checkout directories or the packed `dist` directory for local validation. Normal npm resolution uses the package exports.
 
 The native npm-manager fetch cannot be verified until publication. Interactive TUI in the compiled host against the **packed** artifact, Git preparation in the native manager, other V2 versions, and GitHub Actions/OIDC execution remain unverified. The prior interactive synthetic-provider report applies to the source checkout. See [packed validation and reproduction](testing.md#packed-npm-artifact).
+
+## Performance metrics
+
+Live TPS uses approximate character counts from public text/reasoning deltas; exact per-token streaming counts are unavailable in the pinned SDK. Completed request rates use normalized output + reasoning and `session.step.streamed` timing. TTFT includes native delta batching and transport publication delay. Tool-only output does not establish text/reasoning TTFT. Historical model durations before observation, across restart, or across a stream gap cannot be reconstructed from cumulative tokens; rates retain an explicit partial label.
+
+Both `context-guard.monitor.v1` and `.v2` are served; v1 retains its closed payload shape. Performance integration is covered by offline SDK/mocked-adapter tests. Real-provider timing validation requires the opt-in `test:metrics-live` command and is not certified by offline tests.
+
+Charts require retained scalar history. Existing history records remain readable without migration. The updated terminal chart mode needs `context-guard.history.v1` on the owning server; older servers keep live/context views and show an unavailable-history message. Offline reports require JavaScript for interaction and embed all selected scalar identities/metrics; no external assets or service are used. Native chart formatting/rendering and HTML generation are tested offline; this does not certify a live remote provider.

@@ -81,7 +81,7 @@ test("sidebar and panel share one visible transport and repeated disposal aborts
     panel = state.acquire("r");
   await until(() => state.connection() === "live");
   expect(active).toBe(1);
-  expect(reads).toBe(1);
+  expect(reads).toBe(2);
   sidebar.release();
   expect(active).toBe(1);
   panel.release();
@@ -115,3 +115,77 @@ test("workspace identity handles canonical directory aliases and rejects another
     false,
   );
 });
+
+for (const available of [false, true])
+  test(`state selects ${available ? "v2 performance" : "v1 fallback"} with one subscription`, async () => {
+    const info = session("r"),
+      definitions: string[] = [],
+      subscribed: string[] = [];
+    const context = {
+      client: {
+        session: {
+          get: async () => info,
+          list: async () => ({ data: [], cursor: { next: null } }),
+        },
+        rpc: (definition: { id: string }) => ({
+          read: async () => {
+            definitions.push(definition.id);
+            if (!available && definition.id.endsWith("v2"))
+              throw new Error("Unknown RPC");
+            return {
+              schemaVersion: 1,
+              epoch: "e",
+              sequence: 0,
+              generatedAt: 100,
+              health: {
+                enabled: true,
+                mode: "observe",
+                enforcement: "observing",
+                reasons: [],
+                staleMs: 1000,
+                maxSessions: 1024,
+              },
+              upserts: [],
+              removed: [],
+              unavailable: [{ sessionId: "r", reason: "not-monitored" }],
+            };
+          },
+          events: {
+            subscribe: async function* (
+              _name: string,
+              { signal }: { signal: AbortSignal },
+            ) {
+              subscribed.push(definition.id);
+              await new Promise<void>((resolve) => {
+                if (signal.aborted) resolve();
+                else
+                  signal.addEventListener("abort", () => resolve(), {
+                    once: true,
+                  });
+              });
+            },
+          },
+        }),
+      },
+      data: {
+        session: { get: () => info, status: () => "idle" },
+        listen: () => () => {},
+      },
+      storage: { store: () => [{ expanded: [] }, async () => {}] },
+    } as unknown as Plugin.Context;
+    const state = createGuardState(context),
+      consumer = state.acquire("r");
+    try {
+      await until(() => state.connection() === "live");
+      expect(definitions[0]).toBe("context-guard.monitor.v2");
+      expect(definitions.at(-1)).toBe(
+        `context-guard.monitor.v${available ? 2 : 1}`,
+      );
+      expect(subscribed).toEqual([
+        `context-guard.monitor.v${available ? 2 : 1}`,
+      ]);
+    } finally {
+      consumer.release();
+      state.dispose();
+    }
+  });
