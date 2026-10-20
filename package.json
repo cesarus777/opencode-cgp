@@ -1,6 +1,6 @@
 {
   "name": "@cesarus777/opencode-cgp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "exports": {
     ".": {

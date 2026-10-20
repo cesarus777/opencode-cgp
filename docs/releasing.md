@@ -2,11 +2,11 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**. Version **0.1.0** is already public; **0.2.0** adds performance metrics, history charts, CLI reports, and live validation. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+Publish as **`@cesarus777/opencode-cgp`**. Version **0.1.0** is already public; **0.2.1** adds performance metrics, history charts, CLI reports, and live validation. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
 
 ## Local validation
 
-Use Bun **1.1.34** (the tested minimum) and Node **22.14.0** with npm **11.6.2**, matching CI. Newer tools require their own validation. Local packaging also supports npm 12's keyed JSON pack report. Install with `bun install --frozen-lockfile`; `prepare` builds the checkout, so TypeScript and renderer build dependencies must be installed.
+Use Bun **1.1.34** (the tested minimum) and Node **22.14.0** with npm **11.21.0**, matching CI. Newer tools require their own validation. Local packaging also supports npm 12's keyed JSON pack report. Install with `bun install --frozen-lockfile`; `prepare` builds the checkout, so TypeScript and renderer build dependencies must be installed.
 
 ```sh
 bun run format:check
@@ -38,18 +38,20 @@ These decisions follow [V2 publication guidance](https://dev.opencode.ai/v2/docs
 
 ## Maintainer setup (external permissions required)
 
-1. Confirm scope ownership and select an unused version. First publication requires an npm owner to bootstrap the package interactively with 2FA; trusted publisher configuration is attached to an existing package. Do not place credentials in the repository.
+1. Confirm scope ownership and select an unused version. For a new package, an npm owner can bootstrap it with staged publishing and approve it with 2FA before configuring its trusted publisher. Do not place credentials in the repository.
 2. Create a GitHub environment named `npm`, with required reviewers and deployment restrictions allowing only authorized `v*` tags. Protect release tags and the workflow/default branch against unauthorized changes. Neither workflow creates releases or pushes tags itself.
-3. In npm package settings, configure a GitHub trusted publisher: owner **cesarus777**, repository **opencode-cgp**, workflow **release.yml**, environment **npm**. Allow direct publishing. Use GitHub-hosted runners. Repository URL metadata must match the public GitHub repository for provenance.
-4. Follow npm's [trusted publishing instructions](https://docs.npmjs.com/trusted-publishers/). Node ≥22.14 and npm ≥11.5.1 are required; this workflow pins npm 11.6.2. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` secret is needed. After verifying OIDC, disable token-based publishing if appropriate. Configure a new publisher close to release time; npm documents expiry of unvalidated configurations.
+3. In npm package settings, configure a GitHub trusted publisher: owner **cesarus777**, repository **opencode-cgp**, workflow **release.yml**, environment **npm**. Leave **Allow npm publish** and **Allow npm dist-tag** unchecked; this workflow only stages packages. Use GitHub-hosted runners. Repository URL metadata must match the public GitHub repository for provenance.
+4. Follow npm's [trusted publishing instructions](https://docs.npmjs.com/trusted-publishers/). Staged publishing requires Node ≥22.14 and npm ≥11.15.0; CI and this workflow pin npm 11.21.0. No `NPM_TOKEN` or `NODE_AUTH_TOKEN` secret is needed. After verifying OIDC, disable token-based publishing if appropriate. Configure a new publisher close to release time; npm documents expiry of unvalidated configurations.
 
-After validation, an authorized npm owner can bootstrap the first release locally with `npm login` and `npm publish --access public --tag latest` (or `--tag next` for a prerelease). This is an explicit publication action: do not run it during ordinary validation. Local bootstrap does not receive GitHub provenance; subsequent tag releases use OIDC and provenance. After bootstrapping a version, configure trusted publishing for the next unused version rather than retrying that same version tag.
+For a first release, an authorized npm owner can run `npm login` and `npm stage publish --access public --tag latest` (or `--tag next` for a prerelease), then approve the staged package with 2FA on npmjs.com. This is an explicit release action: do not run it during ordinary validation. Local bootstrap does not receive GitHub provenance; subsequent tag releases use OIDC and provenance. See npm's [staged publishing instructions](https://docs.npmjs.com/staged-publishing/).
 
 ## Release
 
 Update `package.json` to an unused semantic version, run `bun install` to refresh lockfile metadata, and commit the manifest/lockfile and documentation together after review. Run the full local validation suite. With explicit maintainer authorization, tag that commit `v<exact-package-version>` and push that tag. Ordinary branch pushes only validate.
 
-The `release.yml` tag workflow checks exact tag/version equality and queries npm: only a 404 for the requested version permits publication; network/auth/registry failures fail closed. A concurrency group serializes releases. All formatting, type, unit, built-export, pack and clean-install checks must pass. The `npm` environment approval controls execution. Stable versions publish to `latest`; versions with a prerelease suffix publish to `next`. OIDC plus `--provenance` publishes a public provenance attestation. npm also refuses overwriting an existing version. All third-party actions are pinned by commit; review their upstream changes before updating pins.
+The `release.yml` tag workflow checks exact tag/version equality and queries npm: only a 404 for the requested version permits publication; network/auth/registry failures fail closed. A concurrency group serializes releases. All formatting, type, unit, built-export, pack and clean-install checks must pass. The `npm` environment approval controls execution. The workflow runs `npm stage publish --access public --provenance`, using OIDC without a registry token. Stable versions stage with the `latest` tag; prereleases stage with `next`. A successful workflow means the package is staged, not publicly released. Review the stage ID in the workflow log, inspect the package under **Staged Packages** on npmjs.com, and approve it with 2FA to publish it. Approval can also use an interactive `npm stage approve <stage-id>` session; OIDC cannot approve stages. npm refuses versions that are already published or staged; inspect an existing stage before retrying. The registry preflight only detects published versions. All third-party actions are pinned by commit; review their upstream changes before updating pins.
+
+The failed `v0.2.0` direct-publish tag remains unchanged. Version `0.2.1` is the first attempt using this staged workflow.
 
 ## Rollback
 
