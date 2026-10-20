@@ -41,10 +41,10 @@ Global configuration is `~/.config/opencode/opencode.jsonc` (or the OpenCode con
 
 Restart/reload OpenCode and look for `context-guard: observe; diagnostics ...`. Observe mode records policy decisions and never requests compaction; OpenCode's own automatic compaction remains active. Inspect diagnostics first, then set `mode` to `enforce` to admit native compaction at runtime step boundaries. The complete [example](examples/opencode.jsonc) includes model, role, and agent policies. **Last matching rule wins**; selectors within a rule are ANDed.
 
-For a known-good published version, pin the exact version in the existing entry's `package` field or use the manager. Use `0.1.0` only after this project publishes that version.
+Pin the exact published version in the existing entry's `package` field or use the manager. Version `0.2.0` includes performance metrics, history charts, and CLI reports.
 
 ```sh
-opencode plugin add @cesarus777/opencode-cgp@0.1.0
+opencode plugin add @cesarus777/opencode-cgp@0.2.0
 ```
 
 Manage the configured target with the [official V2 CLI](https://dev.opencode.ai/v2/docs/plugins):

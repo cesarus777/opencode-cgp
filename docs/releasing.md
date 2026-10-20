@@ -2,7 +2,7 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**, initially version **0.1.0**. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. The scoped registry lookup returned 404 on 2026-10-16. Verify ownership of the `@cesarus777` npm scope and registry availability immediately before the first release. No publication or remote configuration is part of this preparation.
+Publish as **`@cesarus777/opencode-cgp`**. Version **0.1.0** is already public; **0.2.0** adds performance metrics, history charts, CLI reports, and live validation. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
 
 ## Local validation
 
