@@ -10,27 +10,27 @@ Actual local 2.0.29 host validation with synthetic streaming, metrics/history RP
 
 ## Capability matrix
 
-| Criterion                                                           | Status                                                                                       |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Immutable model limits; three thresholds; role/model/agent policies | Implemented and unit-tested                                                                  |
-| Root, child and nested child monitoring                             | Implemented; mocked SDK integration tested                                                   |
-| Durable public V2 compaction and completion tracking                | Implemented; compiled against published SDK                                                  |
-| Active child can compact before task end                            | Supported by inspected runner; mocked and synthetic-provider live paths tested               |
-| Strict compaction before the immediately next request               | **Unsupported guarantee**; asynchronous event/admission race                                 |
-| Global session inventory before next activity                       | **Unavailable on plugin SessionContext**; lazy discovery via hooks/events                    |
-| Exact next-request size from public provider metrics                | **Unavailable**; reported previous request plus labeled fallback only                        |
-| Completed compaction reconstruction after an event gap/restart      | Conservative `uncertain`; no full transcript replay                                          |
-| Exact cumulative session tokens                                     | Uses harness session totals; provider omissions still propagate                              |
-| Lifetime peak/request/tool counters                                 | **Not implemented**; residency-scoped counters are explicit                                  |
-| Superpowers workflow coexistence                                    | No workflow modifications; **real Superpowers run unverified**                               |
-| Live V2 installation/provider check                                 | **Local TUI verified on 2.0.29 with synthetic metrics**; real-provider compaction unverified |
-| Forced budget stop, rotation, checkpoints                           | Intentionally not implemented                                                                |
+| Criterion                                                           | Status                                                                                            |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Immutable model limits; three thresholds; role/model/agent policies | Implemented and unit-tested                                                                       |
+| Root, child and nested child monitoring                             | Implemented; mocked SDK integration tested                                                        |
+| Durable public V2 compaction and completion tracking                | Implemented; compiled against published SDK                                                       |
+| Active child can compact before task end                            | Supported by inspected runner; mocked and synthetic-provider live paths tested                    |
+| Strict compaction before the immediately next request               | **Unsupported guarantee**; asynchronous event/admission race                                      |
+| Global session inventory before next activity                       | **Unavailable on plugin SessionContext**; lazy discovery via hooks/events or selected-ID UI reads |
+| Exact next-request size from public provider metrics                | **Unavailable**; reported previous request plus labeled fallback only                             |
+| Completed compaction reconstruction after an event gap/restart      | Conservative `uncertain`; no full transcript replay                                               |
+| Exact cumulative session tokens                                     | Uses harness session totals; provider omissions still propagate                                   |
+| Lifetime peak/request/tool counters                                 | **Not implemented**; residency-scoped counters are explicit                                       |
+| Superpowers workflow coexistence                                    | No workflow modifications; **real Superpowers run unverified**                                    |
+| Live V2 installation/provider check                                 | **Local TUI verified on 2.0.29 with synthetic metrics**; real-provider compaction unverified      |
+| Forced budget stop, rotation, checkpoints                           | Intentionally not implemented                                                                     |
 
 An active long-running child is never excluded because it is a child or because it has not become idle. The hook observes every primary request and step events drive enforcement. A single long model request or tool cannot be interrupted by Context Guard. There may be one or more additional requests before admission reaches a safe boundary. This plugin is early compaction policy, not a hard token-limit firewall.
 
 The assembled-context estimator is a heuristic. Large binary/media-heavy or >2-million-character fallback contexts can be unknown. Provider metrics remain preferred; a zero or missing metric does not become an exact count. Protocol-specific `contextTokens` is not available in public step events. Native provider compaction may retain opaque state that is not comparable across models; model changes invalidate prompt usage.
 
-The public directory identifies plugin ownership. Parent/child sessions moved to another location require the plugin to be loaded there too. Sessions inactive before installation appear on their next activity. The plugin does not list historical transcripts or poll every session. CLI history is limited to retained journal records.
+The public directory identifies plugin ownership. Parent/child sessions moved to another location require the plugin to be loaded there too. Sessions inactive before installation appear on their next activity or when selected by a sidebar/panel snapshot read. Those reads can restore the last matching-model prompt usage through public `session.context`, retaining its original timestamp; they never request compaction or reconstruct compaction completion. No usable usage after compaction, missing revert boundaries and missing/zero provider metrics remain unknown. The plugin does not list historical transcripts or poll every session. CLI history is limited to retained journal records.
 
 `uncertain` means an admission/completion may have happened without evidence. It never expires into permission to compact again. A subsequent explicit compaction lifecycle can resolve it; manual native compaction is available through OpenCode. A failure circuit resets after observed success. Reloading does not erase persisted unresolved safety state. No automatic destructive state reset is provided. Long-lived dormant recovery records may exhaust `maxSessions`; increase this bound or inspect/remove obsolete sessions through OpenCode so deletion events can clean them up. Capacity conditions are logged explicitly.
 

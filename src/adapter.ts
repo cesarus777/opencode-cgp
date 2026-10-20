@@ -20,7 +20,8 @@ export interface Host {
   app: { version: string };
   options: unknown;
   location: { directory: string };
-  session: Pick<Plugin.Context["session"], "get" | "compact" | "hook">;
+  session: Pick<Plugin.Context["session"], "get" | "compact" | "hook"> &
+    Partial<Pick<Plugin.Context["session"], "context">>;
   model: Pick<Plugin.Context["model"], "list">;
   event: Plugin.Context["event"];
   storage: Pick<Plugin.Context["storage"], "get" | "set">;
@@ -71,20 +72,27 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       diagnostics.emit(event);
     },
   };
-  const stopV1 = await serveSnapshots(ctx.rpc, store).catch(() => {
-    diagnostics.emit({
-      time: Date.now(),
-      type: "snapshot-service-unavailable",
-    });
-    return () => {};
-  });
-  const stopV2 = await serveSnapshots(ctx.rpc, store, true).catch(() => {
-    diagnostics.emit({
-      time: Date.now(),
-      type: "performance-service-unavailable",
-    });
-    return () => {};
-  });
+  let prepareRead = async (_ids: readonly string[], _signal: AbortSignal) => {};
+  const onRead = (ids: readonly string[], signal: AbortSignal) =>
+    prepareRead(ids, signal);
+  const stopV1 = await serveSnapshots(ctx.rpc, store, false, onRead).catch(
+    () => {
+      diagnostics.emit({
+        time: Date.now(),
+        type: "snapshot-service-unavailable",
+      });
+      return () => {};
+    },
+  );
+  const stopV2 = await serveSnapshots(ctx.rpc, store, true, onRead).catch(
+    () => {
+      diagnostics.emit({
+        time: Date.now(),
+        type: "performance-service-unavailable",
+      });
+      return () => {};
+    },
+  );
   const stopHistory = await serveHistory(
     ctx.historyRpc,
     config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
@@ -238,11 +246,126 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
   );
   monitor = new ContextMonitor(config, scheduler, sink);
   const activeMonitor = monitor;
+  // Snapshot reads may discover sessions that have been idle since installation.
+  // Only restore scalar usage; a read must never evaluate policy or admit work.
+  const usageReads = new Map<string, number>();
+  prepareRead = (ids, signal) =>
+    serialized(async () => {
+      if (stopped || signal.aborted || !ctx.session.context || !ids.length)
+        return;
+      const readSignal = AbortSignal.any([
+        signal,
+        controller.signal,
+        AbortSignal.timeout(5000),
+      ]);
+      for (const id of ids) {
+        if (readSignal.aborted) break;
+        const existing = activeMonitor.sessions.get(id);
+        if (
+          existing?.usage.current ||
+          existing?.active ||
+          (existing?.usage.modelRequests ?? 0) > 0 ||
+          recoveries.has(id)
+        )
+          continue;
+        if (
+          existing &&
+          (existing.compaction.phase !== "idle" ||
+            existing.compaction.lastAttempt !== undefined ||
+            existing.compaction.lastCompleted !== undefined ||
+            existing.compaction.failures > 0)
+        )
+          continue;
+        if (Date.now() - (usageReads.get(id) ?? 0) < 30000) continue;
+        // Bound negative lookups as well as resident session bookkeeping.
+        if (usageReads.size >= config.safety.maxSessions) {
+          const oldest = usageReads.keys().next().value;
+          if (oldest !== undefined) usageReads.delete(oldest);
+        }
+        usageReads.set(id, Date.now());
+        try {
+          const info = await ctx.session.get(
+            { sessionID: id },
+            { signal: readSignal },
+          );
+          if (info.location.directory !== ctx.location.directory) continue;
+          const messages = await ctx.session.context(
+            { sessionID: id },
+            { signal: readSignal },
+          );
+          // Match native usage selection: exclude reverted messages and everything
+          // at/before the last completed compaction. Do not fall back to session totals.
+          const boundary = info.revert?.messageID;
+          const end = boundary
+            ? messages.findIndex((m) => m.id === boundary)
+            : messages.length;
+          if (end < 0) continue;
+          const compacted = messages.findLastIndex(
+            (m, index) =>
+              index < end &&
+              m.type === "compaction" &&
+              m.status === "completed",
+          );
+          const message = messages.findLast(
+            (m, index) =>
+              index > compacted &&
+              index < end &&
+              m.type === "assistant" &&
+              m.tokens !== undefined,
+          );
+          if (message?.type !== "assistant" || !message.tokens) continue;
+          const tokens = promptTokens(message.tokens);
+          const model = `${message.model.providerID}/${message.model.id}`;
+          const at = message.time.completed ?? message.time.streamed;
+          if (
+            tokens === undefined ||
+            at === undefined ||
+            !Number.isFinite(at) ||
+            at < 0 ||
+            at > Date.now()
+          )
+            continue;
+          if (
+            info.model &&
+            model !== `${info.model.providerID}/${info.model.id}`
+          )
+            continue;
+          await refreshModels(!models.has(model), readSignal);
+          const s = await discover(id, readSignal);
+          if (
+            !s ||
+            (s.model && s.model !== model) ||
+            s.usage.current ||
+            readSignal.aborted
+          )
+            continue;
+          // Sessions using defaults may have no explicit selection. The stored
+          // assistant still identifies the model that produced this measurement.
+          activeMonitor.touch({ sessionId: id, model }, models.get(model));
+          s.usage.current = {
+            tokens,
+            at,
+            model,
+            provenance: "provider-normalized",
+            confidence: "reported",
+            scope: "completed-request",
+            requestId: message.id,
+          };
+          s.usage.peak = Math.max(s.usage.peak, tokens);
+          store.mark(id);
+        } catch {
+          // Missing sessions or usage leave an explicit unknown; never expose content/errors.
+        }
+      }
+    });
   let models = new Map<string, ModelLimits>(),
     modelAt = 0,
     modelRetryAt = 0,
     modelRetryMs = 1000;
-  async function refreshModels(retryMissing = false) {
+  async function refreshModels(
+    retryMissing = false,
+    signal = controller.signal,
+  ) {
     const now = Date.now();
     if (now - modelAt < 60000 && (!retryMissing || now < modelRetryAt)) return;
     modelAt = now;
@@ -250,9 +373,10 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     modelRetryMs = Math.min(60000, modelRetryMs * 2);
     try {
       models = new Map(
-        (
-          await ctx.model.list(undefined, { signal: controller.signal })
-        ).data.map((m) => [`${m.providerID}/${m.id}`, { ...m.limit }]),
+        (await ctx.model.list(undefined, { signal })).data.map((m) => [
+          `${m.providerID}/${m.id}`,
+          { ...m.limit },
+        ]),
       );
       let missing = false;
       for (const s of activeMonitor.sessions.values()) {
@@ -275,11 +399,8 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       sink.emit({ time: Date.now(), type: "model-metadata-unavailable" });
     }
   }
-  async function discover(sessionId: string) {
-    const info = await ctx.session.get(
-      { sessionID: sessionId },
-      { signal: controller.signal },
-    );
+  async function discover(sessionId: string, signal = controller.signal) {
+    const info = await ctx.session.get({ sessionID: sessionId }, { signal });
     if (info.location.directory !== ctx.location.directory) return;
     const identity: Identity = {
       sessionId,

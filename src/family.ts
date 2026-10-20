@@ -40,6 +40,7 @@ export function metric(
         : "fresh";
   const t = snapshot?.policy.triggerTokens;
   const valid = freshness === "fresh" && m !== undefined;
+  const displayable = valid || (freshness === "stale" && m !== undefined);
   const pressureRatio =
     valid && t !== undefined && t > 0 ? m.tokens / t : undefined;
   const crossed =
@@ -58,7 +59,7 @@ export function metric(
             ? "near"
             : "normal",
     ...(pressureRatio === undefined ? {} : { pressureRatio }),
-    ...(valid && snapshot?.capacityTokens && snapshot.capacityTokens > 0
+    ...(displayable && snapshot?.capacityTokens && snapshot.capacityTokens > 0
       ? { utilizationPercent: (m.tokens / snapshot.capacityTokens) * 100 }
       : {}),
     ...(valid && t !== undefined ? { triggerDeltaTokens: t - m.tokens } : {}),

@@ -2,7 +2,7 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**. Version **0.2.1** is already public; **0.2.2** adds live context-capacity charts, single-metric performance chart navigation, panel padding, and persistent close controls. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+Publish as **`@cesarus777/opencode-cgp`**. Version **0.2.2** is already public; **0.2.3** restores context usage for sessions predating plugin activation and keeps stale occupancy visible without triggering compaction from snapshot reads. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
 
 ## Local validation
 

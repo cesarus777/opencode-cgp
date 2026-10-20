@@ -95,6 +95,11 @@ test("completed branches collapse unless current or critical and stale pressure 
   expect(familyRows(nodes, new Map(), "r", 100, 100).length).toBe(2);
   expect(familyRows(nodes, new Map(), "b", 100, 100).length).toBe(3);
   expect(metric(snapshot("b", 200), 1000, 100).pressure).toBe("unknown");
+  expect(metric(snapshot("b", 200), 1000, 100).utilizationPercent).toBe(20);
+  expect(metric(snapshot("b", 200), 1000, 100).pressureRatio).toBeUndefined();
+  expect(
+    metric(snapshot("b", 200), 1000, 100).triggerDeltaTokens,
+  ).toBeUndefined();
   expect(metric(snapshot("b", 90), 100, 100).pressure).toBe("near");
 });
 test("running overrides prior success; terminal evidence cannot override a newer start", () => {

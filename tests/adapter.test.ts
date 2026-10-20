@@ -1,7 +1,12 @@
 import { isBatch, isResult, isPerformanceResult } from "../src/rpc.ts";
 import type { SnapshotBatch } from "../src/snapshot.ts";
 import { test, expect } from "bun:test";
-import type { OpenCodeEvent, SessionInfo } from "@opencode/client";
+import type {
+  OpenCodeEvent,
+  SessionInfo,
+  SessionMessageInfo,
+  SessionMessageAssistant,
+} from "@opencode/client";
 import { setup, type Host } from "../src/adapter.ts";
 import type { TelemetryEvent } from "../src/types.ts";
 const zero = {
@@ -55,6 +60,8 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
     logs: TelemetryEvent[] = [],
     calls: { id: string; sessionID: string }[] = [];
   const sessions = new Map<string, SessionInfo>();
+  const contexts = new Map<string, SessionMessageInfo[]>();
+  const contextReads: string[] = [];
   let disposed = 0;
   let state: Awaited<ReturnType<Host["storage"]["get"]>>;
   const add = (id: string, parentID?: string) =>
@@ -135,6 +142,10 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
       list: async () => ({ location: { directory: "/test" }, data: [] }),
     },
     session: {
+      context: async ({ sessionID }) => {
+        contextReads.push(sessionID);
+        return contexts.get(sessionID) ?? [];
+      },
       hook: async () => ({
         dispose: async () => {
           disposed++;
@@ -214,6 +225,8 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
       return readPerformance(ids);
     },
     sessions,
+    contexts,
+    contextReads,
     disposed: () => disposed,
     state: () => state,
   };
@@ -383,6 +396,227 @@ test("malformed stored safety state disables admission without overwriting it", 
     await until(() => f.logs.some((e) => e.type === "compaction.uncertain"));
     expect(f.calls.length).toBe(0);
     expect(writes).toBe(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+function storedUsage(
+  id: string,
+  at = Date.now() - 600000,
+): SessionMessageAssistant {
+  return {
+    id,
+    type: "assistant",
+    agent: "build",
+    model: { providerID: "local", id: "deepseek" },
+    time: { created: at - 100, completed: at },
+    tokens: {
+      input: 140000,
+      output: 99,
+      reasoning: 3,
+      cache: { read: 9000, write: 1000 },
+    },
+    content: [{ type: "text", text: "private transcript content" }],
+  };
+}
+
+test("snapshot reads restore idle root and child usage once without admitting compaction", async () => {
+  const f = fixture();
+  f.add("root");
+  f.add("child", "root");
+  const root = f.sessions.get("root");
+  if (!root) throw new Error("Missing fixture");
+  delete root.model;
+  const message = storedUsage("old");
+  f.contexts.set("root", [message]);
+  f.contexts.set("child", [message]);
+  f.host.model.list = async () => ({
+    location: { directory: "/test" },
+    data: [
+      {
+        id: "deepseek",
+        modelID: "deepseek",
+        providerID: "local",
+        name: "Synthetic",
+        capabilities: { tools: false, input: ["text"], output: ["text"] },
+        variants: [],
+        time: { released: 0 },
+        cost: [],
+        status: "active",
+        enabled: true,
+        limit: { context: 200000, input: 180000, output: 8000 },
+      },
+    ],
+  });
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    const [v1, v2] = await Promise.all([
+      f.read(["root", "child"]),
+      f.readPerformance(["child", "root"]),
+    ]);
+    for (const result of [v1, v2]) {
+      if (!isPerformanceResult(result)) throw new Error("Invalid snapshot");
+      expect(result.unavailable).toEqual([]);
+      expect(result.upserts).toHaveLength(2);
+      for (const row of result.upserts) {
+        expect(row.measurement?.tokens).toBe(150000);
+        expect(row.measurement?.at).toBe(message.time.completed);
+        expect(row.capacityTokens).toBe(180000);
+        expect(row.policy.reason).toBe("stale-usage");
+        expect(row.compaction.phase).toBe("idle");
+        expect(row.compaction.count).toBe(0);
+      }
+      expect(JSON.stringify(result)).not.toContain("private transcript");
+    }
+    expect(f.contextReads.sort()).toEqual(["child", "root"]);
+    expect(f.calls).toHaveLength(0);
+    expect(f.logs.some((event) => event.type === "would-compact")).toBe(false);
+    f.step("child", 10000, "live");
+    await until(() =>
+      f.logs.some(
+        (event) => event.session?.usage.current?.requestId === "live",
+      ),
+    );
+    const updated = await f.read(["child"]);
+    expect(isResult(updated) && updated.upserts[0]?.measurement?.tokens).toBe(
+      10000,
+    );
+  } finally {
+    await cleanup();
+  }
+});
+
+test("recent stored usage above threshold remains observational on read", async () => {
+  const f = fixture();
+  f.add("root");
+  f.contexts.set("root", [storedUsage("recent", Date.now() - 1000)]);
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    const result = await f.read(["root"]);
+    expect(isResult(result) && result.upserts[0]?.policy.crossed).toBe(true);
+    await Bun.sleep(150);
+    expect(f.calls).toHaveLength(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("bootstrap respects compaction and revert boundaries without reconstructing lifecycle", async () => {
+  const f = fixture();
+  for (const id of ["compacted", "continued", "reverted"]) f.add(id);
+  const before = storedUsage("before");
+  const after = { ...storedUsage("after"), tokens: { ...zero, input: 10000 } };
+  const compaction: SessionMessageInfo = {
+    type: "compaction",
+    id: "compaction",
+    status: "completed",
+    reason: "manual",
+    time: { created: Date.now() - 500000 },
+    summary: "private summary",
+    recent: "private recent",
+  };
+  f.contexts.set("compacted", [before, compaction]);
+  f.contexts.set("continued", [before, compaction, after]);
+  f.contexts.set("reverted", [before, after]);
+  const reverted = f.sessions.get("reverted");
+  if (!reverted) throw new Error("Missing fixture");
+  reverted.revert = { messageID: "after" };
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    const result = await f.read(["compacted", "continued", "reverted"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.unavailable).toEqual([
+      { sessionId: "compacted", reason: "not-monitored" },
+    ]);
+    expect(
+      result.upserts.find((row) => row.sessionId === "continued")?.measurement
+        ?.tokens,
+    ).toBe(10000);
+    expect(
+      result.upserts.find((row) => row.sessionId === "reverted")?.measurement
+        ?.tokens,
+    ).toBe(150000);
+    expect(result.upserts.every((row) => row.compaction.count === 0)).toBe(
+      true,
+    );
+    expect(JSON.stringify(result)).not.toContain("private");
+    expect(f.calls).toHaveLength(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("snapshot bootstrap cannot refill usage invalidated by an observed compaction", async () => {
+  const f = fixture();
+  f.add("root");
+  f.contexts.set("root", [storedUsage("before")]);
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    f.events.push({
+      ...f.base("root"),
+      type: "session.compaction.ended",
+      data: {
+        sessionID: "root",
+        reason: "manual",
+        model: { providerID: "local", id: "deepseek" },
+        text: "summary",
+        recent: "recent",
+      },
+    });
+    await until(() =>
+      f.logs.some((event) => event.type === "compaction.ended"),
+    );
+    const result = await f.read(["root"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.upserts[0]?.compaction.phase).toBe("awaiting-measurement");
+    expect(result.upserts[0]?.measurement).toBeUndefined();
+    expect(f.contextReads).toHaveLength(0);
+    expect(f.calls).toHaveLength(0);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("usage bootstrap rejects zero, future, old-model, foreign and reverted context", async () => {
+  const f = fixture();
+  for (const id of [
+    "zero",
+    "future",
+    "model",
+    "foreign",
+    "reverted",
+    "failure",
+  ]) {
+    f.add(id);
+    f.contexts.set(id, [storedUsage(id)]);
+  }
+  const zeroMessage = storedUsage("zero");
+  if (zeroMessage.type !== "assistant") throw new Error("Expected assistant");
+  f.contexts.set("zero", [{ ...zeroMessage, tokens: zero }]);
+  f.contexts.set("future", [storedUsage("future", Date.now() + 60000)]);
+  const model = f.sessions.get("model"),
+    foreign = f.sessions.get("foreign"),
+    reverted = f.sessions.get("reverted");
+  if (!model || !foreign || !reverted) throw new Error("Missing fixture");
+  model.model = { providerID: "other", id: "model" };
+  foreign.location.directory = "/other";
+  reverted.revert = { messageID: "unavailable-boundary" };
+  const context = f.host.session.context;
+  f.host.session.context = async (input, options) => {
+    if (input.sessionID === "failure") throw new Error("private error");
+    return context ? context(input, options) : [];
+  };
+  const cleanup = await setup(f.host, f.sink);
+  try {
+    const result = await f.read([...f.sessions.keys()]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.upserts).toHaveLength(0);
+    expect(result.unavailable).toHaveLength(6);
+    expect(f.contextReads).not.toContain("foreign");
+    await f.read([...f.sessions.keys()]);
+    expect(f.contextReads).toHaveLength(4);
+    expect(f.calls).toHaveLength(0);
   } finally {
     await cleanup();
   }

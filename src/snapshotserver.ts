@@ -22,6 +22,7 @@ export async function serveSnapshots(
   rpc: SnapshotRpcPort | undefined,
   store: SnapshotStore,
   performance = false,
+  prepareRead?: (ids: readonly string[], signal: AbortSignal) => Promise<void>,
 ) {
   if (!rpc) return () => {};
   const stripPerformance = <T extends SnapshotBatch>(batch: T): T => ({
@@ -33,8 +34,9 @@ export async function serveSnapshots(
   const registration = await rpc.register(
     performance ? performanceRpc : monitorRpc,
     {
-      read: async (input) => {
+      read: async (input, context) => {
         if (!isRead(input)) throw new Error("Invalid snapshot request");
+        await prepareRead?.(input.sessionIds, context.signal);
         const raw = store.read(input);
         const result = performance ? raw : stripPerformance(raw);
         if (!resultValid(result))
