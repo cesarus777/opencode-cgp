@@ -126,6 +126,7 @@ export class ContextTraceStore {
 export interface ContextChartSegment {
   readonly text: string;
   readonly held: boolean;
+  readonly tone: "axis" | "threshold" | "value" | "held";
 }
 export interface ContextChartLine {
   readonly line: string;
@@ -196,30 +197,45 @@ export function contextChart(
             height - Math.ceil(Math.min(value / capacity, 1) * height),
           ),
         );
-        if (row === top) return "┈";
-        if (fill > 0) return "░";
+        if (row === top) return { text: "┈", tone: "held" as const };
+        if (fill > 0) return { text: "░", tone: "held" as const };
       }
-      if (threshold) return fill > 0 ? "╂" : "┄";
-      if (value === 0 && row === height - 1) return "▁";
-      return blocks[fill] ?? " ";
+      if (fill > 0)
+        return { text: blocks[fill] ?? " ", tone: "value" as const };
+      if (threshold) return { text: "┄", tone: "threshold" as const };
+      if (value === 0 && row === height - 1)
+        return { text: "▁", tone: "value" as const };
+      return { text: " ", tone: "axis" as const };
     });
-    const line = `${axis}│${plot.join("")}│`;
-    if (!values.some((sample) => sample.held)) return { line, threshold };
-    const segments: ContextChartSegment[] = [{ text: `${axis}│`, held: false }];
-    for (let col = 0; col < plot.length; col++) {
-      const text = plot[col] ?? " ";
-      const held = values[col - offset]?.held === true;
+    const line = `${axis}│${plot.map((cell) => cell.text).join("")}│`;
+    const segments: ContextChartSegment[] = [
+      { text: `${axis}│`, held: false, tone: "axis" },
+    ];
+    for (const cell of plot) {
+      const { text, tone } = cell;
+      const held = tone === "held";
       const previous = segments.at(-1);
-      if (previous?.held === held)
-        segments[segments.length - 1] = { text: previous.text + text, held };
-      else segments.push({ text, held });
+      if (previous?.tone === tone)
+        segments[segments.length - 1] = {
+          text: previous.text + text,
+          held,
+          tone,
+        };
+      else segments.push({ text, held, tone });
     }
-    segments.push({ text: "│", held: false });
+    segments.push({ text: "│", held: false, tone: "axis" });
     return { line, threshold, segments };
   });
   lines.push({
     line: `${" ".repeat(gutter)}└${"─".repeat(size)}┘`,
     threshold: false,
+    segments: [
+      {
+        text: `${" ".repeat(gutter)}└${"─".repeat(size)}┘`,
+        held: false,
+        tone: "axis",
+      },
+    ],
   });
   return lines;
 }

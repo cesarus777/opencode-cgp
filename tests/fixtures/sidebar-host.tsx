@@ -111,7 +111,7 @@ function assertColor(text: string, expected: RGBA, within?: string) {
     `Expected ${text} in ${expected.toString()}${within ? ` within ${within}` : ""}`,
   );
 }
-function assertMainChart(expected: RGBA) {
+function assertMainChart(expected: RGBA = palette.base) {
   const lines = host.captureSpans().lines;
   const end = lines.findIndex((line) =>
     line.spans.some((span) => span.text.includes("Compact threshold")),
@@ -123,7 +123,7 @@ function assertMainChart(expected: RGBA) {
         (span) => /[▁▂▃▄▅▆▇█]/.test(span.text) && span.fg.equals(expected),
       ),
     ),
-    "Context trace reflects current pressure",
+    "Context readings use a stable color",
   );
   assert.ok(
     chart.some((line) =>
@@ -139,7 +139,7 @@ try {
   await host.renderOnce();
   await host.renderOnce();
   assert.equal(consumers, 1);
-  assertMainChart(palette.success);
+  assertMainChart();
   assertColor("RUNNING", palette.success, "Main");
   assertColor("●", palette.success, "explore");
   assertColor("explore", palette.error);
@@ -200,7 +200,7 @@ try {
     /██░│/,
     "new measurements keep the earlier sample and held tail",
   );
-  assertMainChart(palette.warning);
+  assertMainChart();
   assert.match(frame(), /awaiting-measurement/);
   const nearRows = rows();
   const criticalSnapshot = {
@@ -216,7 +216,7 @@ try {
     ...nearRows.slice(1),
   ]);
   await host.renderOnce();
-  assertMainChart(palette.error);
+  assertMainChart();
   assertColor("RUNNING", palette.success, "Main");
   const compacted = {
     ...criticalSnapshot,
@@ -246,6 +246,18 @@ try {
   await host.renderOnce();
   assertMainChart(palette.muted);
   assertColor("STALE", palette.warning);
+  const { measurement: _measurement, ...unknownSnapshot } = criticalSnapshot;
+  setRows([
+    {
+      ...before,
+      snapshot: unknownSnapshot,
+      ...metric(unknownSnapshot, 400000, 300000),
+    },
+    ...nearRows.slice(1),
+  ]);
+  await host.renderOnce();
+  assert.match(frame(), /\? \/ 500K/);
+  assertMainChart(palette.muted);
   setRows([
     {
       ...before,

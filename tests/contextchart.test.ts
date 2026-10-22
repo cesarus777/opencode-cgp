@@ -20,9 +20,21 @@ test("context chart fixes its scale to capacity and draws the threshold across t
   expect(chart).toHaveLength(9);
   expect(chart[0]?.line).toStartWith("100%│");
   expect(chart[7]?.line).toStartWith("  0%│");
-  expect(chart.filter((line) => line.threshold)).toEqual([
-    { line: "    │┄┄┄┄┄┄┄┄┄┄┄┄┄╂│", threshold: true },
-  ]);
+  expect(
+    chart.filter((line) => line.threshold).map((line) => line.line),
+  ).toEqual(["    │┄┄┄┄┄┄┄┄┄┄┄┄┄█│"]);
+  const crossing = chart.find((line) => line.threshold);
+  expect(
+    crossing?.segments?.some(
+      (part) => part.tone === "threshold" && part.text.includes("┄"),
+    ),
+  ).toBe(true);
+  expect(
+    crossing?.segments?.some(
+      (part) => part.tone === "value" && part.text.includes("█"),
+    ),
+  ).toBe(true);
+  expect(chart[0]?.segments?.[0]?.tone).toBe("axis");
   // Adding a higher point never changes the capacity axis or threshold position.
   const higher = contextChart(
     [

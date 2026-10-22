@@ -199,11 +199,14 @@ export function CompactSidebar(props: {
                     {(part) => (
                       <span
                         style={{
-                          fg: part.held
-                            ? colors().muted
-                            : section().tone === "threshold"
-                              ? colors().feedback.warning.base
-                              : pressureColor(current()),
+                          fg:
+                            part.tone === "axis" || part.tone === "held"
+                              ? colors().muted
+                              : part.tone === "threshold"
+                                ? colors().feedback.warning.base
+                                : current()?.freshness === "fresh"
+                                  ? colors().base
+                                  : colors().muted,
                         }}
                       >
                         {part.text}

@@ -127,11 +127,14 @@ export function GuardView(props: {
                   {(part) => (
                     <span
                       style={{
-                        fg: part.held
-                          ? props.context.theme.text.muted
-                          : item.threshold
-                            ? props.context.theme.text.feedback.warning.base
-                            : props.context.theme.text.base,
+                        fg:
+                          part.tone === "axis" || part.tone === "held"
+                            ? props.context.theme.text.muted
+                            : part.tone === "threshold"
+                              ? props.context.theme.text.feedback.warning.base
+                              : current()?.freshness === "fresh"
+                                ? props.context.theme.text.base
+                                : props.context.theme.text.muted,
                       }}
                     >
                       {part.text}
