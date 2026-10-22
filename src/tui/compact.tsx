@@ -7,7 +7,6 @@ import {
   createSignal,
 } from "solid-js";
 import type { Plugin } from "@opencode/plugin/tui";
-import { updateContextTrace, type ContextTrace } from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
 import type { GuardState } from "./state.ts";
 import { cells, clip, wrap } from "./format.ts";
@@ -40,9 +39,7 @@ export function CompactSidebar(props: {
   const current = createMemo(() =>
     props.rows.find((r) => r.node.sessionId === props.sessionID),
   );
-  const trace = createMemo<ContextTrace>((previous) =>
-    updateContextTrace(previous, current()),
-  );
+  const trace = createMemo(() => props.state.contextTrace(current()));
   const tree = createMemo(() =>
     subagentTree(
       props.rows,
@@ -139,7 +136,7 @@ export function CompactSidebar(props: {
     return clip(head, width()) + "─".repeat(Math.max(0, width() - cells(head)));
   };
   const notices = createMemo(() => [
-    ...(props.context.app.version !== "2.0.29"
+    ...(!["2.0.29", "2.1.2"].includes(props.context.app.version)
       ? wrap(`Runtime ${props.context.app.version}: unverified`, width())
       : []),
     ...(props.state.connection() !== "live"
@@ -176,6 +173,7 @@ export function CompactSidebar(props: {
           width(),
           props.state.age(props.sessionID),
           trace().samples,
+          trace().capacity,
         )}
       >
         {(section) => (
@@ -196,7 +194,23 @@ export function CompactSidebar(props: {
                           : colors().base
                 }
               >
-                {line() || " "}
+                <Show when={section().segments} fallback={line() || " "}>
+                  <For each={section().segments}>
+                    {(part) => (
+                      <span
+                        style={{
+                          fg: part.held
+                            ? colors().muted
+                            : section().tone === "threshold"
+                              ? colors().feedback.warning.base
+                              : pressureColor(current()),
+                        }}
+                      >
+                        {part.text}
+                      </span>
+                    )}
+                  </For>
+                </Show>
               </text>
             )}
           </Index>

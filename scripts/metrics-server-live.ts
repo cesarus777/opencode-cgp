@@ -1,4 +1,4 @@
-/** Disposable actual 2.0.29 host + synthetic SSE provider. Never uses real credentials. */
+/** Disposable actual verified V2 host + synthetic SSE provider. Never uses real credentials. */
 import assert from "node:assert/strict";
 import {
   mkdtemp,
@@ -25,6 +25,7 @@ const root = await mkdtemp(join(tmpdir(), "guard-metrics-live-"));
 const project = join(root, "project"),
   archive = join(root, "history");
 await mkdir(project);
+const secret = `private-canary-${crypto.randomUUID()}`;
 const env = {
   ...process.env,
   XDG_CONFIG_HOME: join(root, "config"),
@@ -32,9 +33,9 @@ const env = {
   XDG_STATE_HOME: join(root, "state"),
   XDG_CACHE_HOME: join(root, "cache"),
   OPENCODE_PASSWORD: crypto.randomUUID(),
+  OPENCODE_SYNTHETIC_KEY: secret,
 };
 const authorization = `Basic ${btoa(`opencode:${env.OPENCODE_PASSWORD}`)}`;
-const secret = `private-canary-${crypto.randomUUID()}`;
 type Boundary = Extract<
   OpenCodeEvent,
   {
@@ -45,12 +46,16 @@ type Boundary = Extract<
   }
 >;
 const events: Boundary[] = [];
+const eventCounts = new Map<string, number>();
+const failureTypes: string[] = [];
 const deltas = new Map<string, { text: number; reasoning: number }>();
 const children = new Set<ReturnType<typeof Bun.spawn>>();
 let host: ReturnType<typeof Bun.spawn> | undefined;
 let abort = new AbortController();
 let subscription: Promise<void> | undefined;
 let providerRequests = 0;
+let providerPackage = "@ai-sdk/openai-compatible";
+let contextTokens: number | undefined;
 let toolNext = false,
   enforceTools = 0,
   enforcing = false;
@@ -133,7 +138,7 @@ function listen() {
               ],
             });
           chunk({}, tool ? "tool_calls" : "stop", {
-            prompt_tokens: enforcing ? 12000 : 1200,
+            prompt_tokens: contextTokens ?? (enforcing ? 12000 : 1200),
             completion_tokens: model === "beta" ? 90 : 60,
             completion_tokens_details: { reasoning_tokens: 20 },
           });
@@ -166,7 +171,8 @@ async function config(historyEnabled = true, enforce = false) {
       snapshots: false,
       providers: {
         synthetic: {
-          package: "@ai-sdk/openai-compatible",
+          package: providerPackage,
+          env: ["OPENCODE_SYNTHETIC_KEY"],
           name: "Synthetic validation",
           settings: {
             baseURL: `http://127.0.0.1:${provider.port}/v1`,
@@ -178,7 +184,12 @@ async function config(historyEnabled = true, enforce = false) {
               {
                 name: id,
                 limit: { context: 136000, input: 128000, output: 8000 },
-                capabilities: { reasoning: true },
+                capabilities: {
+                  reasoning: providerPackage.startsWith("@opencode/ai/")
+                    ? { supported: true }
+                    : true,
+                  tools: true,
+                },
               },
             ]),
           ),
@@ -269,6 +280,12 @@ async function start() {
   abort = new AbortController();
   subscription = (async () => {
     for await (const e of client.event.subscribe({ signal: abort.signal })) {
+      eventCounts.set(e.type, (eventCounts.get(e.type) ?? 0) + 1);
+      if (
+        e.type === "session.execution.failed" ||
+        e.type === "session.step.failed"
+      )
+        failureTypes.push(e.data.error.type);
       // Keep numeric boundaries only, never retain delta content.
       if (
         e.type === "session.step.started" ||
@@ -307,11 +324,40 @@ try {
     cwd: project,
     env,
   });
-  assert.match(version.stdout.toString(), /2\.0\.29/);
+  assert.match(version.stdout.toString(), /opencode v2\.(?:0\.29|1\.2)\s*$/);
   console.log(version.stdout.toString().trim());
+  if (version.stdout.toString().includes("v2.1.2"))
+    providerPackage = "@opencode/ai/providers/openai-compatible";
   await config();
   let { client, url } = await start();
   const location = { directory: project };
+  let catalog: unknown;
+  await waitFor(async () => {
+    const models = (await client.model.list({ location })).data;
+    catalog = models.map((m) => ({
+      id: m.id,
+      providerID: m.providerID,
+      enabled: m.enabled,
+    }));
+    return ["alpha", "beta"].every((id) =>
+      models.some(
+        (model) =>
+          model.providerID === "synthetic" && model.id === id && model.enabled,
+      ),
+    );
+  }, "synthetic provider catalog ready").catch(async (error: unknown) => {
+    const providers = await client.provider.list({ location });
+    console.error(
+      JSON.stringify({
+        catalog,
+        providers: providers.data.map((p) => ({
+          id: p.id,
+          package: p.package,
+        })),
+      }),
+    );
+    throw error;
+  });
   const read = async (ids: string[]) => {
     const result = await client
       .rpc(performanceRpc)
@@ -364,8 +410,15 @@ try {
     ids.map((sessionID) => client.session.prompt({ sessionID, text: secret })),
   );
   let sawLive = false;
+  let startupRows: unknown;
   await waitFor(async () => {
     const rows = (await read(ids)).upserts;
+    startupRows = rows.map((r) => ({
+      sessionId: r.sessionId,
+      model: r.model,
+      measurement: r.measurement,
+      performance: r.performance,
+    }));
     sawLive ||= rows.some(
       (r) =>
         r.performance?.status === "streaming" &&
@@ -376,7 +429,17 @@ try {
       rows.length === 3 &&
       rows.every((r) => r.performance?.completedRequests === 1)
     );
-  }, "three completed sessions");
+  }, "three completed sessions").catch((error: unknown) => {
+    console.error(
+      JSON.stringify({
+        providerRequests,
+        eventCounts: Object.fromEntries(eventCounts),
+        failureTypes,
+        rows: startupRows,
+      }),
+    );
+    throw error;
+  });
   assert.ok(sawLive, "live TPS and TTFT observed");
   const observerCode = await observer.exited;
   assert.equal(observerCode, 0, await new Response(observer.stderr).text());
@@ -600,7 +663,7 @@ try {
   assert.ok(isHistoryResult(ignoredPath.output));
   assert.deepEqual(ignoredPath.output.data, history.data);
   console.log(
-    "LIMITATION: 2.0.29 strips unknown RPC input properties before the handler; a supplied path is ignored, never followed.",
+    "LIMITATION: the host strips unknown RPC input properties before the handler; a supplied path is ignored, never followed.",
   );
   console.log(
     "PASS: actual built host, all three RPCs, streaming TPS/TTFT, reported totals, independent hierarchy/model change, idle average, v1 privacy, history ownership/bounds",
@@ -738,6 +801,67 @@ try {
         const incoming = new URL(req.url);
         if (incoming.pathname === "/__validation_counts")
           return Response.json(counts);
+        if (incoming.pathname.startsWith("/__validation_context/")) {
+          const action = incoming.pathname.split("/").at(-1);
+          if (action === "grow" || action === "lower") {
+            contextTokens = action === "grow" ? 89600 : 64000;
+            await client.session.prompt({ sessionID: parent.id, text: secret });
+            await waitFor(
+              async () =>
+                (await read([parent.id])).upserts[0]?.measurement?.tokens ===
+                contextTokens,
+              "context chart measurement",
+            );
+          } else if (action === "permission") {
+            await client.session.update({
+              sessionID: child.id,
+              permissions: [{ action: "*", resource: "*", effect: "ask" }],
+            });
+            toolNext = true;
+            await client.session.prompt({ sessionID: child.id, text: secret });
+            await waitFor(
+              async () =>
+                (await client.permission.list({ sessionID: child.id })).length >
+                0,
+              "child waiting for permission",
+            );
+          } else if (action === "resume") {
+            await client.session.update({
+              sessionID: child.id,
+              permissions: [{ action: "*", resource: "*", effect: "allow" }],
+            });
+            for (const request of await client.permission.list({
+              sessionID: child.id,
+            }))
+              await client.permission.reply({
+                sessionID: child.id,
+                requestID: request.id,
+                decision: "once",
+              });
+          } else if (action === "child") {
+            toolNext = true;
+            await client.session.prompt({ sessionID: child.id, text: secret });
+          } else if (action === "compact") {
+            contextTokens = 12800;
+            const before =
+              (await read([parent.id])).upserts[0]?.compaction.count ?? 0;
+            await client.session.compact({ sessionID: parent.id });
+            await waitFor(
+              async () =>
+                ((await read([parent.id])).upserts[0]?.compaction.count ?? 0) >
+                before,
+              "manual compaction ended",
+            );
+            await client.session.prompt({ sessionID: parent.id, text: secret });
+            await waitFor(
+              async () =>
+                (await read([parent.id])).upserts[0]?.measurement?.tokens ===
+                12800,
+              "post-compaction measurement",
+            );
+          } else throw new Error("Unknown context validation action");
+          return Response.json({ ok: true });
+        }
         if (incoming.pathname === "/__validation_delay") {
           counts.delay = true;
           return Response.json({ ok: true });
@@ -819,6 +943,7 @@ try {
       proxy.stop(true);
     }
   }
+  contextTokens = undefined;
   await stop();
   await config(false);
   ({ client, url } = await start());

@@ -3,6 +3,7 @@ import { RGBA } from "@opentui/core";
 import { createSignal } from "solid-js";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { KeymapLayer } from "@opencode/plugin/tui/context";
+import { ContextTraceStore } from "../../src/tui/contextchart.ts";
 import type { GuardState } from "../../src/tui/state.ts";
 import { GuardView } from "../../src/tui/sidebar.tsx";
 import { metric } from "../../src/family.ts";
@@ -15,7 +16,10 @@ const [sessionID, setSessionID] = createSignal("main");
 let consumers = 0,
   destination = "";
 let layer: (() => KeymapLayer) | undefined;
+const traceStore = new ContextTraceStore();
 const state = {
+  contextTrace: (row: Parameters<ContextTraceStore["update"]>[0]) =>
+    traceStore.update(row),
   acquire: () => {
     consumers++;
     return {
@@ -191,7 +195,11 @@ try {
   assert.match(frame(), /144K \/ 500K/);
   assert.match(frame(), /90%/);
   assert.match(frame(), /recent samples → now/);
-  assert.match(frame(), /██│/, "new measurements keep the earlier sample");
+  assert.match(
+    frame(),
+    /██░│/,
+    "new measurements keep the earlier sample and held tail",
+  );
   assertMainChart(palette.warning);
   assert.match(frame(), /awaiting-measurement/);
   const nearRows = rows();
@@ -213,6 +221,7 @@ try {
   const compacted = {
     ...criticalSnapshot,
     measurement: { ...criticalSnapshot.measurement, at: 4000, tokens: 20000 },
+    compaction: { ...criticalSnapshot.compaction, lastCompleted: 3500 },
   };
   setRows([
     { ...before, snapshot: compacted, ...metric(compacted, 4000, 300000) },
@@ -220,9 +229,10 @@ try {
   ]);
   await host.renderOnce();
   assert.match(frame(), /20K \/ 500K/);
+  assertColor("┈", palette.muted);
   assert.match(
     frame(),
-    /█▃│/,
+    /█▃┈│/,
     "post-compaction measurement drops while keeping history",
   );
   setRows([

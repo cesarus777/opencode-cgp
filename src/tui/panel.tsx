@@ -21,7 +21,9 @@ export function GuardPanel(props: {
 }) {
   const [showCharts, setShowCharts] = createSignal(false);
   const [metricIndex, setMetricIndex] = createSignal(0);
-  const width = () => Math.max(4, props.input.width - 4);
+  const [viewportWidth, setViewportWidth] = createSignal<number>();
+  const width = () =>
+    Math.max(4, Math.min(props.input.width - 4, viewportWidth() ?? Infinity));
   const windows = [300000, 3600000, 86400000, 7 * 86400000];
   const [windowIndex, setWindowIndex] = createSignal(1);
   const [chartRefresh, setChartRefresh] = createSignal(0);
@@ -201,6 +203,11 @@ export function GuardPanel(props: {
       paddingBottom={1}
     >
       <scrollbox
+        viewportOptions={{
+          onSizeChange: function () {
+            setViewportWidth(this.width);
+          },
+        }}
         ref={(value) => {
           scroll = value;
         }}

@@ -1,4 +1,8 @@
-import { contextChart, type ContextSample } from "./contextchart.ts";
+import {
+  contextChart,
+  type ContextSample,
+  type ContextChartSegment,
+} from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
 import { cells, clip, wrap, performanceLines } from "./format.ts";
 
@@ -35,6 +39,7 @@ export interface MainSection {
     | "measurement"
     | "threshold";
   readonly lines: readonly string[];
+  readonly segments?: readonly ContextChartSegment[];
 }
 
 export function mainSections(
@@ -42,6 +47,7 @@ export function mainSections(
   width: number,
   age: number,
   samples?: readonly ContextSample[],
+  chartCapacity?: number,
 ): MainSection[] {
   if (!row)
     return [{ tone: "base", lines: wrap("Loading session family...", width) }];
@@ -82,15 +88,29 @@ export function mainSections(
     },
     ...contextChart(
       samples ?? (m && valid ? [{ at: m.at, tokens: m.tokens }] : []),
-      s?.capacityTokens,
+      s?.capacityTokens ?? chartCapacity,
       s?.policy.triggerTokens,
       width,
+      m
+        ? m.at + age
+        : s?.observedAt === undefined
+          ? undefined
+          : s.observedAt + age,
     ).map(
-      ({ line, threshold }): MainSection => ({
+      ({ line, threshold, segments }): MainSection => ({
         tone: threshold ? "threshold" : "pressure",
         lines: [line],
+        ...(segments ? { segments } : {}),
       }),
     ),
+    ...(samples?.some((sample) => sample.held) || (m && age > 2500)
+      ? [
+          {
+            tone: "measurement" as const,
+            lines: wrap("┈ held · last known context", width),
+          },
+        ]
+      : []),
     {
       tone: "base",
       lines: wrap(

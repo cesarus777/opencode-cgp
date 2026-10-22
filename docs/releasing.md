@@ -2,7 +2,7 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**. Version **0.2.2** is already public; **0.2.3** restores context usage for sessions predating plugin activation and keeps stale occupancy visible without triggering compaction from snapshot reads. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+Publish as **`@cesarus777/opencode-cgp`**. Version **0.2.3** is already public; **0.2.4** adds continuous context charts, shared sidebar/panel traces, confirmed compaction drops and local OpenCode 2.1.2 validation. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
 
 ## Local validation
 
@@ -59,4 +59,4 @@ Consumers can edit their existing package target to a previously verified exact 
 
 ## Runtime evidence limits
 
-The default packed smoke test covers isolated mocks and the public native renderer. The opt-in actual OpenCode 2.0.29 server registration/RPC check passed in observe and enforce modes without model requests. Neither proves native npm-manager fetching or real-provider compaction. Prior checkout verification used an actual local 2.0.29 server/TUI with a synthetic provider; interactive compiled-host TUI with the packed artifact remains unverified. For reproduction and provider checks, follow [testing](testing.md). V1 and other V2 versions are not certified. Git installation preparation and GitHub Actions/OIDC execution must be verified in their real environments.
+The default packed smoke test covers isolated mocks and the public native renderer. The opt-in actual OpenCode 2.0.29 server registration/RPC check passed in observe and enforce modes without model requests. Neither proves native npm-manager fetching or real-provider compaction. Prior checkout verification used an actual local 2.0.29 server/TUI with a synthetic provider; interactive compiled-host TUI with the packed artifact remains unverified. For reproduction and provider checks, follow [testing](testing.md). OpenCode 2.1.2 is additionally covered by the [current local validation](validation/context-chart-2.1.2-2026-10-22.md); V1 and other V2 versions are not certified. Git installation preparation and GitHub Actions/OIDC execution must be verified in their real environments.

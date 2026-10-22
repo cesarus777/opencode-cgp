@@ -2,7 +2,7 @@
 
 ## Evidence
 
-Verified against published `@opencode/plugin@2.0.29` and `@opencode/client@2.0.29`; inspected upstream commit `4397ee44d038a5f17bf6ac161431673d93e563b5`. SDK type checks and entrypoint import run in Bun 1.1.34. Official docs are live and may change; pin the SDK and revalidate lifecycle behavior when upgrading the harness. A different runtime version is not certified merely because it loads this package.
+Verified against published `@opencode/plugin@2.0.29` and `@opencode/client@2.0.29`; inspected upstream commit `4397ee44d038a5f17bf6ac161431673d93e563b5`. SDK type checks and entrypoint import run in Bun 1.1.34. Official docs are live and may change; pin the SDK and revalidate lifecycle behavior when upgrading the harness. OpenCode 2.1.2 additionally passes local server/TUI validation with the same pinned SDK baseline; see the [2.1.2 report](validation/context-chart-2.1.2-2026-10-22.md). Other runtime versions are not certified merely because they load this package.
 
 The source's `packages/core/test/session-runner.test.ts` includes “runs manual compaction before the continuation of an active tool turn”. It asserts the compaction message completes and the continuation runs. The corresponding runner consumes steer compaction controls on every iteration without excluding parented sessions. This is source evidence, not a claim that the upstream test suite was executed here.
 
@@ -38,7 +38,7 @@ An event stream gap suspends enforcement until reload even when observation reco
 
 ## Native TUI validation boundary
 
-The TUI and RPC boundaries compile against the installed 2.0.29 declarations. Offline tests verify public checkout entry resolution, server imports without renderer modules, mocked server snapshots, cancellation/order recovery, nested paginated inventory, execution reduction and native OpenTUI rendering through its public Solid preload. Optional renderer peers remain separate from server imports. The actual compiled 2.0.29 host additionally passed local synthetic-provider checks; see the [verification report](validation/tui-2.0.29-2026-10-16.md). Other V2 versions remain uncertified.
+The TUI and RPC boundaries compile against the installed 2.0.29 declarations. Offline tests verify public checkout entry resolution, server imports without renderer modules, mocked server snapshots, cancellation/order recovery, nested paginated inventory, execution reduction and native OpenTUI rendering through its public Solid preload. Optional renderer peers remain separate from server imports. The actual compiled 2.0.29 host additionally passed local synthetic-provider checks; see the [verification report](validation/tui-2.0.29-2026-10-16.md). Apart from the separately validated 2.1.2 runtime, other V2 versions remain uncertified.
 
 The inspected host controls sidebar visibility and suppresses it for child routes. The child composer also occupies its own input mode, hiding the normal prompt/palette shortcut. The native **Context Guard: open panel** action above that composer provides panel access without navigating to the parent; `/context-guard` and palette access remain available in the usual prompt scope. Another plugin can suppress additive sidebar claims through replacement. Remote clients need a client-side package installation plus the server plugin in every owning location. Workspace IDs are used when available for canonical alias matching, with directory equality as the fallback. Actual remote routing/authentication aliases remain a live-validation item.
 

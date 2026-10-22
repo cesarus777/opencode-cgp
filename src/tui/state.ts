@@ -13,10 +13,13 @@ import {
   familyRows,
   type ExecutionEvidence,
   type SessionNode,
+  type GuardRow,
 } from "../family.ts";
+import { ContextTraceStore } from "./contextchart.ts";
 import { SnapshotClient } from "./transport.ts";
 import { discoverFamily, type Inventory } from "./inventory.ts";
 export function createGuardState(context: Plugin.Context) {
+  const contextTraces = new ContextTraceStore();
   const [version, setVersion] = createSignal(0);
   const notify = () => {
     setVersion((n) => n + 1);
@@ -329,7 +332,11 @@ export function createGuardState(context: Plugin.Context) {
       return result;
     },
     rows,
-    dispose: stop,
+    contextTrace: (row: GuardRow | undefined) => contextTraces.update(row),
+    dispose() {
+      stop();
+      contextTraces.clear();
+    },
     age(id: string) {
       version();
       const c = [...clients.values()].find((c) => c.rows.has(id));

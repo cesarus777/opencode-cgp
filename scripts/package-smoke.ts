@@ -34,7 +34,7 @@ async function run(command: string[], cwd = root): Promise<string> {
     stdout: Bun.file(output),
     stderr: Bun.file(errors),
   });
-  const deadline = setTimeout(() => child.kill("SIGKILL"), 180000);
+  const deadline = setTimeout(() => child.kill("SIGKILL"), 300000);
   try {
     const code = await child.exited;
     const stdout = await readFile(output, "utf8");

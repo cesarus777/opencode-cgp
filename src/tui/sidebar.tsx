@@ -3,11 +3,7 @@ import type { Plugin } from "@opencode/plugin/tui";
 import type { GuardState } from "./state.ts";
 import type { GuardRow } from "../family.ts";
 import { detailLines, rowLines, clip, wrap } from "./format.ts";
-import {
-  contextChart,
-  updateContextTrace,
-  type ContextTrace,
-} from "./contextchart.ts";
+import { contextChart } from "./contextchart.ts";
 import { CompactSidebar } from "./compact.tsx";
 export function GuardView(props: {
   sessionID: string;
@@ -28,15 +24,19 @@ export function GuardView(props: {
   const current = createMemo(() =>
     rows().find((row) => row.node.sessionId === props.sessionID),
   );
-  const trace = createMemo<ContextTrace>((previous) =>
-    updateContextTrace(previous, props.expanded ? current() : undefined),
+  const trace = createMemo(() =>
+    props.state.contextTrace(props.expanded ? current() : undefined),
   );
   const chart = createMemo(() =>
     contextChart(
       trace().samples,
-      current()?.snapshot?.capacityTokens,
+      current()?.snapshot?.capacityTokens ?? trace().capacity,
       current()?.snapshot?.policy.triggerTokens,
       props.width,
+      current()?.snapshot?.measurement
+        ? (current()?.snapshot?.measurement?.at ?? 0) +
+            props.state.age(props.sessionID)
+        : undefined,
     ),
   );
   const detail = createMemo(() => {
@@ -100,10 +100,10 @@ export function GuardView(props: {
           Context Guard / {props.state.health()?.mode ?? "?"}
         </text>
         <text fg={props.context.theme.text.muted}>
-          {props.context.app.version === "2.0.29"
+          {["2.0.29", "2.1.2"].includes(props.context.app.version)
             ? ""
             : clip(
-                `Runtime ${props.context.app.version}: unverified (2.0.29 target)`,
+                `Runtime ${props.context.app.version}: unverified (tested: 2.0.29, 2.1.2)`,
                 props.width,
               )}
         </text>
@@ -122,12 +122,31 @@ export function GuardView(props: {
                   : props.context.theme.text.muted
               }
             >
-              {item.line}
+              <Show when={item.segments} fallback={item.line}>
+                <For each={item.segments}>
+                  {(part) => (
+                    <span
+                      style={{
+                        fg: part.held
+                          ? props.context.theme.text.muted
+                          : item.threshold
+                            ? props.context.theme.text.feedback.warning.base
+                            : props.context.theme.text.base,
+                      }}
+                    >
+                      {part.text}
+                    </span>
+                  )}
+                </For>
+              </Show>
             </text>
           )}
         </For>
         <For
-          each={wrap("Recent context samples → now · ┄ trigger", props.width)}
+          each={wrap(
+            "Recent context samples → now · ┄ trigger · ┈ held",
+            props.width,
+          )}
         >
           {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
         </For>

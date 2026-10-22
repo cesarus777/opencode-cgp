@@ -3,9 +3,11 @@ import { testRender } from "@opentui/solid";
 import { RGBA } from "@opentui/core";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { KeymapLayer } from "@opencode/plugin/tui/context";
+import { ContextTraceStore } from "../../src/tui/contextchart.ts";
 import type { GuardState } from "../../src/tui/state.ts";
 import type { GuardRow } from "../../src/family.ts";
 import { GuardPanel } from "../../src/tui/panel.tsx";
+import { sidebarFamily } from "./sidebar.ts";
 import { createSignal } from "solid-js";
 import assert from "node:assert/strict";
 
@@ -23,8 +25,15 @@ const family: GuardRow[] = Array.from({ length: 150 }, (_, i) => ({
   pressure: "unknown",
   hidden: 0,
 }));
+const chartSnapshot = sidebarFamily()[0]?.snapshot;
+assert.ok(chartSnapshot);
+const firstRow = family[0];
+assert.ok(firstRow);
 const historyReads: { sessionId: string; windowMs: number }[] = [];
+const traceStore = new ContextTraceStore();
 const state: GuardState = {
+  contextTrace: (row: Parameters<ContextTraceStore["update"]>[0]) =>
+    traceStore.update(row),
   version: () => 0,
   history: async (id, from, to) => {
     historyReads.push({ sessionId: id, windowMs: to - from });
@@ -216,6 +225,44 @@ try {
   assert.equal(typeof enabled === "function" ? enabled() : enabled, false);
 } finally {
   host.renderer.destroy();
+}
+assert.equal(consumers, 0);
+setSessionID("s0");
+setWidth(40);
+setFocused(true);
+const chartRows: GuardRow[] = [
+  {
+    ...firstRow,
+    snapshot: { ...chartSnapshot, sessionId: "s0" },
+    freshness: "fresh",
+    pressure: "normal",
+  },
+];
+const chartHost = await testRender(
+  () => (
+    <GuardPanel
+      input={input}
+      context={context}
+      state={{ ...state, rows: () => chartRows }}
+    />
+  ),
+  { width: 40, height: 50 },
+);
+try {
+  await chartHost.renderOnce();
+  await chartHost.renderOnce();
+  const initialFrame = chartHost.captureCharFrame().split("\n");
+  const chartTop = initialFrame.findIndex((line) => line.includes("100%│"));
+  assert.ok(chartTop >= 0);
+  const chartEnd = initialFrame[chartTop]?.lastIndexOf("│") ?? -1;
+  assert.ok(chartEnd > 10, "right chart edge fits before the scrollbar");
+  assert.equal(
+    initialFrame[chartTop + 8]?.[chartEnd],
+    "┘",
+    "chart uses nine rows without line wrapping",
+  );
+} finally {
+  chartHost.renderer.destroy();
 }
 assert.equal(consumers, 0);
 console.log(
