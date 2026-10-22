@@ -45,7 +45,8 @@
     "validate": "bun run format:check && bun run typecheck && bun test && bun run test:package",
     "test:metrics-live": "bun scripts/metrics-live.ts",
     "charts": "bun src/cli.ts charts",
-    "test:metrics-server-live": "bun scripts/metrics-server-live.ts"
+    "test:metrics-server-live": "bun scripts/metrics-server-live.ts",
+    "test:dashboard-spike": "bun scripts/dashboard-spike.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.0.29",
