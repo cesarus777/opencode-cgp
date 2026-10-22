@@ -21,7 +21,7 @@ A boolean reasoning capability on 2.1.2 caused the test provider configuration t
 
 ## Validation results
 
-Formatting, strict type checking and all 131 offline tests passed. The clean-package check passed with npm 11.21.0, including 16 adapter regressions against the installed tarball, actual 2.1.2 registration/RPC checks in observe and enforce modes, native TUI rendering/reactivity and consumer declaration compilation. The dry-run pack contained 41 allowlisted files. The initial npm 12.2.0 cold install reached the former three-minute command deadline; clean-package commands now allow five minutes, and the retry used the same npm version as CI.
+Formatting, strict type checking and all 132 offline tests passed. The clean-package check passed with npm 11.21.0, including 16 adapter regressions against the installed tarball, actual 2.1.2 registration/RPC checks in observe and enforce modes, native TUI rendering/reactivity and consumer declaration compilation. The dry-run pack contained 41 allowlisted files. The initial npm 12.2.0 cold install reached the former three-minute command deadline; clean-package commands now allow five minutes, and the retry used the same npm version as CI.
 
 ## Checked behavior
 
@@ -35,3 +35,5 @@ Formatting, strict type checking and all 131 offline tests passed. The clean-pac
 Scalar PTY chart rectangles are saved to ignored `.artifacts/context-*.txt` and `.png`. PNGs reconstruct terminal character/color cells; they are not desktop screenshots and contain no session messages, titles or tool output. Local chart history is bounded and shared between sidebar/panel views, as described in [configuration](../configuration.md).
 
 Genuine-provider accounting, cross-machine clients, tmux and Neovim remain outside this synthetic-provider validation. This report does not imply that npm staging is public publication; release status must be checked separately.
+
+The 0.2.4 tag passed CI but its release preflight stopped before staging. The 0.2.5 release uses bounded npm-client registry lookups; a local preflight confirmed the unused version, and tests verify that authentication/network failures, malformed responses and interrupted commands cannot permit publication.
