@@ -175,7 +175,7 @@ try:
     context_action("grow")
     expect("70% used")
     pump(4)
-    expect("┈ held")
+    expect("muted held")
     capture_chart("wide-pause")
     context_action("permission")
     pump(4)

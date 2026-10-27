@@ -106,7 +106,7 @@ test("context history deduplicates renders, replaces corrections and is bounded 
       ...row,
       snapshot: {
         ...snapshot,
-        measurement: { ...measurement, at, tokens: at },
+        measurement: { ...measurement, at, tokens: 120000 + at },
       },
     });
   expect(trace.samples).toHaveLength(96);
@@ -170,6 +170,17 @@ test("pauses retain the last level, lower observations are display-only and reco
   expect(trace.samples.at(-1)?.tokens).toBe(112000);
   expect(trace.samples.at(-1)?.held).toBe(true);
   expect(lower.snapshot.measurement.tokens).toBe(20000);
+  expect(trace.samples).toHaveLength(1);
+  for (let at = 3001; at < 3100; at++) {
+    trace = updateContextTrace(trace, {
+      ...lower,
+      snapshot: {
+        ...lower.snapshot,
+        measurement: { ...lower.snapshot.measurement, at },
+      },
+    });
+  }
+  expect(trace.samples).toHaveLength(1);
   trace = updateContextTrace(trace, {
     ...row,
     snapshot: {
@@ -178,7 +189,7 @@ test("pauses retain the last level, lower observations are display-only and reco
     },
   });
   expect(trace.samples.slice(-2)).toEqual([
-    { at: 9999, tokens: 112000, held: true },
+    { at: 3099, tokens: 112000, held: true },
     { at: 10000, tokens: 150000 },
   ]);
   expect(updateContextTrace(trace, lower).samples).toEqual(trace.samples);
@@ -241,15 +252,22 @@ test("only completed compaction plus a new reported measurement allows a drop; d
   expect(trace.samples[0]?.tokens).toBe(112000);
 });
 
-test("idle rendering uses one marked tail without storing timer measurements or losing narrow layout", () => {
+test("idle rendering recolors the latest column without shifting samples or losing narrow layout", () => {
   const samples = [{ at: 1000, tokens: 70000 }];
   for (const width of [4, 8, 16, 35, 80]) {
     const plot = contextChart(samples, 100000, 80000, width, 10000);
-    expect(plot.some((line) => line.line.includes("┈"))).toBe(true);
+    expect(plot.some((line) => line.segments?.some((part) => part.held))).toBe(
+      true,
+    );
     expect(plot.every((line) => cells(line.line) <= width)).toBe(true);
+    expect(plot.map((line) => line.line)).toEqual(
+      contextChart(samples, 100000, 80000, width, 1000).map(
+        (line) => line.line,
+      ),
+    );
     expect(
       plot.some((line) =>
-        line.segments?.some((part) => part.held && part.text.includes("┈")),
+        line.segments?.some((part) => part.held && part.text.trim().length > 0),
       ),
     ).toBe(true);
     expect(
@@ -263,9 +281,68 @@ test("idle rendering uses one marked tail without storing timer measurements or 
   expect(samples).toEqual([{ at: 1000, tokens: 70000 }]);
   expect(
     contextChart([], 100000, undefined, 20, 10000).some((line) =>
-      line.line.includes("┈"),
+      line.segments?.some((part) => part.held),
     ),
   ).toBe(false);
+});
+
+test("unchanged measurements reuse one column and a fresh observation restores its color", () => {
+  const row = sidebarFamily()[0];
+  if (!row?.snapshot?.measurement) throw new Error("Missing fixture");
+  const snapshot = row.snapshot;
+  const measurement = snapshot.measurement;
+  if (!measurement) throw new Error("Missing measurement");
+  let trace = updateContextTrace(undefined, row);
+  for (let at = 2000; at <= 10000; at += 1000) {
+    trace = updateContextTrace(trace, {
+      ...row,
+      snapshot: { ...snapshot, measurement: { ...measurement, at } },
+    });
+  }
+  expect(trace.samples).toEqual([{ at: 10000, tokens: measurement.tokens }]);
+  const paused = contextChart(
+    trace.samples,
+    trace.capacity,
+    undefined,
+    20,
+    13000,
+  );
+  const fresh = contextChart(
+    trace.samples,
+    trace.capacity,
+    undefined,
+    20,
+    10000,
+  );
+  expect(paused.map((line) => line.line)).toEqual(
+    fresh.map((line) => line.line),
+  );
+  expect(paused.some((line) => line.segments?.some((part) => part.held))).toBe(
+    true,
+  );
+  expect(fresh.some((line) => line.segments?.some((part) => part.held))).toBe(
+    false,
+  );
+});
+
+test("held bars preserve measured height at fractional, full, zero and clipped levels", () => {
+  for (const tokens of [0, 1, 12500, 22400, 65000, 70000, 100000, 120000]) {
+    const chart = contextChart(
+      [
+        { at: 1000, tokens },
+        { at: 2000, tokens, held: true },
+      ],
+      100000,
+      80000,
+      20,
+    );
+    for (const row of chart.slice(0, 8)) {
+      expect(row.line.at(-2)).toBe(row.line.at(-3));
+    }
+    expect(chart.some((row) => row.segments?.some((part) => part.held))).toBe(
+      true,
+    );
+  }
 });
 
 test("shared traces survive panel/sidebar remounts, isolate sessions and bound retained sessions", () => {
@@ -294,7 +371,7 @@ test("shared traces survive panel/sidebar remounts, isolate sessions and bound r
   store.update(compacted);
   expect(
     store.update(compacted).samples.map((sample) => sample.tokens),
-  ).toEqual([112000, 112000, 20000]);
+  ).toEqual([112000, 20000]);
   for (let i = 0; i < 128; i++)
     store.update({ ...low, node: { ...low.node, sessionId: `other-${i}` } });
   expect(store.update(low).samples).toEqual([{ at: 2000, tokens: 20000 }]);

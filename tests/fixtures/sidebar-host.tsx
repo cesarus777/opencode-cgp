@@ -139,7 +139,7 @@ try {
   await host.renderOnce();
   await host.renderOnce();
   assert.equal(consumers, 1);
-  assertMainChart();
+  assertMainChart(palette.muted);
   assertColor("RUNNING", palette.success, "Main");
   assertColor("●", palette.success, "explore");
   assertColor("explore", palette.error);
@@ -197,8 +197,8 @@ try {
   assert.match(frame(), /recent samples → now/);
   assert.match(
     frame(),
-    /██░│/,
-    "new measurements keep the earlier sample and held tail",
+    /██│/,
+    "new measurements keep the earlier sample without an extra held column",
   );
   assertMainChart();
   assert.match(frame(), /awaiting-measurement/);
@@ -229,10 +229,10 @@ try {
   ]);
   await host.renderOnce();
   assert.match(frame(), /20K \/ 500K/);
-  assertColor("┈", palette.muted);
+  assertColor("▃", palette.muted);
   assert.match(
     frame(),
-    /█▃┈│/,
+    /█▃│/,
     "post-compaction measurement drops while keeping history",
   );
   setRows([

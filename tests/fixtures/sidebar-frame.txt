@@ -8,10 +8,10 @@
 │     │                             │ │
 │     │                             │ │
 │     │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
-│     │                           ▇┈│ │
-│   0%│                           █░│ │
+│     │                            ▇│ │
+│   0%│                            █│ │
 │     └─────────────────────────────┘ │
-│ ┈ held · last known context         │
+│ muted held · last known context     │
 │ 22% used · recent samples → now     │
 │                                     │
 │ Compact threshold       112K / 160K │

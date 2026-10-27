@@ -107,7 +107,7 @@ export function mainSections(
       ? [
           {
             tone: "measurement" as const,
-            lines: wrap("┈ held · last known context", width),
+            lines: wrap("muted held · last known context", width),
           },
         ]
       : []),

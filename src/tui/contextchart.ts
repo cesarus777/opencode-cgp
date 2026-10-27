@@ -77,18 +77,16 @@ export function updateContextTrace(
           : {}),
       };
       if (reset) pending = undefined;
-      if (!last || at > last.at) {
-        // A long interval has no measurements: mark the retained level explicitly.
-        const bridge: ContextSample[] =
-          last?.tokens !== undefined && at - last.at > 2500
-            ? [{ at: at - 1, tokens: last.tokens, held: true }]
-            : [];
-        next = [...samples, ...bridge, sample].slice(-96);
+      if (!last || (at > last.at && sample.tokens !== last.tokens)) {
+        next = [...samples, sample].slice(-96);
       } else if (
+        sample.at !== last.at ||
         sample.tokens !== last.tokens ||
         sample.held !== last.held ||
         sample.compacted !== last.compacted
       ) {
+        // Unchanged/held observations update the latest column instead of
+        // consuming history space with repeated levels.
         next = [...samples.slice(0, -1), sample];
       }
     }
@@ -134,7 +132,7 @@ export interface ContextChartLine {
   readonly segments?: readonly ContextChartSegment[];
 }
 
-/** Fixed capacity scale; held levels are dashed and rendered in a muted color. */
+/** Fixed capacity scale; held levels preserve bar geometry and render in a muted color. */
 export function contextChart(
   samples: readonly ContextSample[],
   capacity: number | undefined,
@@ -153,11 +151,15 @@ export function contextChart(
   const gutter = width >= 16 ? 4 : 0;
   const size = Math.max(1, Math.min(96, width - gutter - 2));
   const last = samples.at(-1);
-  const tail: ContextSample[] =
-    now !== undefined && last?.tokens !== undefined && now - last.at > 2500
-      ? [{ at: now, tokens: last.tokens, held: true }]
-      : [];
-  const values = [...samples, ...tail].slice(-size);
+  const paused =
+    now !== undefined && last?.tokens !== undefined && now - last.at > 2500;
+  const values = samples
+    .slice(-size)
+    .map((sample, index, visible) =>
+      paused && index === visible.length - 1
+        ? { ...sample, held: true }
+        : sample,
+    );
   const offset = size - values.length;
   const thresholdRow =
     trigger !== undefined &&
@@ -189,22 +191,10 @@ export function contextChart(
                 ),
               ),
             );
-      if (sample?.held && value !== undefined) {
-        const top = Math.min(
-          height - 1,
-          Math.max(
-            0,
-            height - Math.ceil(Math.min(value / capacity, 1) * height),
-          ),
-        );
-        if (row === top) return { text: "┈", tone: "held" as const };
-        if (fill > 0) return { text: "░", tone: "held" as const };
-      }
-      if (fill > 0)
-        return { text: blocks[fill] ?? " ", tone: "value" as const };
+      const tone = sample?.held ? ("held" as const) : ("value" as const);
+      if (fill > 0) return { text: blocks[fill] ?? " ", tone };
       if (threshold) return { text: "┄", tone: "threshold" as const };
-      if (value === 0 && row === height - 1)
-        return { text: "▁", tone: "value" as const };
+      if (value === 0 && row === height - 1) return { text: "▁", tone };
       return { text: " ", tone: "axis" as const };
     });
     const line = `${axis}│${plot.map((cell) => cell.text).join("")}│`;

@@ -23,7 +23,7 @@ test("sidebar preserves occupancy and threshold text with a capacity-scaled char
     expect(lines.join(" ")).toContain("48K");
     expect(lines.join(" ")).toContain("100%");
     expect(lines.join(" ")).toContain("┄");
-    expect(lines.join(" ")).toContain("┈ held");
+    expect(lines.join(" ")).toContain("muted held");
   }
   const stale: GuardRow = { ...row, ...metric(row.snapshot, 400000, 300000) };
   expect(mainLines(stale, 35, 399000).join(" ")).toContain("STALE");

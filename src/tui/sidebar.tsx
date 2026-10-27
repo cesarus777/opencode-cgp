@@ -147,7 +147,7 @@ export function GuardView(props: {
         </For>
         <For
           each={wrap(
-            "Recent context samples → now · ┄ trigger · ┈ held",
+            "Recent context samples → now · ┄ trigger · muted held",
             props.width,
           )}
         >
