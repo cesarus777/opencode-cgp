@@ -6,7 +6,39 @@ import { renderChartReport } from "./chartreport.ts";
 import { readPerformanceHistory } from "./history.ts";
 import { readJournal } from "./telemetry.ts";
 const args = process.argv.slice(2);
-if (!args[0] || args.includes("--help")) {
+if (args[0] === "dashboard") {
+  const { parseDashboardArgs, dashboardHelp, checkTerminalRuntime } =
+    await import("./dashboard/command.ts");
+  try {
+    const options = parseDashboardArgs(
+      args.slice(1),
+      process.cwd(),
+      process.env,
+    );
+    if (options === "help") console.log(dashboardHelp);
+    else {
+      checkTerminalRuntime(
+        Bun.version,
+        Boolean(process.stdin.isTTY && process.stdout.isTTY),
+      );
+      const { runTerminal } = await import("./dashboard/terminal.ts");
+      await runTerminal(options);
+    }
+  } catch (error) {
+    // Only controlled messages are public; SDK/renderer exceptions may contain secrets.
+    const message = error instanceof Error ? error.message : "";
+    const safe =
+      /^(Use context-guard|Unknown dashboard|Duplicate dashboard|Missing value for --|Explicit servers require|dashboard tui requires|Terminal renderer unavailable|Terminal dashboard stopped|Dashboard directory must|Explicit credentials require|Use an HTTPS|No running|Dashboard server connection failed)/.test(
+        message,
+      );
+    console.error(
+      safe
+        ? message
+        : "Dashboard startup failed; check server, owning directory, authentication and renderer installation",
+    );
+    process.exitCode = 1;
+  }
+} else if (!args[0] || args.includes("--help")) {
   console.log(
     "Usage: bun run inspect /absolute/path/to/journal.jsonl [--history] [--json]\nThe ready log reports the location-specific journal path.\nMetrics: inspect metrics /absolute/history-directory [--session ID] [--from ISO-or-ms] [--to ISO-or-ms] [--csv]\nCharts: inspect charts /absolute/history-directory --output report.html [--session ID] [--agent NAME] [--model provider/model] [--from ISO-or-ms] [--to ISO-or-ms] [--max-points 1000] [--force]",
   );

@@ -96,3 +96,28 @@ The [OpenCode 2.1.2 validation](validation/context-chart-2.1.2-2026-10-22.md) re
 Run `bun run build`, then `GUARD_DASHBOARD_HOST=1 bun run test:dashboard-spike` to validate the standalone read transport against an installed OpenCode binary with its native TUI closed. Set `GUARD_DASHBOARD_BINARY` to an absolute binary path to check another version. The opt-in fixture creates only disposable sessions in isolated directories, uses generated loopback authentication, validates service discovery, root pagination, child inventory, live monitor events and bounded history, and cleans up afterward. Without opt-in it reports a skip. Offline dashboard connection tests use injected fetch fixtures and do not open network connections. See the [2.0.29/2.1.2 connection validation](validation/dashboard-connection-2026-10-22.md) for results and remaining runtime gates.
 
 The probe also starts the shared dashboard controller, selects a child, loads its history and verifies that session titles, metadata and credentials are absent from its view model. Run `bun test tests/dashboardconnection.test.ts tests/dashboardinventory.test.ts tests/dashboardcontroller.test.ts tests/dashboardview.test.ts` for deterministic offline coverage of inventory limits, live reconciliation, cancellation, history/cache bounds, immutable views and scalar privacy. See [controller validation](validation/dashboard-controller-2026-10-22.md) for the behavior and live-check limits.
+
+## Standalone terminal dashboard
+
+`bun test tests/dashboardterminal.test.ts` covers parsing, remote path/credential scope, focus, selection by identity, all six metrics without extra history reads, narrow layouts, resize, missing/stale/partial data and public OpenTUI lifecycle cleanup after startup/runtime failure. Run the full offline suite separately from compilation-heavy jobs.
+
+The standalone live smoke requires Python 3 with `pyte`, Bun >=1.3.0 for the terminal, and an installed supported OpenCode binary. It launches an isolated authenticated host and synthetic SSE provider, never the native TUI:
+
+```sh
+bun run build
+GUARD_DASHBOARD_HOST=1 bun run test:dashboard-terminal
+# When the default Bun is older, select the terminal runtime explicitly:
+GUARD_DASHBOARD_HOST=1 GUARD_DASHBOARD_BUN=/absolute/path/to/bun-1.3.11 bun run test:dashboard-terminal
+# Repeat with the other supported host:
+GUARD_DASHBOARD_HOST=1 GUARD_DASHBOARD_BUN=/absolute/path/to/bun-1.3.11 GUARD_DASHBOARD_BINARY=/absolute/path/to/opencode-2.0.29 bun run test:dashboard-terminal
+```
+
+It exercises a root and two concurrent children, alpha/beta model attribution, streaming/populated metrics, detail fields, all six history metrics and four windows, search/selection, help, resizing to 24 columns, stale labels on interruption, authenticated server restart, retained request deduplication and partial timing, privacy canaries and terminal mode/cursor/alternate-screen restoration. Failed UI assertions retain only a canary-checked scalar frame in `.artifacts/dashboard-terminal-frame.txt`. Hosts, credentials and provider content are temporary and removed afterward. Without `GUARD_DASHBOARD_HOST=1` the live smoke explicitly skips.
+
+For the **clean-installed CLI**, run:
+
+```sh
+GUARD_PACKAGE_TERMINAL=1 GUARD_DASHBOARD_HOST=1 GUARD_DASHBOARD_BUN=/absolute/path/to/bun-1.3.11 bun run test:package
+```
+
+The package check first verifies renderer-free imports, the built dynamic import boundary, help, unsupported-runtime and missing-renderer errors in a real PTY before terminal takeover. It then installs the pinned renderer peers and runs the standalone live smoke against the installed CLI. The ordinary package check reports the optional host smoke as skipped unless opted in. Registry and loopback access are required. See the [dated validation record](validation/dashboard-terminal-2026-10-28.md) for exact runtimes, measurements and limits.

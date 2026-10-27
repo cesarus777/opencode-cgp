@@ -46,7 +46,8 @@
     "test:metrics-live": "bun scripts/metrics-live.ts",
     "charts": "bun src/cli.ts charts",
     "test:metrics-server-live": "bun scripts/metrics-server-live.ts",
-    "test:dashboard-spike": "bun scripts/dashboard-spike.ts"
+    "test:dashboard-spike": "bun scripts/dashboard-spike.ts",
+    "test:dashboard-terminal": "bun scripts/dashboard-terminal-live.ts"
   },
   "dependencies": {
     "@opencode/plugin": "2.0.29",

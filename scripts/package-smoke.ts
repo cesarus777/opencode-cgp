@@ -99,6 +99,9 @@ try {
     consumer,
   );
   const installed = join(consumer, "node_modules/@cesarus777/opencode-cgp");
+  console.log(
+    `Packed plugin: ${"size" in pack ? pack.size : "unknown"} compressed bytes; ${"unpackedSize" in pack ? pack.unpackedSize : "unknown"} unpacked bytes`,
+  );
   assert.equal(
     (await lstat(installed)).isSymbolicLink(),
     false,
@@ -119,6 +122,48 @@ try {
     join(consumer, "server.ts"),
   );
   console.log(await run(["bun", "server.ts"], consumer));
+  const installedCli = join(installed, "dist/cli.js");
+  const cliSource = await readFile(installedCli, "utf8");
+  assert.ok(
+    cliSource.includes('import("@opentui/core")'),
+    "renderer loading must remain dynamic in built CLI",
+  );
+  assert.ok(
+    !/^import .*from ["']@opentui\//m.test(cliSource),
+    "no eager renderer imports",
+  );
+  const terminalRuntime = process.env.GUARD_DASHBOARD_BUN ?? process.execPath;
+  console.log(
+    await run(["bun", installedCli, "dashboard", "tui", "--help"], consumer),
+  );
+  console.log(
+    await run(
+      [
+        "python3",
+        resolve("scripts/fixtures/dashboard-command.py"),
+        process.execPath,
+        installedCli,
+        Bun.version.startsWith("1.1.") || Bun.version.startsWith("1.2.")
+          ? "Bun >=1.3.0"
+          : "Terminal renderer unavailable",
+      ],
+      consumer,
+    ),
+  );
+  if (terminalRuntime !== process.execPath) {
+    console.log(
+      await run(
+        [
+          "python3",
+          resolve("scripts/fixtures/dashboard-command.py"),
+          terminalRuntime,
+          installedCli,
+          "Terminal renderer unavailable",
+        ],
+        consumer,
+      ),
+    );
+  }
   if (process.env.GUARD_PACKAGE_HOST === "1") {
     await copyFile(
       join(root, "scripts/fixtures/package-live.ts"),
@@ -197,6 +242,22 @@ try {
     ],
     consumer,
   );
+  if (process.env.GUARD_PACKAGE_TERMINAL === "1") {
+    console.log(
+      await run(
+        [
+          "env",
+          `GUARD_DASHBOARD_CLI=${installedCli}`,
+          "bun",
+          resolve("scripts/dashboard-terminal-live.ts"),
+        ],
+        root,
+      ),
+    );
+  } else
+    console.log(
+      "SKIP: installed dashboard live PTY requires GUARD_PACKAGE_TERMINAL=1, GUARD_DASHBOARD_HOST=1 and Bun >=1.3.0",
+    );
   await writeFile(
     join(consumer, "tui.js"),
     new Bun.Transpiler({ loader: "ts", target: "bun" }).transformSync(

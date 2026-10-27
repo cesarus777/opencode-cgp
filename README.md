@@ -82,6 +82,32 @@ Use `{"plugins":[{"package":"/absolute/path/to/opencode-cgp","options":{"mode":"
 
 If loading fails, run `opencode plugin list` and `opencode plugin check`, confirm V2 2.0.29 and the correct configuration scope, and inspect OpenCode's startup logs. A missing `@opencode/plugin` or client module indicates an incomplete package installation: remove/re-add the configured package using the manager. TUI-only missing `solid-js`/OpenTUI modules usually indicate an unsupported host or loading the TUI outside its host runtime. These optional peers are supplied by the native TUI and must share its runtime instances; do not bundle private renderer copies. Standalone renderer tests need the pinned peers and public runtime preload described in [testing](docs/testing.md). Never reset persisted safety state merely to fix loading. For remote clients, check both client installation and server registration in the session's owning location.
 
+## Standalone terminal dashboard
+
+Run the dashboard with OpenCode's native TUI closed. The server must already be running, with Context Guard registered in the owning location. The standalone command requires **Bun >=1.3.0** and the optional **`@opentui/core@0.5.17`** peer; server imports and existing diagnostic commands retain Bun >=1.1.34 support. Solid and the native TUI plugin are unnecessary for this command.
+
+For an unreleased checkout:
+
+```sh
+bun install --frozen-lockfile
+bun run build
+bun dist/cli.js dashboard tui
+bun dist/cli.js dashboard tui --server https://server.example --directory /server/project
+```
+
+For a packed artifact, install the tarball and renderer together into a separate client directory, then launch with Bun >=1.3.0:
+
+```sh
+npm install /absolute/path/cesarus777-opencode-cgp-0.2.5.tgz @opentui/core@0.5.17
+bun node_modules/.bin/context-guard dashboard tui
+```
+
+Local discovery uses the current directory by default. An explicit server requires an absolute **server-side** `--directory`; it is passed unchanged. Set `CONTEXT_GUARD_PASSWORD` and optional `CONTEXT_GUARD_USERNAME` (default `opencode`) in the environment for remote authentication. Use HTTPS except on loopback. Credentials in URLs are rejected.
+
+Use `1` overview, `2` detail, `3` history, arrows or `j/k` to navigate, `/` to search, `f` for exact agent/model filters, `l` for location, `r` to refresh, and `?` for help. History uses Left/Right for six metrics, `w` for 5m/1h/24h/7d, and `[`/`]` to inspect exact samples or requests. Detail scrolls through full IDs and every exposed snapshot field. Editors take precedence over shortcuts; Enter applies and Escape cancels. Quit with `q` or Ctrl+C.
+
+The location editor's Tab key cycles up to four remembered owning directories; this is not server-wide discovery. History shows bounded retention, partial/downsampled data and gaps. Unknown measurements stay unknown, while stale occupancy remains labeled and pressure becomes unknown. Browser delivery is a later milestone. See [terminal validation and dependency sizes](docs/validation/dashboard-terminal-2026-10-28.md).
+
 ## Thresholds
 
 | Type        | Example  | Trigger                                    |
