@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { OpenCode } from "@opencode/client";
 import { connectDashboard } from "../src/dashboard/connection.ts";
+import { DashboardController } from "../src/dashboard/controller.ts";
 import { isPerformanceBatch, isPerformanceResult } from "../src/rpc.ts";
 
 if (process.env.GUARD_DASHBOARD_HOST !== "1") {
@@ -16,6 +17,7 @@ if (process.env.GUARD_DASHBOARD_HOST !== "1") {
 const root = await mkdtemp(join(tmpdir(), "guard-dashboard-spike-"));
 const directory = join(root, "project");
 const password = crypto.randomUUID();
+const privateTitle = `private-title-${crypto.randomUUID()}`;
 await mkdir(directory);
 await writeFile(
   join(directory, "opencode.json"),
@@ -105,7 +107,11 @@ try {
     await Bun.sleep(100);
   }
   const rootSession = await writer.session.create(
-    { location: { directory } },
+    {
+      location: { directory },
+      title: privateTitle,
+      metadata: { private: privateTitle },
+    },
     { signal },
   );
   const child = await writer.session.create(
@@ -124,11 +130,11 @@ try {
     signal,
   );
   assert.equal(next.data.length, 1);
-  assert.notEqual(page.data[0]?.id, next.data[0]?.id);
+  assert.notEqual(page.data[0]?.sessionId, next.data[0]?.sessionId);
   assert.ok(
     (
       await connection.listSessions({ parentID: rootSession.id }, signal)
-    ).data.some((row) => row.id === child.id),
+    ).data.some((row) => row.sessionId === child.id),
   );
   const monitor = await connection.monitor(signal);
   assert.equal(monitor.version, 2);
@@ -174,8 +180,48 @@ try {
     !JSON.stringify({ baseline, changed, history }).includes(password),
     "credentials excluded from scalar contracts",
   );
+  controller.abort();
+  await subscription;
+  subscription = undefined;
+  const dashboard = new DashboardController(connection, {
+    refreshIntervalMs: 0,
+  });
+  try {
+    await dashboard.start();
+    for (
+      let attempt = 0;
+      attempt < 100 && dashboard.getView().connection !== "live";
+      attempt++
+    )
+      await Bun.sleep(50);
+    assert.equal(dashboard.getView().connection, "live");
+    assert.equal(dashboard.getView().inventory.complete, true);
+    assert.equal(dashboard.getView().inventory.total, 3);
+    dashboard.selectSession(child.id);
+    dashboard.setScreen("history");
+    for (
+      let attempt = 0;
+      attempt < 100 && dashboard.getView().history.status === "loading";
+      attempt++
+    )
+      await Bun.sleep(50);
+    const view = dashboard.getView();
+    assert.equal(view.selected?.depth, 1);
+    assert.equal(view.selected?.freshness, "missing");
+    assert.equal(view.history.status, "ready");
+    assert.ok(
+      !JSON.stringify(view).includes(password),
+      "credentials excluded from view model",
+    );
+    assert.ok(
+      !JSON.stringify(view).includes(privateTitle),
+      "session titles/metadata excluded from view model",
+    );
+  } finally {
+    dashboard.stop();
+  }
   console.log(
-    `PASS: OpenCode ${info.version}: explicit URL/auth, Service.discover/headers, root pagination, children, monitor v2 read/events, history and unknown usage; native TUI closed`,
+    `PASS: OpenCode ${info.version}: explicit URL/auth, Service.discover/headers, root pagination, children, monitor v2 read/events, controller inventory/selection/history, scalar privacy and unknown usage; native TUI closed`,
   );
 } catch {
   // Raw SDK/host errors can contain response data. Keep failure output scalar.

@@ -5,6 +5,7 @@ import { SnapshotStore } from "../src/snapshot.ts";
 import { parseConfig } from "../src/config.ts";
 import { buildChartData } from "../src/charts.ts";
 import type { HistoryChartResult } from "../src/historycharts.ts";
+import { session } from "./fixtures/session.ts";
 
 const signal = () => AbortSignal.timeout(3000);
 const snapshot = () =>
@@ -225,6 +226,56 @@ test("dashboard prefers v2 and validates bounded location-scoped history without
   ]);
   await expect(
     connection.history({ ...input, maxPoints: 501 }, signal()),
-  ).rejects.toThrow("1–500 points");
+  ).rejects.toThrow("16–500 points");
+  await expect(
+    connection.history({ ...input, maxPoints: 15 }, signal()),
+  ).rejects.toThrow("16–500 points");
   expect(paths.length).toBe(2);
+});
+
+test("dashboard rebinds locations on the same authenticated client and projects only approved session scalars", async () => {
+  let discoveries = 0;
+  const runtime = {
+    ...network((request) => {
+      expect(request.headers.get("authorization")).toBe(
+        `Basic ${btoa("opencode:private-canary")}`,
+      );
+      const url = new URL(request.url);
+      if (url.pathname === "/api/session/active")
+        return Response.json({
+          data: { root: { type: "running" }, foreign: { type: "running" } },
+        });
+      const directory = url.searchParams.get("directory") ?? "/project";
+      return Response.json({
+        data: [
+          {
+            ...session("root"),
+            location: { directory },
+            title: "private-title",
+            metadata: { secret: "private-canary" },
+          },
+        ],
+        cursor: { next: null },
+      });
+    }),
+    discover: async () => {
+      discoveries++;
+      return {
+        url: "http://127.0.0.1:1234",
+        auth: {
+          type: "basic" as const,
+          username: "opencode",
+          password: "private-canary",
+        },
+      };
+    },
+  };
+  const connection = await connectDashboard({ directory: "/project" }, runtime);
+  const next = connection.atLocation("/other");
+  const page = await next.listSessions({ parentID: null }, signal());
+  expect(page.data).toEqual([{ sessionId: "root", directory: "/other" }]);
+  expect(JSON.stringify(page)).not.toContain("private-");
+  expect(await next.activeSessions(["root"], signal())).toEqual(["root"]);
+  expect(discoveries).toBe(1);
+  expect(() => next.atLocation("relative")).toThrow("absolute path");
 });
