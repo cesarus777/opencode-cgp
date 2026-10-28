@@ -6,11 +6,11 @@ Targets **`@opencode/plugin@2.0.29`**. The published SDK, official documentation
 
 ## Install
 
-The intended npm distribution is **`@cesarus777/opencode-cgp`**. It becomes available after this repository's first publication. The unscoped `opencode-context-guard` name belongs to another project; do not install it expecting this plugin.
+The npm package is **`@cesarus777/opencode-cgp`**. The unscoped `opencode-context-guard` name belongs to another project; do not install it expecting this plugin.
 
 Minimum supported host: **OpenCode V2 2.0.29**. Versions 2.0.29 and 2.1.2 have been tested locally with a synthetic provider; V1 is unsupported.
 
-After this project's first publication, register the global package through the native manager:
+Register the global package through the native manager:
 
 ```sh
 opencode plugin add @cesarus777/opencode-cgp@latest
@@ -41,10 +41,10 @@ Global configuration is `~/.config/opencode/opencode.jsonc` (or the OpenCode con
 
 Restart/reload OpenCode and look for `context-guard: observe; diagnostics ...`. Observe mode records policy decisions and never requests compaction; OpenCode's own automatic compaction remains active. Inspect diagnostics first, then set `mode` to `enforce` to admit native compaction at runtime step boundaries. The complete [example](examples/opencode.jsonc) includes model, role, and agent policies. **Last matching rule wins**; selectors within a rule are ANDed.
 
-Pin the exact published version in the existing entry's `package` field or use the manager. Version `0.2.5` keeps the context chart continuous through pauses, retains its history between sidebar and panel, and shows confirmed compaction drops. It also adds local OpenCode 2.1.2 validation.
+Pin the exact published version in the existing entry's `package` field or use the manager. Version `0.3.0` adds a standalone terminal dashboard, offline model analytics across retained sessions, and context charts that preserve bar height and reuse the latest column during pauses. See the [changelog](CHANGELOG.md).
 
 ```sh
-opencode plugin add @cesarus777/opencode-cgp@0.2.1
+opencode plugin add @cesarus777/opencode-cgp@0.3.0
 ```
 
 Manage the configured target with the [official V2 CLI](https://dev.opencode.ai/v2/docs/plugins):
@@ -64,7 +64,7 @@ For development or unreleased Git revisions, V2 supports npm-compatible Git targ
 opencode plugin add 'github:cesarus777/opencode-cgp#master'
 ```
 
-Replace `master` with a version tag or full commit hash to pin a revision. Git installs require Bun and development dependencies to run `prepare`; unlike npm artifacts they build from source. Prefer an exact published prerelease such as `@cesarus777/opencode-cgp@0.2.0-beta.1` after publication. Git preparation has not been verified with the real plugin manager; use a built local checkout if it fails.
+Replace `master` with a version tag or full commit hash to pin a revision. Git installs require Bun and development dependencies to run `prepare`; unlike npm artifacts they build from source. Prefer an exact published npm version for reproducible installs. Git preparation has not been verified with the real plugin manager; use a built local checkout if it fails.
 
 Contributors can build and register a checkout without publishing:
 
@@ -98,7 +98,7 @@ bun dist/cli.js dashboard tui --server https://server.example --directory /serve
 For a packed artifact, install the tarball and renderer together into a separate client directory, then launch with Bun >=1.3.0:
 
 ```sh
-npm install /absolute/path/cesarus777-opencode-cgp-0.2.5.tgz @opentui/core@0.5.17
+npm install /absolute/path/cesarus777-opencode-cgp-0.3.0.tgz @opentui/core@0.5.17
 bun node_modules/.bin/context-guard dashboard tui
 ```
 

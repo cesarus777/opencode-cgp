@@ -70,10 +70,16 @@ try {
   });
   for (const path of paths) {
     assert.ok(
-      /^(dist\/.*\.(js|d\.ts)|package\.json|README\.md|LICENSE)$/.test(path),
+      /^(dist\/.*\.(js|d\.ts)|package\.json|README\.md|CHANGELOG\.md|LICENSE)$/.test(
+        path,
+      ),
       `Unexpected published file: ${path}`,
     );
   }
+  assert.ok(
+    paths.includes("CHANGELOG.md"),
+    "release notes ship with the package",
+  );
   for (const entry of ["index", "core", "rpc", "tui"]) {
     assert.ok(paths.includes(`dist/${entry}.js`));
     assert.ok(paths.includes(`dist/types/${entry}.d.ts`));
