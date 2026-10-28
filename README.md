@@ -130,6 +130,8 @@ Enabling Context Guard after work has already started also shows the last report
 
 Per-session live TPS, average model throughput, average session throughput and observed TTFT appear in the selected session and child rows. Live TPS and TTFT use `~` to mark estimates; completed rates use provider totals. Configurable local history defaults to seven days with a 64 MiB total cap, independently of diagnostic telemetry. See [metric definitions and history exports](docs/configuration.md#live-performance-and-retained-history).
 
+Compare models across retained sessions with `bun run inspect models /absolute/history-directory --model provider/model` (installed: `context-guard models ...`). JSON/CSV summaries include weighted request TPS, TTFT mean/median/p95, eligibility counts and coverage limits. Use `--from`, `--to` and `--agent` to scope the analysis. This offline command precedes the planned TUI Models screen; see [analytics definitions](docs/configuration.md#offline-model-analytics).
+
 Press **c** in the Context Guard panel for retained-history terminal charts. View one metric at a time with **Left / Right**, change the time window with **[ / ]**, and select an agent instance with **Up / Down**. Press **c** to return or **q** to close the panel; controls stay visible below the scrollable content. Generate a self-contained interactive browser report with `bun run charts /absolute/history-directory --output report.html`. It includes filters, UTC timestamp tooltips, request statistics and SVG export. Installed packages expose the same command as `context-guard charts ...` (Bun required). See [chart controls and limits](docs/configuration.md#performance-charts).
 
 ## Inspect

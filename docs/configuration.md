@@ -115,6 +115,25 @@ Timestamps accept ISO dates or epoch milliseconds. JSON includes retention/read-
 
 The new `context-guard.monitor.v2` RPC adds optional performance snapshots while retaining the version-1 batch envelope and revision protocol. The original v1 endpoint strips performance fields. Updated clients probe v2 per location and fall back to v1; older servers show context monitoring without performance metrics.
 
+## Offline model analytics
+
+Aggregate completed requests across all sessions present in a location's retained archive:
+
+```sh
+bun run inspect models /absolute/history-directory --model provider/model --from 2026-10-20T00:00:00Z --to 2026-10-21T00:00:00Z
+bun run inspect models /absolute/history-directory --agent build --csv > models.csv
+```
+
+Installed packages expose the same command as `context-guard models ...`. JSON is the default (`--json` is also accepted); CSV writes coverage metadata to stderr. Model and agent filters match exact identifiers. Unknown model attribution has its own row with the model field absent in JSON or empty in CSV. The CLI's location identity is the absolute archive directory.
+
+The command groups raw request records before chart downsampling, session inventory limits or the history RPC's 500-request limit. Request identity is session ID, request ID and request start timestamp within that archive. Duplicate complementary observations are merged; conflicting timing, tokens or attribution exclude the request and increment `conflictingRequests`. Request model attribution takes precedence over the record's model, with legacy fallback counted separately. Sampled session averages and cumulative session totals never enter model aggregates.
+
+Only requests with an observed stream end after their start enter completed-request totals, including failed steps with a completed stream; this is not a success-rate measure. Time filters use stream completion in `[from, to)`, independently of archive write time. `averageTps` divides summed reported output-plus-reasoning tokens by summed matched request duration, including TTFT. Concurrent durations are summed rather than treated as wall-clock system throughput. Live token estimates are excluded; reported zero remains zero, subject to provider omission ambiguity.
+
+TTFT statistics use available nonnegative observed values no greater than request duration; these remain approximate transport-observed timing. `meanTtftMs`, midpoint `medianTtftMs` and nearest-rank `p95TtftMs` report milliseconds. `tpsRequests` and `ttftRequests` give independent denominators; missing or invalid metric facts increment the corresponding exclusion count. Empty eligible sets omit their statistics. A partial session's matched requests may still contribute, with `partialRequests` preserved.
+
+The scan reads at most 64 MiB of recent whole segments and tracks at most 100,000 distinct request identities; crossing that identity budget stops the scan and reports `unscannedRecords`. Coverage counters describe the scanned archive before model/agent/time filtering; model rows describe the selected subset. Gaps, missing identity/completion, invalid timing, conflicting duplicates, legacy attribution, metric exclusions, malformed records and scan limits produce explicit partial indicators. Every result is still bounded by retention even when `partial` is false; no claim of complete or permanent history is made. Disabled collection and history before installation cannot be reconstructed. A dedicated Models screen and durable analytics ledger remain planned.
+
 ## Performance charts
 
 Both chart surfaces display live TPS estimates, model-time and session-time average TPS, per-request TTFT, completed request throughput, and cumulative output. Each session instance keeps its own series, even when agent names match. Curves break across missing samples longer than 2.5 seconds, recorded gaps, model/agent changes, counter resets, or observation epochs. Missing observations are never filled with zero. Request TTFT/throughput use one scatter observation per completed request, deduplicated by session, request ID, and start time.

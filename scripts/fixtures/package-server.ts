@@ -3,12 +3,13 @@ import assert from "node:assert/strict";
 import { existsSync } from "node:fs";
 import plugin from "@cesarus777/opencode-cgp";
 import server from "@cesarus777/opencode-cgp/server";
-import { parseConfig } from "@cesarus777/opencode-cgp/core";
+import { parseConfig, aggregateModels } from "@cesarus777/opencode-cgp/core";
 import { monitorRpc } from "@cesarus777/opencode-cgp/rpc";
 import { Host } from "@opencode/plugin/host";
 assert.equal(plugin.id, "context-guard");
 assert.equal(typeof plugin.setup, "function");
 assert.equal(server, plugin);
+assert.deepEqual(aggregateModels([], { location: "package-test" }).models, []);
 assert.equal(monitorRpc.id, "context-guard.monitor.v1");
 assert.ok(!existsSync("node_modules/solid-js"));
 const entries = Host.resolve({

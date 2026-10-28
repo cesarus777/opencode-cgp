@@ -40,8 +40,11 @@ if (args[0] === "dashboard") {
   }
 } else if (!args[0] || args.includes("--help")) {
   console.log(
-    "Usage: bun run inspect /absolute/path/to/journal.jsonl [--history] [--json]\nThe ready log reports the location-specific journal path.\nMetrics: inspect metrics /absolute/history-directory [--session ID] [--from ISO-or-ms] [--to ISO-or-ms] [--csv]\nCharts: inspect charts /absolute/history-directory --output report.html [--session ID] [--agent NAME] [--model provider/model] [--from ISO-or-ms] [--to ISO-or-ms] [--max-points 1000] [--force]",
+    "Usage: bun run inspect /absolute/path/to/journal.jsonl [--history] [--json]\nThe ready log reports the location-specific journal path.\nMetrics: inspect metrics /absolute/history-directory [--session ID] [--from ISO-or-ms] [--to ISO-or-ms] [--csv]\nModels: inspect models /absolute/history-directory [--model provider/model] [--agent NAME] [--from ISO-or-ms] [--to ISO-or-ms] [--csv | --json]\nCharts: inspect charts /absolute/history-directory --output report.html [--session ID] [--agent NAME] [--model provider/model] [--from ISO-or-ms] [--to ISO-or-ms] [--max-points 1000] [--force]",
   );
+} else if (args[0] === "models") {
+  const { inspectModels } = await import("./modelcli.ts");
+  await inspectModels(args.slice(1));
 } else if (args[0] === "metrics" || args[0] === "charts") {
   const directory = args[1];
   if (!directory || directory.startsWith("--"))

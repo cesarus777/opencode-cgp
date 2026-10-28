@@ -225,6 +225,76 @@ try {
   assert.ok(
     (await readFile(report, "utf8")).includes('"sessionId":"chart-session"'),
   );
+  // Built model analytics must also work before installing renderer peers.
+  await writeFile(
+    join(archive, "1001-abcdef.jsonl"),
+    JSON.stringify({
+      schema: 1,
+      recordId: "request",
+      type: "request",
+      sessionId: "chart-session",
+      time: 3000,
+      performance: {
+        sessionCreatedAt: 0,
+        observedSince: 0,
+        at: 3000,
+        status: "idle",
+        partial: false,
+        estimatedOutputTokens: 0,
+        modelOutputTokens: 100,
+        modelDurationMs: 1000,
+        completedRequests: 1,
+        tokenSource: "reported",
+        requestId: "req",
+        requestModel: "p/test",
+        requestStartedAt: 1000,
+        streamEndedAt: 2000,
+        requestOutputTokens: 100,
+        ttftMs: 50,
+      },
+    }) + "\n",
+  );
+  const modelSummary: unknown = JSON.parse(
+    await run(
+      [
+        "bun",
+        installedCli,
+        "models",
+        archive,
+        "--model",
+        "p/test",
+        "--from",
+        "2000",
+        "--to",
+        "2001",
+      ],
+      consumer,
+    ),
+  );
+  assert.ok(
+    typeof modelSummary === "object" &&
+      modelSummary !== null &&
+      "models" in modelSummary,
+  );
+  assert.deepEqual(modelSummary.models, [
+    {
+      model: "p/test",
+      sessions: 1,
+      completedRequests: 1,
+      partialRequests: 0,
+      legacyAttributionRequests: 0,
+      tpsRequests: 1,
+      ttftRequests: 1,
+      excludedTpsRequests: 0,
+      excludedTtftRequests: 0,
+      outputTokens: 100,
+      durationMs: 1000,
+      averageTps: 100,
+      meanTtftMs: 50,
+      medianTtftMs: 50,
+      p95TtftMs: 50,
+    },
+  ]);
   // Install host modules only after verifying the renderer-free server. Keep
   // host module versions aligned with the repository's tested V2 fixture.
   await run(

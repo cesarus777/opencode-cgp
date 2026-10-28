@@ -71,6 +71,8 @@ The snapshot store projects performance at the configured cadence. Both monitor 
 
 ## Chart projections
 
+`src/modelanalytics.ts` exports harness-independent `aggregateModels` through core. It reconciles scalar request facts from raw history records before any chart limits, groups by historical model identity and computes matched duration-weighted TPS and TTFT distributions with explicit eligibility counts and coverage. A distinct-request budget bounds aggregation memory. `src/modelcli.ts` joins that pure layer to the existing bounded filesystem reader and JSON/CSV exports; completion-time filtering occurs after reconciliation. This offline feature does not add an RPC or dashboard subscription.
+
 `buildChartData` is exported through core and owns chronological ordering, per-instance grouping, event/request deduplication, discontinuities and extrema-preserving downsampling. It has no runtime SDK or filesystem dependency. Timestamped request records keep matched token/duration pairs for duration-weighted summaries. Historical session averages remain the collector's snapshots; filtering observations does not reinterpret their lifetime scope.
 
 The CLI builds a self-contained offline HTML/SVG report with escaped embedded JSON, DOM text nodes for identities, and a network-blocking content policy. It is shipped as the Bun-backed `context-guard` executable as well as the checkout's `charts`/`inspect` scripts. The terminal panel keeps the shared live transport mounted and independently polls the new history RPC only in chart mode. History requests are serialized per location service, have capped windows/results, and accept no filesystem path from the client.

@@ -121,3 +121,7 @@ GUARD_PACKAGE_TERMINAL=1 GUARD_DASHBOARD_HOST=1 GUARD_DASHBOARD_BUN=/absolute/pa
 ```
 
 The package check first verifies renderer-free imports, the built dynamic import boundary, help, unsupported-runtime and missing-renderer errors in a real PTY before terminal takeover. It then installs the pinned renderer peers and runs the standalone live smoke against the installed CLI. The ordinary package check reports the optional host smoke as skipped unless opted in. Registry and loopback access are required. See the [dated validation record](validation/dashboard-terminal-2026-10-28.md) for exact runtimes, measurements and limits.
+
+## Offline model analytics
+
+`tests/modelanalytics.test.ts` verifies duration-weighted TPS, TTFT statistics, independent eligibility counts, completion-time boundaries, historical model attribution, duplicate/conflicting facts, retries/restarts, gaps and bounded processing. It covers 1,200 requests from 1,200 sessions before any chart limits. CLI checks cover JSON/CSV filters and metadata, malformed records, invalid arguments and read-only operation. Package smoke checks the built core export and renderer-free installed analytics command. These checks do not certify genuine-provider timing or the planned analytics RPC/TUI screen.
