@@ -9,7 +9,10 @@ import time
 
 master, slave = pty.openpty()
 original = termios.tcgetattr(slave)
-child = subprocess.Popen([sys.argv[1], sys.argv[2], "dashboard", "tui"], stdin=slave, stdout=slave, stderr=slave)
+child = subprocess.Popen(
+    [sys.argv[1], sys.argv[2], "dashboard", "tui", "--server", "ftp://invalid.test", "--directory", "/package-test"],
+    stdin=slave, stdout=slave, stderr=slave,
+)
 captured = b""
 try:
     deadline = time.monotonic() + 20

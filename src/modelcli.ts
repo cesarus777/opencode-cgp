@@ -6,7 +6,7 @@ export async function inspectModels(args: readonly string[]): Promise<void> {
   const directory = args[0];
   if (!directory || !isAbsolute(directory))
     throw new Error(
-      "Usage: inspect models /absolute/history-directory [--model ID] [--agent NAME] [--from ISO-or-ms] [--to ISO-or-ms] [--csv | --json]",
+      "Use context-guard models --help for usage and examples; the history directory must be an absolute path",
     );
   const values = new Map<string, string>();
   let csv = false,

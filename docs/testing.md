@@ -57,7 +57,7 @@ bun run test:package
 
 This network-enabled check upgrades the former workspace-symlink export check to a real npm tarball installation. It verifies server imports without optional renderer peers, every public export, configuration, the existing adapter behavior suite against the installed default export, native compiled TUI rendering through public host runtime support, and consumer declarations. It uses no repository symlinks and removes its temporary installation on success or failure. See [package architecture](releasing.md#package-layout-and-runtime-boundary).
 
-The native renderer fixture deliberately installs `solid-js@1.9.15` with `@opentui/solid@0.5.17`, matching the inspected OpenCode 2.0.29 host. That renderer declares a narrower Solid peer version, so this test uses npm's `--legacy-peer-deps` while supplying the exact tested host modules explicitly. Server-only installation also bypasses peer auto-installation and omits optional dependencies to prove the renderer is not required. This does not change consumers' dependency resolution or bundle host modules into the package.
+The native renderer fixture deliberately installs `solid-js@1.9.15` with `@opentui/solid@0.5.17`, matching the inspected OpenCode 2.0.29 host. That renderer declares a narrower Solid peer version, so this test uses npm's `--legacy-peer-deps` while supplying the exact tested host modules explicitly. The first installation bypasses peer auto-installation but includes the standalone renderer and its optional platform binary. Server imports must still avoid loading renderer modules. This does not change consumers' dependency resolution or bundle host modules into the package.
 
 For an actual installed **OpenCode V2 2.0.29** executable on PATH, additionally run:
 
@@ -120,7 +120,7 @@ For the **clean-installed CLI**, run:
 GUARD_PACKAGE_TERMINAL=1 GUARD_DASHBOARD_HOST=1 GUARD_DASHBOARD_BUN=/absolute/path/to/bun-1.3.11 bun run test:package
 ```
 
-The package check first verifies renderer-free imports, the built dynamic import boundary, help, unsupported-runtime and missing-renderer errors in a real PTY before terminal takeover. It then installs the pinned renderer peers and runs the standalone live smoke against the installed CLI. The ordinary package check reports the optional host smoke as skipped unless opted in. Registry and loopback access are required. See the [dated validation record](validation/dashboard-terminal-2026-10-28.md) for exact runtimes, measurements and limits.
+The package check first verifies renderer-free imports, the built dynamic import boundary, help and unsupported-runtime errors in a real PTY before terminal takeover. With `GUARD_DASHBOARD_BUN` pointing to Bun >=1.3.0, it creates and destroys a test renderer using only the CGP installation, then verifies that the installed CLI reaches URL validation without terminal takeover. The package check installs the native-TUI peers afterward and optionally runs the standalone live smoke against the installed CLI. The ordinary package check reports the optional host smoke as skipped unless opted in. Registry and loopback access are required. See the [dated validation record](validation/dashboard-terminal-2026-10-28.md) for exact runtimes, measurements and limits.
 
 ## Offline model analytics
 

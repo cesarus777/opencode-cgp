@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 — 2026-10-29
+
+- Install the standalone dashboard's pinned OpenTUI renderer automatically with CGP, including its native platform library. Keep renderer loading lazy so server and offline commands still work on Bun >=1.1.34; the dashboard requires Bun >=1.3.0.
+- Clarify CLI launch instructions and add command-specific help with examples.
+
 ## 0.3.0 — 2026-10-28
 
 Changes since 0.2.5:

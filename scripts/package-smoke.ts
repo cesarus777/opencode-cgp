@@ -96,7 +96,6 @@ try {
       "install",
       "--ignore-scripts",
       "--omit=dev",
-      "--omit=optional",
       "--legacy-peer-deps",
       "--no-audit",
       "--no-fund",
@@ -129,6 +128,25 @@ try {
   );
   console.log(await run(["bun", "server.ts"], consumer));
   const installedCli = join(installed, "dist/cli.js");
+  // The standalone renderer, including its platform library, must work from
+  // the CGP installation alone, before any native-host peers are installed.
+  const terminalRuntime = process.env.GUARD_DASHBOARD_BUN ?? process.execPath;
+  const modernTerminal = !/^1\.[012]\./.test(
+    (await run([terminalRuntime, "--version"], consumer)).trim(),
+  );
+  await writeFile(
+    join(consumer, "renderer.ts"),
+    `const { createTestRenderer } = await import("@opentui/core/testing");
+const { renderer } = await createTestRenderer({ width: 40, height: 10 });
+renderer.destroy();
+console.log("PASS: CGP installs a working standalone renderer without extra packages");\n`,
+  );
+  if (modernTerminal)
+    console.log(await run([terminalRuntime, "renderer.ts"], consumer));
+  else
+    console.log(
+      "SKIP: installed standalone renderer requires GUARD_DASHBOARD_BUN pointing to Bun >=1.3.0",
+    );
   const cliSource = await readFile(installedCli, "utf8");
   assert.ok(
     cliSource.includes('import("@opentui/core")'),
@@ -138,7 +156,6 @@ try {
     !/^import .*from ["']@opentui\//m.test(cliSource),
     "no eager renderer imports",
   );
-  const terminalRuntime = process.env.GUARD_DASHBOARD_BUN ?? process.execPath;
   console.log(
     await run(["bun", installedCli, "dashboard", "tui", "--help"], consumer),
   );
@@ -151,7 +168,7 @@ try {
         installedCli,
         Bun.version.startsWith("1.1.") || Bun.version.startsWith("1.2.")
           ? "Bun >=1.3.0"
-          : "Terminal renderer unavailable",
+          : "Use an HTTPS",
       ],
       consumer,
     ),
@@ -164,7 +181,7 @@ try {
           resolve("scripts/fixtures/dashboard-command.py"),
           terminalRuntime,
           installedCli,
-          "Terminal renderer unavailable",
+          "Use an HTTPS",
         ],
         consumer,
       ),
@@ -188,7 +205,7 @@ try {
     .replace(/import type \{[^}]*\} from "\.\.\/src\/[^";]+";/g, "");
   await writeFile(join(consumer, "adapter.test.ts"), adapter);
   console.log(await run(["bun", "test", "adapter.test.ts"], consumer));
-  // The shipped CLI can generate offline charts without renderer peers.
+  // Offline commands still work on the minimum Bun without loading OpenTUI.
   const archive = join(consumer, "chart-history");
   await mkdir(archive);
   await writeFile(
@@ -231,7 +248,7 @@ try {
   assert.ok(
     (await readFile(report, "utf8")).includes('"sessionId":"chart-session"'),
   );
-  // Built model analytics must also work before installing renderer peers.
+  // Built model analytics must also work before installing native-host peers.
   await writeFile(
     join(archive, "1001-abcdef.jsonl"),
     JSON.stringify({
@@ -312,7 +329,6 @@ try {
       "--no-audit",
       "--no-fund",
       "solid-js@1.9.15",
-      "@opentui/core@0.5.17",
       "@opentui/solid@0.5.17",
       "@opencode/theme@2.0.29",
     ],

@@ -1,16 +1,37 @@
 import { isAbsolute, resolve } from "node:path";
 import type { DashboardConnectionOptions } from "./connection.ts";
 
-export const dashboardHelp = `Usage: context-guard dashboard tui [--server URL] [--directory PATH]
-Read-only standalone terminal dashboard; never starts an OpenCode server.
-Requires an interactive terminal, Bun >=1.3.0 and @opentui/core@0.5.17.
-Install the renderer beside this package: npm install @opentui/core@0.5.17
-Local discovery defaults to the current directory.
-An explicit server requires --directory with an owning absolute server path.
-Remote authentication: CONTEXT_GUARD_PASSWORD and optional CONTEXT_GUARD_USERNAME
-(default opencode). Credentials must never be supplied in the URL.
-Keys: 1 overview, 2 detail, 3 history, arrows/j/k move, / search, f filters,
-l location, w history window, r refresh, ? help, Escape back, q/Ctrl+C quit.`;
+export const dashboardHelp = `Usage: context-guard dashboard tui [options]
+Open a read-only live terminal dashboard for an existing OpenCode server.
+
+Start here
+  1. Keep an OpenCode server running with Context Guard registered.
+  2. Close OpenCode's native TUI before opening the standalone dashboard.
+  3. In the owning project directory, run: context-guard dashboard tui
+
+Options
+  --directory PATH   Owning project directory (local default: current directory)
+  --server URL       Connect to an explicit server; requires --directory with
+                     an absolute server-side project path. Use HTTPS except
+                     on loopback. Credentials in URLs are rejected.
+  -h, --help         Show this help
+
+Examples
+  context-guard dashboard tui
+  context-guard dashboard tui --directory /absolute/project
+  context-guard dashboard tui --server https://server.example --directory /server/project
+
+Requirements
+  Interactive terminal and Bun >=1.3.0. The OpenTUI renderer is installed
+  automatically with CGP. This command never starts a server.
+
+Authentication (explicit servers)
+  CONTEXT_GUARD_PASSWORD   Server password
+  CONTEXT_GUARD_USERNAME   Server username (default: opencode)
+
+Keys
+  1/2/3 overview/detail/history; arrows or j/k move; / search; f filters;
+  l location; w history window; r refresh; ? help; q or Ctrl+C quit.`;
 
 export function parseDashboardArgs(
   args: readonly string[],
@@ -80,7 +101,7 @@ export async function loadTerminalRenderer() {
     return await import("@opentui/core");
   } catch {
     throw new Error(
-      "Terminal renderer unavailable; install @opentui/core@0.5.17 beside @cesarus777/opencode-cgp using Bun >=1.3.0",
+      "Terminal renderer unavailable; reinstall @cesarus777/opencode-cgp with optional dependencies enabled for its platform renderer, using Bun >=1.3.0",
     );
   }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@cesarus777/opencode-cgp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "exports": {
     ".": {
@@ -50,6 +50,7 @@
     "test:dashboard-terminal": "bun scripts/dashboard-terminal-live.ts"
   },
   "dependencies": {
+    "@opentui/core": "0.5.17",
     "@opencode/plugin": "2.0.29",
     "@opencode/client": "2.0.29"
   },
@@ -58,7 +59,6 @@
     "typescript": "5.9.3",
     "prettier": "3.6.2",
     "solid-js": "1.9.15",
-    "@opentui/core": "0.5.17",
     "@opentui/solid": "0.5.17",
     "@opencode/theme": "2.0.29"
   },
@@ -67,14 +67,10 @@
   },
   "peerDependencies": {
     "solid-js": ">=1.9.0",
-    "@opentui/core": ">=0.5.17",
     "@opentui/solid": ">=0.5.17"
   },
   "peerDependenciesMeta": {
     "solid-js": {
-      "optional": true
-    },
-    "@opentui/core": {
       "optional": true
     },
     "@opentui/solid": {

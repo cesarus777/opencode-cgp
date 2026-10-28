@@ -5,8 +5,29 @@ import { buildChartData } from "./charts.ts";
 import { renderChartReport } from "./chartreport.ts";
 import { readPerformanceHistory } from "./history.ts";
 import { readJournal } from "./telemetry.ts";
+import { commandHelp, mainHelp } from "./clihelp.ts";
 const args = process.argv.slice(2);
-if (args[0] === "dashboard") {
+const helpRequested = args.some((arg) => arg === "--help" || arg === "-h");
+const helpTopic = args[0] === "help" ? args[1] : args[0];
+if (
+  !args[0] ||
+  args[0] === "help" ||
+  helpRequested ||
+  (args.length === 1 &&
+    (args[0] === "dashboard" || Object.hasOwn(commandHelp, args[0])))
+) {
+  if (helpTopic === "dashboard") {
+    const { dashboardHelp } = await import("./dashboard/command.ts");
+    console.log(dashboardHelp);
+  } else if (helpTopic && Object.hasOwn(commandHelp, helpTopic)) {
+    console.log(commandHelp[helpTopic]);
+  } else if (args[0] === "help" && helpTopic) {
+    console.error(`Unknown help topic. Use context-guard --help for commands.`);
+    process.exitCode = 1;
+  } else if (helpRequested && helpTopic && !helpTopic.startsWith("-")) {
+    console.log(commandHelp.journal);
+  } else console.log(mainHelp);
+} else if (args[0] === "dashboard") {
   const { parseDashboardArgs, dashboardHelp, checkTerminalRuntime } =
     await import("./dashboard/command.ts");
   try {
@@ -38,10 +59,6 @@ if (args[0] === "dashboard") {
     );
     process.exitCode = 1;
   }
-} else if (!args[0] || args.includes("--help")) {
-  console.log(
-    "Usage: bun run inspect /absolute/path/to/journal.jsonl [--history] [--json]\nThe ready log reports the location-specific journal path.\nMetrics: inspect metrics /absolute/history-directory [--session ID] [--from ISO-or-ms] [--to ISO-or-ms] [--csv]\nModels: inspect models /absolute/history-directory [--model provider/model] [--agent NAME] [--from ISO-or-ms] [--to ISO-or-ms] [--csv | --json]\nCharts: inspect charts /absolute/history-directory --output report.html [--session ID] [--agent NAME] [--model provider/model] [--from ISO-or-ms] [--to ISO-or-ms] [--max-points 1000] [--force]",
-  );
 } else if (args[0] === "models") {
   const { inspectModels } = await import("./modelcli.ts");
   await inspectModels(args.slice(1));
@@ -49,7 +66,7 @@ if (args[0] === "dashboard") {
   const directory = args[1];
   if (!directory || directory.startsWith("--"))
     throw new Error(
-      "Usage: inspect metrics /absolute/history-directory [--session ID] [--from ISO-or-ms] [--to ISO-or-ms] [--csv]",
+      `Use context-guard ${args[0]} --help for usage and examples`,
     );
   const option = (name: string) => {
     const index = args.indexOf(name);
