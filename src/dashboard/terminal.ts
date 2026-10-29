@@ -7,6 +7,7 @@ import {
 } from "./connection.ts";
 import { loadTerminalRenderer } from "./command.ts";
 import { historyWindows } from "./view.ts";
+import { modelMetrics, terminalModelRow, terminalModels } from "./modelview.ts";
 import { clip } from "../tui/format.ts";
 import {
   headerLines,
@@ -31,6 +32,13 @@ export class TerminalShell {
   scroll = 0;
   metric = 0;
   sample = 0;
+  modelDetail = false;
+  modelRequests = false;
+  modelFocus = 0;
+  private modelFocusId: string | undefined;
+  private modelViewport:
+    | { focus: number; start: number; end: number; height: number }
+    | undefined;
   help = false;
   editor: Editor | undefined;
   input = "";
@@ -81,7 +89,8 @@ export class TerminalShell {
           }
           this.task(this.controller.selectLocation(this.input));
         } else this.controller.setFilters({ [editor]: this.input });
-        this.editor = editor === "agent" ? "model" : undefined;
+        this.editor =
+          editor === "agent" && view.screen !== "models" ? "model" : undefined;
         this.input = this.editor === "model" ? view.filters.model : "";
         this.scroll = 0;
         this.notice = "";
@@ -106,6 +115,11 @@ export class TerminalShell {
     if (name === "escape") {
       this.help = false;
       this.scroll = 0;
+      if (view.screen === "models" && this.modelDetail) {
+        this.modelDetail = false;
+        this.modelRequests = false;
+        return;
+      }
       this.controller.setScreen("overview");
       return;
     }
@@ -127,6 +141,127 @@ export class TerminalShell {
     if (name === "r") {
       this.task(this.controller.refresh());
       return;
+    }
+    if (name === "4") {
+      this.help = false;
+      this.scroll = 0;
+      this.modelDetail = false;
+      this.modelRequests = false;
+      this.controller.setScreen("models");
+      return;
+    }
+    if (view.screen === "models" && !this.help) {
+      if (name === "enter" || name === "return") {
+        const model = view.models.result?.models[this.modelFocus];
+        if (model) {
+          this.controller.models.select(model.model ?? "");
+          this.modelDetail = true;
+          this.modelRequests = false;
+          this.sample = 0;
+          this.scroll = 0;
+        }
+        return;
+      }
+      if (name === "w") {
+        this.controller.setWindow(
+          historyWindows[
+            (historyWindows.indexOf(view.models.windowMs) + 1) %
+              historyWindows.length
+          ] ?? historyWindows[0],
+        );
+        this.sample = 0;
+        this.scroll = 0;
+        return;
+      }
+      if (name === "s" && !this.modelDetail) {
+        this.controller.models.sort();
+        this.scroll = 0;
+        return;
+      }
+      if (name === "n" || name === "p") {
+        if (!this.modelDetail || this.modelRequests) {
+          this.controller.models.page(
+            this.modelDetail ? "requests" : "models",
+            name === "n" ? 1 : -1,
+          );
+          if (!this.modelDetail) {
+            this.modelFocus = 0;
+            this.modelFocusId = undefined;
+          }
+          this.scroll = 0;
+        }
+        return;
+      }
+      if (this.modelDetail) {
+        if (name === "d") {
+          this.modelRequests = !this.modelRequests;
+          this.scroll = 0;
+          return;
+        }
+        if (name === "left" || name === "right") {
+          this.metric =
+            (this.metric + modelMetrics.length + (name === "left" ? -1 : 1)) %
+            modelMetrics.length;
+          this.sample = 0;
+          this.scroll = 0;
+          return;
+        }
+        if (name === "[" || name === "]") {
+          this.sample = Math.max(
+            0,
+            Math.min(
+              (view.models.result?.buckets.length ?? 1) - 1,
+              this.sample + (name === "[" ? -1 : 1),
+            ),
+          );
+          return;
+        }
+      } else if (
+        ["up", "down", "j", "k", "home", "end", "pageup", "pagedown"].includes(
+          name,
+        )
+      ) {
+        const models = view.models.result?.models ?? [];
+        const delta =
+          name === "down" || name === "j"
+            ? 1
+            : name === "up" || name === "k"
+              ? -1
+              : name === "pagedown"
+                ? page
+                : -page;
+        const viewport = this.modelViewport;
+        if (
+          viewport?.focus === this.modelFocus &&
+          viewport.end - viewport.start > viewport.height &&
+          name !== "home" &&
+          name !== "end" &&
+          (delta > 0
+            ? this.scroll + viewport.height < viewport.end
+            : this.scroll > viewport.start)
+        ) {
+          this.scroll = Math.max(
+            viewport.start,
+            Math.min(viewport.end - viewport.height, this.scroll + delta),
+          );
+          return;
+        }
+        if (name === "home") this.scroll = 0;
+        if (name === "end") this.scroll = Number.MAX_SAFE_INTEGER;
+        this.modelFocus = Math.max(
+          0,
+          Math.min(
+            models.length - 1,
+            name === "home"
+              ? 0
+              : name === "end"
+                ? models.length - 1
+                : this.modelFocus + delta,
+          ),
+        );
+        this.modelFocusId = models[this.modelFocus]?.model ?? "";
+        return;
+      }
     }
     if (["1", "2", "3", "return", "enter"].includes(name)) {
       this.help = false;
@@ -199,8 +334,29 @@ export class TerminalShell {
   frame(width: number, height: number): string {
     width = Math.max(1, width);
     height = Math.max(1, height);
+    this.controller.models.setWidth(width);
     const view = this.controller.getView();
-    const identity = `${view.location}\0${view.selectedSessionId}\0${view.history.windowMs}`;
+    if (view.screen === "models") {
+      const models = view.models.result?.models ?? [];
+      const identity =
+        this.modelFocusId ?? view.models.result?.selected?.model ?? "";
+      const focused = models.findIndex((m) => (m.model ?? "") === identity);
+      this.modelFocus = Math.max(
+        0,
+        focused < 0 ? Math.min(this.modelFocus, models.length - 1) : focused,
+      );
+      if (view.models.status === "ready" && models.length)
+        this.modelFocusId = models[this.modelFocus]?.model ?? "";
+    }
+    const identity =
+      view.screen === "models"
+        ? JSON.stringify([
+            view.location,
+            view.models.windowMs,
+            view.filters.agent,
+            view.models.result?.selected?.model,
+          ])
+        : `${view.location}\0${view.selectedSessionId}\0${view.history.windowMs}`;
     if (identity !== this.historyIdentity) {
       this.sample = 0;
       this.scroll = 0;
@@ -208,7 +364,7 @@ export class TerminalShell {
     }
     const footer = this.editor
       ? `${this.editor}> ${this.input} [Enter apply; Esc cancel${this.editor === "location" ? "; Tab remembered" : ""}]`
-      : "? help q quit · 1 overview 2 detail 3 history · / search f filters l location r refresh";
+      : "? help q quit · 1 overview 2 detail 3 history 4 models · / search f filters l location r refresh";
     if (height < 5)
       return [
         clip("Context Guard · ? help · q quit", width),
@@ -223,7 +379,7 @@ export class TerminalShell {
       ...view.inventory.notices,
       ...(view.health?.reasons ?? []),
       ...(this.notice ? [this.notice] : []),
-      ...(Object.values(view.filters).some(Boolean)
+      ...(view.screen !== "models" && Object.values(view.filters).some(Boolean)
         ? [
             `Filters: search=${view.filters.search} agent=${view.filters.agent} model=${view.filters.model}`,
           ]
@@ -283,10 +439,50 @@ export class TerminalShell {
           ...notices,
           ...(view.screen === "detail"
             ? terminalDetail(view.selected)
-            : terminalHistory(view, width, this.metric, this.sample)),
+            : view.screen === "models"
+              ? terminalModels(
+                  view,
+                  width,
+                  this.modelDetail,
+                  this.metric,
+                  this.sample,
+                  this.modelFocus,
+                  this.modelRequests,
+                )
+              : terminalHistory(view, width, this.metric, this.sample)),
         ],
         width,
       );
+    this.modelViewport = undefined;
+    if (
+      view.screen === "models" &&
+      !this.modelDetail &&
+      !this.help &&
+      view.models.result?.models.length
+    ) {
+      const heights = (view.models.result?.models ?? []).map(
+        (model, index) =>
+          wrapped(terminalModelRow(model, index === this.modelFocus), width)
+            .length,
+      );
+      const start =
+        body.length - heights.slice(this.modelFocus).reduce((a, b) => a + b, 0);
+      const end = start + (heights[this.modelFocus] ?? 0);
+      this.modelViewport = {
+        focus: this.modelFocus,
+        start,
+        end,
+        height: available,
+      };
+      if (end - start > available) {
+        // A tall row is a viewport of its own: arrows can visit every line
+        // before advancing to the next model.
+        this.scroll = Math.max(start, Math.min(this.scroll, end - available));
+      } else {
+        if (start < this.scroll) this.scroll = start;
+        if (end > this.scroll + available) this.scroll = end - available;
+      }
+    }
     this.scroll = Math.max(
       0,
       Math.min(this.scroll, Math.max(0, body.length - available)),

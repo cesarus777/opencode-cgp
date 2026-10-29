@@ -1,4 +1,4 @@
-"""Drive only the standalone CLI. Captures contain scalar dashboard fields."""
+"""Drive the dashboard beside a native OpenCode client in an independent PTY."""
 import codecs
 import fcntl
 import json
@@ -26,13 +26,29 @@ env = {**connection["env"], "TERM": "xterm-256color", "CONTEXT_GUARD_PASSWORD": 
 command = [connection["runtime"], connection["cli"], "dashboard", "tui", "--server", connection["url"], "--directory", connection["project"]]
 child = subprocess.Popen(command, cwd=connection["project"], env=env, stdin=slave, stdout=slave, stderr=slave, start_new_session=True)
 output = ""
+native_master, native_slave = pty.openpty()
+fcntl.ioctl(native_slave, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+native_child = None
+native_ready = False
 
 
 def pump(seconds=0.3):
-    global output
+    global output, native_ready
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
-        if select.select([master], [], [], 0.05)[0]:
+        ready = select.select([master] + ([native_master] if native_child is not None else []), [], [], 0.05)[0]
+        if native_master in ready:
+            try:
+                native_data = os.read(native_master, 65536)
+                native_ready = native_ready or b"\x1b[?1049h" in native_data
+                if b"\x1b[6n" in native_data:
+                    os.write(native_master, b"\x1b[1;1R")
+                if b"\x1b[c" in native_data:
+                    os.write(native_master, b"\x1b[?1;2c")
+                # Native output may contain provider content: never retain/capture it.
+            except OSError:
+                pass
+        if master in ready:
             try:
                 data = os.read(master, 65536)
             except OSError:
@@ -85,6 +101,16 @@ try:
     expect("Context Guard")
     expect("monitored 3")
     expect("synthetic/beta")
+    native_child = subprocess.Popen(
+        [connection["binary"], "--server", connection["url"], "--session", connection["ids"][0], connection["project"]],
+        cwd=connection["project"], env=env, stdin=native_slave, stdout=native_slave, stderr=native_slave, start_new_session=True,
+    )
+    for _ in range(100):
+        pump(0.2)
+        assert native_child.poll() is None, "native OpenCode client must remain running beside dashboard"
+        if native_ready:
+            break
+    assert native_ready, "native TUI must initialize its independent terminal"
     action("prompt")
     expect("performance streaming")
     expect("live TPS")
@@ -121,6 +147,31 @@ try:
         key("w")
         expect(str(minutes) + " minutes")
         expect("History: ready")
+    action("analytics")
+    key("4")
+    expect("Models")
+    expect("ready")
+    expect("synthetic/alpha")
+    expect("synthetic/beta")
+    key("\r")
+    expect("Weighted request TPS")
+    baseline = action("counts")
+    for name in ["TTFT median", "TTFT p95", "Completed requests", "Reported output", "Weighted request TPS"]:
+        key("\x1b[C")
+        expect(name)
+    key("]")
+    assert action("counts")["analyticsReads"] == baseline["analyticsReads"], "metric/bucket navigation must not query analytics"
+    key("d")
+    expect("Request page 1")
+    key("d")
+    resize(80, 50)
+    expect("Weighted request TPS")
+    resize(180, 60)
+    expect("Weighted request TPS")
+    rows = [line for line in screen.display if "│" in line]
+    assert len(rows) == 6 and len({line.index("│") for line in rows}) == 1, "model chart axes align after resize"
+    key("\x1b")
+    expect("Model page 1")
     key("?")
     expect("keyboard help")
     key("\x1b")
@@ -146,6 +197,7 @@ try:
     child.wait(timeout=10)
     pump()
     assert child.returncode == 0, "normal quit status"
+    assert native_child.poll() is None, "dashboard exit must not stop native OpenCode"
     restored = termios.tcgetattr(slave)
     assert restored[3] & (termios.ICANON | termios.ECHO) == original[3] & (termios.ICANON | termios.ECHO), "raw mode restored"
     assert "\x1b[?1049l" in output, "alternate screen restored"
@@ -170,6 +222,13 @@ try:
         assert "\x1b[?1049l" in output and "\x1b[?25h" in output, "signal screen/cursor restored"
     print("PASS: standalone PTY navigation, all metrics/windows, root/children, resize, restart, privacy and restoration")
 finally:
+    if native_child is not None and native_child.poll() is None:
+        os.killpg(native_child.pid, signal.SIGTERM)
+        try:
+            native_child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(native_child.pid, signal.SIGKILL)
+            native_child.wait()
     if child.poll() is None:
         os.killpg(child.pid, signal.SIGTERM)
         try:
@@ -179,3 +238,5 @@ finally:
             child.wait()
     os.close(master)
     os.close(slave)
+    os.close(native_master)
+    os.close(native_slave)

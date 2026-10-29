@@ -354,6 +354,165 @@ export function isHistoryResult(
 ): value is import("./historycharts.ts").HistoryChartResult {
   return valid(value, historyResultSchema);
 }
+
+const modelSummarySchema = object(
+  {
+    model: text,
+    sessions: count,
+    completedRequests: count,
+    partialRequests: count,
+    legacyAttributionRequests: count,
+    tpsRequests: count,
+    ttftRequests: count,
+    excludedTpsRequests: count,
+    excludedTtftRequests: count,
+    outputTokens: nonnegative,
+    durationMs: nonnegative,
+    averageTps: nonnegative,
+    meanTtftMs: nonnegative,
+    medianTtftMs: nonnegative,
+    p95TtftMs: nonnegative,
+  },
+  [
+    "sessions",
+    "completedRequests",
+    "partialRequests",
+    "legacyAttributionRequests",
+    "tpsRequests",
+    "ttftRequests",
+    "excludedTpsRequests",
+    "excludedTtftRequests",
+    "outputTokens",
+    "durationMs",
+  ],
+);
+export const analyticsReadSchema = object(
+  {
+    schemaVersion: { const: 1 },
+    from: count,
+    to: count,
+    buckets: { type: "integer", minimum: 1, maximum: 240 },
+    agent: text,
+    model: text,
+    unknownModel: { type: "boolean" },
+    sort: enumeration("requests", "tps", "ttft", "identity"),
+    snapshotId: text,
+    modelCursor: text,
+    requestCursor: text,
+  },
+  ["schemaVersion", "from", "to", "buckets"],
+);
+const analyticsResultSchema = object(
+  {
+    schemaVersion: { const: 1 },
+    generatedAt: count,
+    expiresAt: count,
+    snapshotId: text,
+    enabled: { type: "boolean" },
+    from: count,
+    to: count,
+    agent: text,
+    models: array(modelSummarySchema, 50),
+    totalModels: count,
+    nextModelsCursor: text,
+    selected: modelSummarySchema,
+    buckets: array(
+      object(
+        { from: nonnegative, to: nonnegative, summary: modelSummarySchema },
+        ["from", "to"],
+      ),
+      240,
+    ),
+    requests: array(
+      object(
+        {
+          location: text,
+          sessionId: text,
+          requestId: text,
+          startedAt: count,
+          completedAt: count,
+          model: text,
+          agent: text,
+          attribution: enumeration("request", "legacy-record", "unknown"),
+          partial: { type: "boolean" },
+          outputTokens: nonnegative,
+          ttftMs: nonnegative,
+        },
+        [
+          "location",
+          "sessionId",
+          "requestId",
+          "startedAt",
+          "completedAt",
+          "attribution",
+          "partial",
+        ],
+      ),
+      50,
+    ),
+    nextRequestsCursor: text,
+    coverage: object({
+      source: enumeration("retained-request-records"),
+      scannedRecords: count,
+      unscannedRecords: count,
+      duplicateRecords: count,
+      conflictingRequests: count,
+      missingIdentityRecords: count,
+      incompleteRequests: count,
+      invalidTimingRequests: count,
+      gapRecords: count,
+      maxRequests: count,
+      partial: { type: "boolean" },
+    }),
+    metadata: historyResultSchema.properties.metadata ?? {},
+    gaps: array(count, 128),
+    omittedGaps: count,
+  },
+  [
+    "schemaVersion",
+    "generatedAt",
+    "expiresAt",
+    "snapshotId",
+    "enabled",
+    "from",
+    "to",
+    "models",
+    "totalModels",
+    "buckets",
+    "requests",
+    "coverage",
+    "metadata",
+    "gaps",
+    "omittedGaps",
+  ],
+);
+export const analyticsRpc = Rpc.define({
+  id: "context-guard.analytics.v1",
+  methods: {
+    read: { input: analyticsReadSchema, output: analyticsResultSchema },
+  },
+  events: {},
+});
+export function isAnalyticsRead(
+  value: unknown,
+): value is import("./modelseries.ts").AnalyticsRead {
+  return (
+    valid(value, analyticsReadSchema) &&
+    record(value) &&
+    typeof value.from === "number" &&
+    typeof value.to === "number" &&
+    value.from < value.to &&
+    value.to - value.from <= 604800000 &&
+    !(value.model !== undefined && value.unknownModel === true) &&
+    (!(value.modelCursor || value.requestCursor) ||
+      typeof value.snapshotId === "string")
+  );
+}
+export function isAnalyticsResult(
+  value: unknown,
+): value is import("./modelseries.ts").AnalyticsResult {
+  return valid(value, analyticsResultSchema);
+}
 function record(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null && !Array.isArray(x);
 }

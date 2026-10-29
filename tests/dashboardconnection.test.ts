@@ -6,6 +6,9 @@ import { parseConfig } from "../src/config.ts";
 import { buildChartData } from "../src/charts.ts";
 import type { HistoryChartResult } from "../src/historycharts.ts";
 import { session } from "./fixtures/session.ts";
+import { analyticsFixture } from "./fixtures/analytics.ts";
+import { isAnalyticsRead } from "../src/rpc.ts";
+import { AnalyticsUnavailable } from "../src/dashboard/port.ts";
 
 const signal = () => AbortSignal.timeout(3000);
 const snapshot = () =>
@@ -25,6 +28,79 @@ function network(handler: (request: Request) => Response | Promise<Response>) {
     ),
   };
 }
+
+test("dashboard analytics uses the owning location and validates scalar-only responses", async () => {
+  const fixture = analyticsFixture();
+  const runtime = network(async (request) => {
+    const url = new URL(request.url);
+    expect(url.pathname).toBe("/api/rpc/context-guard.analytics.v1/read");
+    expect(url.searchParams.get("location[directory]")).toBe("/project");
+    const body: unknown = await request.json();
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("input" in body) ||
+      !isAnalyticsRead(body.input)
+    )
+      throw new Error("Bad input");
+    return Response.json({
+      output: await fixture.service.read(body.input, signal()),
+    });
+  });
+  try {
+    const connection = await connectDashboard(
+      { directory: "/project", server: "https://example.test" },
+      runtime,
+    );
+    const result = await connection.analytics?.(
+      { schemaVersion: 1, from: 700000, to: 1000000, buckets: 120 },
+      signal(),
+    );
+    expect(result?.selected?.averageTps).toBe(32.5);
+    expect(JSON.stringify(result)).not.toContain("private-canary");
+    await expect(
+      connection.analytics?.(
+        { schemaVersion: 1, from: 0, to: 604800001, buckets: 120 },
+        signal(),
+      ),
+    ).rejects.toThrow("Invalid analytics");
+  } finally {
+    fixture.service.dispose();
+  }
+});
+
+test("dashboard analytics distinguishes unsupported RPC from transport failure without exposing server messages", async () => {
+  for (const missing of [true, false]) {
+    const runtime = network(() =>
+      missing
+        ? Response.json(
+            {
+              _tag: "RpcError",
+              type: "rpc.unavailable",
+              message: "private-canary",
+            },
+            { status: 400 },
+          )
+        : new Response("private-canary", { status: 503 }),
+    );
+    const connection = await connectDashboard(
+      { directory: "/project", server: "https://example.test" },
+      runtime,
+    );
+    try {
+      await connection.analytics?.(
+        { schemaVersion: 1, from: 700000, to: 1000000, buckets: 120 },
+        signal(),
+      );
+      throw new Error("Expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(AnalyticsUnavailable);
+      if (error instanceof AnalyticsUnavailable)
+        expect(error.reason).toBe(missing ? "unsupported" : "unavailable");
+      expect(String(error)).not.toContain("private-canary");
+    }
+  }
+});
 
 test("dashboard discovers an existing service without starting one and keeps credentials private", async () => {
   let discovered = false;

@@ -1,5 +1,5 @@
 import { chartMetrics, metricPlot } from "../tui/chartformat.ts";
-import { clip, wrap, quantity } from "../tui/format.ts";
+import { cells, clip, wrap, quantity } from "../tui/format.ts";
 import type { DashboardRow, DashboardView } from "./view.ts";
 
 export function overviewRow(row: DashboardRow): string {
@@ -206,7 +206,10 @@ export function terminalHistory(
 
 export const terminalHelp = [
   "Context Guard standalone dashboard — keyboard help",
-  "1 overview · 2 detail · 3 history · Enter detail",
+  "1 overview · 2 detail · 3 history · 4 models · Enter detail/chart",
+  "Models: Up/Down scroll tall rows, then select · Enter aggregate chart · Esc model list · s sort",
+  "Models charts: Left/Right metric · w window · [/] bucket · d request details",
+  "Models list/request details: n/p pages · f exact agent filter · r refresh",
   "Up/Down or j/k: select session in overview; scroll other screens",
   "PageUp/PageDown: move by a page · Home/End: first/last",
   "Left/Right: history metric (six metrics) · w: cycle 5m/1h/24h/7d",
@@ -221,9 +224,13 @@ export const terminalHelp = [
 ];
 
 export function wrapped(lines: readonly string[], width: number) {
-  return lines.flatMap((line) =>
-    line ? wrap(line, Math.max(1, width)) : [""],
-  );
+  const available = Math.max(1, width);
+  return lines.flatMap((line) => {
+    // Already-sized rows include chart gutters and hierarchy indentation.
+    // Word wrapping would strip their leading spaces and shift graph columns.
+    const clean = clip(line, Math.max(available, cells(line)));
+    return cells(clean) <= available ? [clean] : wrap(clean, available);
+  });
 }
 export function headerLines(view: DashboardView, width: number): string[] {
   return [

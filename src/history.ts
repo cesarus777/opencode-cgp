@@ -217,6 +217,7 @@ export function scalarPerformance(p: PerformanceSnapshot): PerformanceSnapshot {
   };
 }
 export interface HistoryFilter {
+  signal?: AbortSignal;
   sessionId?: string;
   agent?: string;
   model?: string;
@@ -238,6 +239,7 @@ export async function readPerformanceHistory(
 ) {
   const records: HistoryRecord[] = [];
   const files = await segments(directory);
+  filter.signal?.throwIfAborted();
   const maxBytes = filter.maxBytes ?? 64 * 1024 * 1024;
   let bytes = 0,
     skippedBytes = 0,
@@ -252,6 +254,7 @@ export async function readPerformanceHistory(
     selected.unshift(file);
   }
   for (const file of selected) {
+    filter.signal?.throwIfAborted();
     const handle = await open(join(directory, file.name), "r");
     let source: string;
     try {
@@ -261,7 +264,12 @@ export async function readPerformanceHistory(
     } finally {
       await handle.close();
     }
+    let scannedLines = 0;
     for (const line of source.split("\n")) {
+      if (filter.signal && ++scannedLines % 256 === 0) {
+        await new Promise<void>((done) => setTimeout(done, 0));
+        filter.signal.throwIfAborted();
+      }
       if (!line) continue;
       try {
         const value: unknown = JSON.parse(line);

@@ -173,5 +173,5 @@ export function terminalFixture() {
     elapsed: () => 0,
     refreshIntervalMs: 0,
   });
-  return { controller, counts, snapshots };
+  return { controller, counts, snapshots, port: port("/project") };
 }

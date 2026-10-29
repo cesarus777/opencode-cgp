@@ -12,3 +12,4 @@ export * from "./performance.ts";
 
 export * from "./charts.ts";
 export * from "./modelanalytics.ts";
+export * from "./modelseries.ts";

@@ -1,5 +1,9 @@
 import { PerformanceTracker, outputTokens } from "./performance.ts";
 import { serveHistory, type HistoryRpcPort } from "./historyserver.ts";
+import {
+  serveModelAnalytics,
+  type AnalyticsRpcPort,
+} from "./modelanalyticsserver.ts";
 import { PerformanceHistory } from "./history.ts";
 import { SnapshotStore } from "./snapshot.ts";
 import { serveSnapshots, type SnapshotRpcPort } from "./snapshotserver.ts";
@@ -17,6 +21,7 @@ import type { Identity, ModelLimits, TelemetrySink } from "./types.ts";
 export interface Host {
   rpc?: SnapshotRpcPort;
   historyRpc?: HistoryRpcPort;
+  analyticsRpc?: AnalyticsRpcPort;
   app: { version: string };
   options: unknown;
   location: { directory: string };
@@ -106,7 +111,20 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     diagnostics.emit({ time: Date.now(), type: "history-service-unavailable" });
     return () => {};
   });
+  const stopAnalytics = await serveModelAnalytics(
+    ctx.analyticsRpc,
+    config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
+    ctx.location.directory,
+    config.enabled && config.metrics.enabled && config.history.enabled,
+  ).catch(() => {
+    diagnostics.emit({
+      time: Date.now(),
+      type: "analytics-service-unavailable",
+    });
+    return () => {};
+  });
   const stopSnapshots = async () => {
+    await stopAnalytics();
     await stopHistory();
     await stopV2();
     await stopV1();

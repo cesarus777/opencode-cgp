@@ -6,8 +6,9 @@ Open a read-only live terminal dashboard for an existing OpenCode server.
 
 Start here
   1. Keep an OpenCode server running with Context Guard registered.
-  2. Close OpenCode's native TUI before opening the standalone dashboard.
-  3. In the owning project directory, run: context-guard dashboard tui
+  2. Open a separate terminal tab, window or pane for the dashboard.
+  3. In the same project directory, run: context-guard dashboard tui
+  Keep working in OpenCode; the dashboard reads live updates from its server.
 
 Options
   --directory PATH   Owning project directory (local default: current directory)
@@ -30,8 +31,10 @@ Authentication (explicit servers)
   CONTEXT_GUARD_USERNAME   Server username (default: opencode)
 
 Keys
-  1/2/3 overview/detail/history; arrows or j/k move; / search; f filters;
-  l location; w history window; r refresh; ? help; q or Ctrl+C quit.`;
+  1/2/3/4 overview/detail/history/models; arrows or j/k move; Enter detail/chart;
+  Models: Left/Right metric, [/] bucket, d requests, n/p pages, s sort;
+  / session search; f filters (Models: agent); l location; w time window;
+  r refresh; ? help; q or Ctrl+C quit.`;
 
 export function parseDashboardArgs(
   args: readonly string[],

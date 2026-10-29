@@ -1,6 +1,8 @@
 # Model analytics in the standalone dashboard
 
-Status: stage 1 implemented and validated in the working tree. Stages 2–4 remain planned.
+Status: stages 1–3 implemented. Stage 1 shipped in 0.3.0; the analytics RPC and terminal Models screen are in the working tree. Stage 4 (durable storage) remains planned.
+
+The [aggregate model charts implementation plan](model-analytics-tui.md) expands stages 2–3 with the terminal workflow, bucket metric definitions, RPC snapshots and delivery checks. Stage 1 shipped in 0.3.0.
 
 ## Goal and scope
 

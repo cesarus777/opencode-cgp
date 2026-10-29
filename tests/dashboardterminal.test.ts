@@ -152,6 +152,40 @@ test("detail exposes all fields and unknown, stale, partial, blocked and uncerta
   }
 });
 
+test("history screen keeps chart axes and gap columns aligned after dashboard layout", async () => {
+  const { controller } = terminalFixture();
+  const shell = new TerminalShell(controller, () => {});
+  try {
+    await controller.start();
+    await settle(() => controller.getView().connection === "live");
+    shell.key({ name: "3" });
+    await settle(() => controller.getView().history.status === "ready");
+    for (const width of [20, 35, 80, 180]) {
+      for (let metric = 0; metric < 6; metric++) {
+        const lines = shell.frame(width, 200).split("\n");
+        const rows = lines.filter((line) => line.includes("│"));
+        expect(rows).toHaveLength(6);
+        const first = rows[0];
+        if (!first) throw new Error("History graph is missing");
+        const left = first.indexOf("│");
+        const right = first.lastIndexOf("│");
+        for (const row of rows) {
+          expect(row.indexOf("│")).toBe(left);
+          expect(row.lastIndexOf("│")).toBe(right);
+          expect(row.indexOf("┆")).toBe(first.indexOf("┆"));
+        }
+        const baseline = lines.find((line) => line.includes("└─"));
+        expect(baseline?.indexOf("└")).toBe(left);
+        expect(baseline?.indexOf("┘")).toBe(right);
+        expect(lines.every((line) => cells(line) <= width)).toBe(true);
+        shell.key({ name: "right" });
+      }
+    }
+  } finally {
+    controller.stop();
+  }
+});
+
 test("public native renderer handles resize, editor focus and idempotent shutdown", async () => {
   const signals = process.listenerCount("SIGTERM");
   const { createTestRenderer } = await import("@opentui/core/testing");

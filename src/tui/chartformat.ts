@@ -9,6 +9,7 @@ function columns(
   to: number,
   width: number,
   gaps: readonly number[] = [],
+  halfOpen = false,
 ) {
   const size = Math.max(1, Math.min(120, Math.floor(width))),
     values: (number | undefined)[] = Array.from({ length: size });
@@ -17,7 +18,10 @@ function columns(
       0,
       Math.min(
         size - 1,
-        Math.floor(((time - from) / Math.max(1, to - from)) * (size - 1)),
+        Math.floor(
+          ((time - from) / Math.max(1, to - from)) *
+            (halfOpen ? size : size - 1),
+        ),
       ),
     );
   let min = Infinity,
@@ -85,6 +89,7 @@ export function metricPlot(
   to: number,
   width: number,
   gaps: readonly number[] = [],
+  halfOpen = false,
 ): string[] {
   const label = (value: number) =>
     value >= 1000000
@@ -104,8 +109,14 @@ export function metricPlot(
     points,
     from,
     to,
-    Math.max(1, width - gutter - 2),
+    Math.max(
+      1,
+      halfOpen
+        ? Math.min(points.length, width - gutter - 2)
+        : width - gutter - 2,
+    ),
     gaps,
+    halfOpen,
   );
   const gapColumns = new Set(
     gaps.filter((time) => time >= from && time <= to).map(column),

@@ -127,10 +127,10 @@ function reconcile(
 }
 
 /** Aggregate raw request records before any chart downsampling or session limits. */
-export function aggregateModels(
+export function analyzeModelRequests(
   records: readonly HistoryRecord[],
   options: ModelAnalyticsOptions,
-): ModelAnalyticsResult {
+): ModelAnalyticsResult & { requests: CompletedAnalyticsRequest[] } {
   const maxRequests = options.maxRequests ?? 100000;
   if (
     !Number.isSafeInteger(maxRequests) ||
@@ -199,14 +199,7 @@ export function aggregateModels(
       requests.set(key, { fact, conflict: false });
     }
   }
-  const groups = new Map<
-    string | undefined,
-    {
-      summary: ModelSummary;
-      sessions: Set<string>;
-      ttfts: number[];
-    }
-  >();
+  const accepted: CompletedAnalyticsRequest[] = [];
   for (const { fact: r, conflict } of requests.values()) {
     if (conflict) {
       coverage.conflictingRequests++;
@@ -232,6 +225,51 @@ export function aggregateModels(
       (options.agent !== undefined && r.agent !== options.agent)
     )
       continue;
+    accepted.push({ ...r, completedAt: r.completedAt });
+  }
+  const models = summarizeModelRequests(accepted);
+  coverage.partial =
+    coverage.unscannedRecords > 0 ||
+    coverage.conflictingRequests > 0 ||
+    coverage.missingIdentityRecords > 0 ||
+    coverage.incompleteRequests > 0 ||
+    coverage.invalidTimingRequests > 0 ||
+    coverage.gapRecords > 0 ||
+    models.some(
+      (s) =>
+        s.partialRequests > 0 ||
+        s.legacyAttributionRequests > 0 ||
+        s.excludedTpsRequests > 0 ||
+        s.excludedTtftRequests > 0 ||
+        !s.model,
+    );
+  return {
+    schemaVersion: 1,
+    location: options.location,
+    models,
+    coverage,
+    requests: accepted,
+  };
+}
+
+export interface CompletedAnalyticsRequest extends AnalyticsRequest {
+  completedAt: number;
+}
+
+/** Summarize already reconciled requests, including independent metric eligibility. */
+export function summarizeModelRequests(
+  requests: readonly CompletedAnalyticsRequest[],
+): ModelSummary[] {
+  const groups = new Map<
+    string | undefined,
+    {
+      summary: ModelSummary;
+      sessions: Set<string>;
+      ttfts: number[];
+    }
+  >();
+  for (const r of requests) {
+    const duration = r.completedAt - r.startedAt;
     let group = groups.get(r.model);
     if (!group) {
       group = {
@@ -285,20 +323,16 @@ export function aggregateModels(
       return s;
     })
     .sort((a, b) => (a.model ?? "").localeCompare(b.model ?? ""));
-  coverage.partial =
-    coverage.unscannedRecords > 0 ||
-    coverage.conflictingRequests > 0 ||
-    coverage.missingIdentityRecords > 0 ||
-    coverage.incompleteRequests > 0 ||
-    coverage.invalidTimingRequests > 0 ||
-    coverage.gapRecords > 0 ||
-    models.some(
-      (s) =>
-        s.partialRequests > 0 ||
-        s.legacyAttributionRequests > 0 ||
-        s.excludedTpsRequests > 0 ||
-        s.excludedTtftRequests > 0 ||
-        !s.model,
-    );
-  return { schemaVersion: 1, location: options.location, models, coverage };
+  return models;
+}
+
+export function aggregateModels(
+  records: readonly HistoryRecord[],
+  options: ModelAnalyticsOptions,
+): ModelAnalyticsResult {
+  const { requests: _requests, ...result } = analyzeModelRequests(
+    records,
+    options,
+  );
+  return result;
 }

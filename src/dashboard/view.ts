@@ -3,13 +3,14 @@ import type { MonitorHealth } from "../snapshot.ts";
 import type { HistoryChartResult } from "../historycharts.ts";
 import type { Connection } from "../tui/transport.ts";
 import type { InventoryNotice } from "./inventory.ts";
+import type { DashboardModels } from "./models.ts";
 
 export type Immutable<T> = T extends object
   ? { readonly [K in keyof T]: Immutable<T[K]> }
   : T;
 export const historyWindows = [300000, 3600000, 86400000, 604800000] as const;
 export type HistoryWindow = (typeof historyWindows)[number];
-export type DashboardScreen = "overview" | "detail" | "history";
+export type DashboardScreen = "overview" | "detail" | "history" | "models";
 export interface DashboardFilters {
   readonly search: string;
   readonly agent: string;
@@ -73,6 +74,7 @@ export type DashboardView = Immutable<{
   selectedSessionId?: string;
   selected?: DashboardRow;
   history: DashboardHistory;
+  models: DashboardModels;
   notices: readonly string[];
 }>;
 

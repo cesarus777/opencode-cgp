@@ -9,10 +9,15 @@ import {
   isPerformanceResult,
   isHistoryRead,
   isHistoryResult,
+  analyticsRpc,
+  isAnalyticsRead,
+  isAnalyticsResult,
 } from "../rpc.ts";
 import type { HistoryChartRead } from "../historycharts.ts";
 import type { SnapshotTransport } from "../tui/transport.ts";
 import type { DashboardPort, SessionPageInput } from "./port.ts";
+import { AnalyticsUnavailable } from "./port.ts";
+import type { AnalyticsRead } from "../modelseries.ts";
 
 export interface DashboardConnectionOptions {
   readonly directory: string;
@@ -234,6 +239,28 @@ export async function connectDashboard(
             },
           },
         };
+      },
+      async analytics(input: AnalyticsRead, signal: AbortSignal) {
+        if (!isAnalyticsRead(input))
+          throw new Error("Invalid analytics request");
+        try {
+          const result = await client
+            .rpc(analyticsRpc)
+            .read(input, { location, signal: deadline(signal) });
+          if (!isAnalyticsResult(result))
+            throw new Error("Invalid analytics response");
+          return result;
+        } catch (error) {
+          const missing =
+            typeof error === "object" &&
+            error !== null &&
+            "type" in error &&
+            (error.type === "rpc.unavailable" ||
+              error.type === "rpc.method_not_found");
+          throw new AnalyticsUnavailable(
+            missing ? "unsupported" : "unavailable",
+          );
+        }
       },
       async history(input: HistoryChartRead, signal: AbortSignal) {
         if (!isHistoryRead(input))

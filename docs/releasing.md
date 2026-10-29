@@ -2,7 +2,7 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**. Version **0.3.0** is already public; **0.3.1** installs the standalone dashboard renderer automatically and clarifies CLI help. See the [changelog](../CHANGELOG.md). The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+Publish as **`@cesarus777/opencode-cgp`**. Version **0.3.1** is already public; **0.4.0** adds terminal model analytics and its location-scoped RPC, and preserves complete statistics in narrow terminals. See the [changelog](../CHANGELOG.md). The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
 
 ## Local validation
 

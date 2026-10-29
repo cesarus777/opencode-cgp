@@ -1,4 +1,4 @@
-/** Authenticated synthetic provider + standalone CLI PTY; native TUI is never launched. */
+/** Authenticated synthetic provider + dashboard/native-client PTYs in separate terminals. */
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,7 +9,11 @@ import {
   historyRpc,
   isPerformanceResult,
   isHistoryResult,
+  analyticsRpc,
+  isAnalyticsResult,
 } from "../src/rpc.ts";
+import { readPerformanceHistory } from "../src/history.ts";
+import { aggregateModels } from "../src/modelanalytics.ts";
 
 if (process.env.GUARD_DASHBOARD_HOST !== "1") {
   console.log(
@@ -89,7 +93,8 @@ let client: ReturnType<typeof OpenCode.make>;
 const location = { directory: project };
 const ids: string[] = [];
 let streams = 0,
-  historyReads = 0;
+  historyReads = 0,
+  analyticsReads = 0;
 async function until(check: () => Promise<boolean>) {
   for (let i = 0; i < 300; i++) {
     if (await check()) return;
@@ -144,7 +149,8 @@ const proxy = Bun.serve({
     const url = new URL(req.url);
     if (url.pathname.startsWith("/__test/")) {
       const action = url.pathname.slice(8);
-      if (action === "counts") return Response.json({ streams, historyReads });
+      if (action === "counts")
+        return Response.json({ streams, historyReads, analyticsReads });
       if (action === "prompt") {
         await Promise.all(
           ids.map((sessionID) =>
@@ -159,6 +165,31 @@ const proxy = Bun.serve({
             client.session.prompt({ sessionID, text: canary }),
           ),
         );
+      } else if (action === "analytics") {
+        const to = Date.now(),
+          from = to - 300000;
+        const result = await client.rpc(analyticsRpc).read(
+          {
+            schemaVersion: 1,
+            from,
+            to,
+            buckets: 120,
+            model: "synthetic/alpha",
+          },
+          { location },
+        );
+        assert.ok(isAnalyticsResult(result));
+        const archived = await readPerformanceHistory(join(root, "history"));
+        const expected = aggregateModels(archived.records, {
+          location: project,
+          from,
+          to,
+          model: "synthetic/alpha",
+        });
+        assert.deepEqual(result.selected, expected.models[0]);
+        assert.equal(result.selected?.sessions, 2);
+        assert.equal(result.models.length, 2);
+        assert.ok(!JSON.stringify(result).includes(canary));
       } else if (action === "verify") {
         for (const id of ids) {
           const result = await client
@@ -194,6 +225,7 @@ const proxy = Bun.serve({
     const body = req.method === "POST" ? await req.arrayBuffer() : undefined;
     if (body && new TextDecoder().decode(body).includes(historyRpc.id))
       historyReads++;
+    if (url.pathname.includes(analyticsRpc.id)) analyticsReads++;
     // Public SSE route; count connection attempts without retaining any payload.
     if (url.pathname.includes("event")) streams++;
     try {
@@ -293,6 +325,7 @@ try {
     config,
     JSON.stringify({
       runtime,
+      binary,
       capture: resolve(".artifacts/dashboard-terminal-frame.txt"),
       cli: resolve(process.env.GUARD_DASHBOARD_CLI ?? "dist/cli.js"),
       project,

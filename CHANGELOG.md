@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 — 2026-10-29
+
+- Add a Models screen to the standalone terminal dashboard: aggregate charts and statistics across retained root, child and archived sessions, exact agent filtering, model sorting, time windows, bucket inspection and paginated request details.
+- Add the read-only, location-scoped `context-guard.analytics.v1` RPC with bounded scans, short-lived snapshots and pagination independent of aggregate totals. Older servers preserve existing dashboard screens and report Models as unsupported.
+
+- Preserve history graph indentation in the standalone dashboard so axes, gap markers and filled columns stay aligned.
+- Keep all model statistics accessible in narrow terminals, scrolling through wrapped rows before advancing model selection.
+- Clarify that the dashboard can run in a separate terminal while working in OpenCode; closing the native TUI was a test setup condition.
+
 ## 0.3.1 — 2026-10-29
 
 - Install the standalone dashboard's pinned OpenTUI renderer automatically with CGP, including its native platform library. Keep renderer loading lazy so server and offline commands still work on Bun >=1.1.34; the dashboard requires Bun >=1.3.0.

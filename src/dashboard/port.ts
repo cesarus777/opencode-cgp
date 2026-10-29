@@ -1,6 +1,13 @@
 import type { ExecutionStatus } from "../family.ts";
 import type { HistoryChartRead, HistoryChartResult } from "../historycharts.ts";
 import type { SnapshotTransport } from "../tui/transport.ts";
+import type { AnalyticsRead, AnalyticsResult } from "../modelseries.ts";
+
+export class AnalyticsUnavailable extends Error {
+  constructor(readonly reason: "unsupported" | "unavailable") {
+    super(`Model analytics ${reason}`);
+  }
+}
 
 /** The inventory boundary deliberately excludes titles, metadata, and content. */
 export interface DashboardSession {
@@ -40,6 +47,10 @@ export interface DashboardPort {
     input: HistoryChartRead,
     signal: AbortSignal,
   ): Promise<HistoryChartResult>;
+  analytics?(
+    input: AnalyticsRead,
+    signal: AbortSignal,
+  ): Promise<AnalyticsResult>;
 }
 export interface InventoryNode extends DashboardSession {
   readonly status: ExecutionStatus;

@@ -11,6 +11,7 @@ import {
   type InventoryNotice,
 } from "./inventory.ts";
 import type { DashboardPort, InventoryNode } from "./port.ts";
+import { ModelsController } from "./models.ts";
 import {
   immutableView,
   projectHistory,
@@ -88,6 +89,7 @@ export class DashboardController {
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private ageTimer: ReturnType<typeof setInterval> | undefined;
   private view: DashboardView;
+  readonly models: ModelsController;
 
   constructor(port: DashboardPort, options: DashboardControllerOptions = {}) {
     this.limits = { ...(options.limits ?? inventoryLimits) };
@@ -102,6 +104,7 @@ export class DashboardController {
       throw new Error("Invalid dashboard refresh interval");
     this.state = this.createLocation(port);
     this.locations.set(port.location.directory, this.state);
+    this.models = new ModelsController(() => this.publish());
     this.view = this.buildView();
   }
   private createLocation(port: DashboardPort): LocationState {
@@ -151,6 +154,7 @@ export class DashboardController {
     await this.refresh();
   }
   stop() {
+    this.models.stop();
     this.running = false;
     this.generation++;
     this.scope?.abort();
@@ -184,6 +188,7 @@ export class DashboardController {
     this.locations.delete(directory);
     this.locations.set(directory, next);
     this.state = next;
+    this.configureModels();
     // Bound inventories and retained snapshots as well as historical responses.
     if (this.locations.size > 4) {
       const oldest = this.locations.keys().next().value;
@@ -202,10 +207,11 @@ export class DashboardController {
     this.publish();
   }
   setScreen(screen: DashboardScreen) {
-    if (!["overview", "detail", "history"].includes(screen))
+    if (!["overview", "detail", "history", "models"].includes(screen))
       throw new Error("Invalid dashboard screen");
     if (screen === this.screen) return;
     this.screen = screen;
+    this.configureModels();
     this.queueHistory();
     this.publish();
   }
@@ -214,6 +220,7 @@ export class DashboardController {
       throw new Error("Invalid dashboard history window");
     if (windowMs === this.windowMs) return;
     this.windowMs = windowMs;
+    this.configureModels();
     this.queueHistory();
     this.publish();
   }
@@ -226,10 +233,23 @@ export class DashboardController {
       agent: filters.agent ?? this.filters.agent,
       model: filters.model ?? this.filters.model,
     };
+    this.configureModels();
     this.publish();
+  }
+  private configureModels() {
+    this.models.configure(
+      this.state.port,
+      this.running && this.screen === "models",
+      this.windowMs,
+      this.filters.agent,
+      this.filters.model,
+      this.serverNow(),
+    );
   }
   async refresh(): Promise<void> {
     if (!this.running || !this.scope) return;
+    this.configureModels();
+    if (this.screen === "models") void this.models.refresh(this.serverNow());
     for (const cached of this.cache.values())
       if (cached.directory === this.state.port.location.directory)
         cached.valid = false;
@@ -612,6 +632,7 @@ export class DashboardController {
           "maximum-500-points-and-requests",
         ],
       },
+      models: this.models.getView(),
       notices: [
         ...(!state.complete ? ["partial-inventory"] : []),
         ...(state.connection !== "live" ? ["live-data-stale"] : []),
