@@ -105,6 +105,8 @@ The probe also starts the shared dashboard controller, selects a child, loads it
 
 `bun test tests/dashboardterminal.test.ts` covers parsing, remote path/credential scope, focus, selection by identity, all six metrics without extra history reads, narrow layouts, resize, missing/stale/partial data and public OpenTUI lifecycle cleanup after startup/runtime failure. Run the full offline suite separately from compilation-heavy jobs.
 
+Overview coverage also checks bounded columns/cards, repeated names and Unicode, threshold equality, exception overflow, selected marker/identity visibility at 80×24, 40×20 and 20×12, one/two-line row budgets, paging by measured rows, filtered selection, removal, reordered updates and location changes. The native renderer asserts the selected identity after resize. The PTY fixture exercises these three geometries before full-ID child inspection; performance and full token diagnostics are checked in Details. See the [overview delivery record](validation/standalone-overview-density-2026-11-06.md) for measured density and host results.
+
 The standalone live smoke requires Python 3 with `pyte`, Bun >=1.3.0 for the terminal, and an installed supported OpenCode binary. It launches an isolated authenticated host and synthetic SSE provider, never the native TUI:
 
 ```sh

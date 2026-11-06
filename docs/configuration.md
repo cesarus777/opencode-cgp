@@ -96,6 +96,25 @@ Snapshots work with telemetry disabled. Public RPC reads and live events carry o
 
 Automatic inventory is bounded to 1024 nodes, depth 64 and 100 list pages per scan, with one list request at a time. `l` resumes pending pages and permits up to 2048 resident client nodes, still with 100 pages per action. A partial marker remains when a bound, cycle, missing parent or failed branch prevents completeness. A visible family rescan runs every 30 seconds. Each owning location has a separate cancellable transport, reads at most 128 IDs per call with concurrency two, and reconciles every 15 seconds with a 5-second deadline. Live batches coalesce on the existing 100 ms worker. Gaps, reconnects, incompatible payloads and missing services are visible; transient errors retain last-known measurements. Hiding the last consumer aborts requests, streams, listeners and timers.
 
+## Standalone terminal dashboard
+
+Launch `context-guard dashboard tui` in a separate terminal connected to the same owning OpenCode location; see [installation and connection options](../README.md#standalone-terminal-dashboard). No additional setting enables the compact Overview.
+
+Overview uses aligned columns at 72 cells or wider and two-line cards below that width, plus one optional exception line. It compares agent/model identity, execution state, capacity occupancy and threshold pressure/distance. `T` means threshold, `~` marks approximate usage, and `+N` indicates more diagnostics in Details. Below 40 cells, model names move to Details; below 100 cells, `#N` distinguishes current list positions. Wider rows use unique session-ID suffixes with position fallback. These labels do not change the selected session's full identity.
+
+| Key                | Action                                                                     |
+| ------------------ | -------------------------------------------------------------------------- |
+| Up / Down or j / k | Select the adjacent session in Overview; scroll other screens              |
+| PageUp / PageDown  | Select by the measured visible row count in Overview; scroll other screens |
+| Home / End         | First/last session in Overview; beginning/end of other content             |
+| Enter or 2         | Open selected-session Details from Overview                                |
+| 1 or Escape        | Return to Overview, preserving selection                                   |
+| 3 / 4              | Open session History / Models                                              |
+| / / f / l          | Search sessions / edit exact filters / select owning location              |
+| r / ? / q          | Refresh / help / quit; Ctrl+C also quits                                   |
+
+Editors take precedence over shortcuts. Filters preserve the selected session even when its row is hidden; Overview shows feedback and arrows select a visible result. Full IDs/models, usage quantities, thresholds, performance, freshness breakdowns and exact snapshot fields remain scrollable in Details. Short viewports reduce row content to keep the selected marker and identity visible. Critical connection/Guard status remains outside the row viewport; at dimensions below usable geometry, the bounded fallback cannot show all explanations simultaneously. See [overview geometry and validation](validation/standalone-overview-density-2026-11-06.md).
+
 ## Live performance and retained history
 
 Each root/child session instance has separate metrics, even when agent names match. `TPS` is a rolling estimate of text plus reasoning characters / 4 per second; it is language/tokenizer dependent and marked `~`. The window defaults to two seconds and publication to 500 ms. Both intervals are integer milliseconds, at least 100; the window must be >= the publication interval and <= 60000.

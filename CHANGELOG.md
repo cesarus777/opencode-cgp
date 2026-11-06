@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compact the standalone dashboard Overview into aligned columns or narrow cards, with bounded exception lines and full diagnostics in Details. Preserve the selected identity through resizing, updates and small viewports; page by visible session rows.
+- Add distinguishing session labels, contextual details/quit hints, and filtered-selection feedback. Validate with 213 offline tests and synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2; see the [overview validation record](docs/validation/standalone-overview-density-2026-11-06.md).
+
 - Use consistent threshold and Guard status wording across the native sidebar, panel, and standalone dashboard. Replace “tokens until compaction” with distance below/over threshold, and separate capacity occupancy from “Near threshold” / “Threshold reached.”
 - Keep stale occupancy labeled “Last measured” while current pressure stays unknown. Explain last-known Guard health during disconnect and reason-specific reload/storage-repair requirements without treating reconnect as enforcement recovery.
 - Preserve critical status and selected identity at narrow sizes; retain monitoring-limit/model-limit warnings and exact diagnostic reason codes in Details. Validate with 209 offline tests and native/standalone OpenCode 2.1.2 PTY smoke tests; see the [status validation record](docs/validation/threshold-status-consistency-2026-11-06.md).

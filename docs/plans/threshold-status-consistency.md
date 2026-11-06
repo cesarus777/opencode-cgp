@@ -26,7 +26,7 @@ Investigation baseline: `bun test tests/panelformat.test.ts tests/sidebar.test.t
 
 Change presentation helpers, primary status/copy, fixtures, and user documentation. Preserve policy, scheduler, accounting, transport, RPC schemas, selection, subscription ownership, and existing keyboard bindings. Keep detailed diagnostic codes and numeric fields inspectable.
 
-Standalone row density/reachability, sidebar collapse/history defaults, new shortcuts, broad lifecycle terminology work, and chart-error recovery remain later increments. Limited status layout adjustments are necessary here so the new explanation remains visible; they must not turn into a row redesign. No version bump or publication is included.
+Standalone row density/reachability, sidebar collapse/history defaults, new shortcuts, broad lifecycle terminology work, and chart-error recovery were outside this increment. Row density/reachability has since been [delivered as UX-04/UX-05](../validation/standalone-overview-density-2026-11-06.md); the other items remain follow-up work. Limited status layout adjustments were necessary here so the new explanation remained visible. No version bump or publication is included.
 
 ## Presentation contract
 
@@ -90,4 +90,4 @@ Run the full offline suite separately from compilation-heavy live jobs. If share
 
 Use the repository's existing opt-in synthetic-provider harnesses for native and standalone PTY status/resize checks; inspect their current controls in `docs/testing.md` before execution. Reuse supported installed hosts and record exact versions. Mocked state transitions establish the message matrix; an actual host smoke establishes integration and geometry. Report unavailable live checks as skipped, and do not claim new 2.0.29, genuine-provider, remote, or terminal-environment certification from local offline results.
 
-After this increment, implement UX-04/UX-05 together: compact standalone overview rows and preserve selected identity through narrow scrolling. Their shared variable-height row path in `TerminalShell.frame` makes them one coherent next layout change.
+The next increment, UX-04/UX-05, was implemented together: compact standalone overview rows and selected identity preserved through narrow scrolling. See the [implementation plan](standalone-overview-density.md) and [delivery record](../validation/standalone-overview-density-2026-11-06.md). The verbose `overviewRow` helper referenced in this historical plan is now `diagnosticRow`, retained for Details; Overview uses bounded `overviewRowLines`.

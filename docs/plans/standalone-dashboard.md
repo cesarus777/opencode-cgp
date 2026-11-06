@@ -1,6 +1,6 @@
 # Standalone Context Guard dashboard
 
-Current status: the terminal dashboard and Models screen are shipped through 0.4.0; the [threshold/status consistency increment](threshold-status-consistency.md) is implemented for the next release. Browser delivery, durable analytics storage, and UX-04/UX-05 row improvements remain pending. The dated progress entries below preserve their original delivery context.
+Current status: the terminal dashboard and Models screen are shipped through 0.4.0; the [threshold/status consistency increment](threshold-status-consistency.md) and [standalone overview density/reachability increment](standalone-overview-density.md) (UX-04/UX-05) are implemented for the next release. Browser delivery and durable analytics storage remain pending. The dated progress entries below preserve their original delivery context.
 
 ## Goal and scope
 
@@ -37,7 +37,7 @@ No new server RPC is required for the first release. The current history RPC is 
 
 ## Screens and interaction
 
-The overview shows connection and enforcement health, monitored/active session counts, and a searchable root/child tree. Rows show agent/model, current prompt tokens and capacity, occupancy, trigger/headroom, pressure, compaction phase, live TPS, and measurement age. Unknown, stale, estimated, blocked, uncertain, and partial values have distinct text labels as well as color.
+The overview shows connection and enforcement health, monitored/active session counts, and a searchable root/child tree. Delivered terminal rows compare agent/model, execution state, capacity occupancy and threshold distance/pressure, with a bounded exception line. Full token/capacity quantities, performance, measurement age and freshness breakdowns are available in selected-session Details. Columns become compact cards at narrow widths, with identity-first reduction at short heights. Unknown, stale, estimated, blocked, uncertain, and partial values retain explicit labels in the relevant views. See [current terminal controls](../configuration.md#standalone-terminal-dashboard).
 
 The selected-session detail shows the complete snapshot contract: usage source/scope, input capacity and output reserve, configured threshold and effective trigger, peak, cumulative input/output/reasoning/cache totals, compaction count/arming/timestamps/reason, and all `PerformanceSnapshot` fields (status, live and average TPS, TTFT, latest request, output totals, timing, completed requests, token source, partial flag). Display request/session IDs as identifiers, with truncation only in narrow layouts.
 
@@ -78,3 +78,5 @@ Acceptance: either command starts from the published package; both frontends sho
 2026-10-28: stage 3 is implemented: `context-guard dashboard tui`, lazy optional OpenTUI core loading with a terminal-specific Bun >=1.3.0 check, overview/detail/history, editor focus, explicit locations and idempotent cleanup. The offline suite passes 161 tests. Authenticated standalone synthetic-provider PTYs pass on OpenCode 2.0.29 and 2.1.2; the clean-installed CLI passes on 2.1.2 with renderer-free existing consumers preserved. See [terminal validation](../validation/dashboard-terminal-2026-10-28.md) for exact runtime/binary paths, package measurements and limits. Stage 4 browser delivery and stage 5's remaining combined release checks are still pending.
 
 2026-11-06: consistent threshold, stale-measurement, and Guard/connection wording is delivered across the standalone dashboard and native surfaces (UX-02/UX-03/UX-06). See the [status implementation plan](threshold-status-consistency.md) and [validation record](../validation/threshold-status-consistency-2026-11-06.md). Standalone overview density and row reachability (UX-04/UX-05) are the next UX increment; browser delivery remains pending.
+
+2026-11-06: UX-04/UX-05 are implemented: compact Overview columns/cards, bounded exceptions, identity-first selection reveal, measured page movement, and complete diagnostics in Details. The offline suite passes 213 tests and synthetic-provider PTYs pass on OpenCode 2.0.29 and 2.1.2, including 80×24, 40×20 and 20×12 layouts. See the [implementation plan](standalone-overview-density.md) and [delivery record](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) is the next recommended UX increment; browser delivery remains pending.

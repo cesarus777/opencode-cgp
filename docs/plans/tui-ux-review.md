@@ -1,6 +1,6 @@
 # Context Guard TUI UX review
 
-Date: 2026-11-06. Status: recommendations documented; UX-01 is implemented with [validation evidence](../validation/native-panel-overview-2026-11-06.md). Its [implementation plan](native-panel-overview.md) records the scope. UX-02, UX-03, and UX-06 are also implemented with [validation evidence](../validation/threshold-status-consistency-2026-11-06.md); the remaining recommendations are follow-up work.
+Date: 2026-11-06. Status: recommendations documented; UX-01 is implemented with [validation evidence](../validation/native-panel-overview-2026-11-06.md). Its [implementation plan](native-panel-overview.md) records the scope. UX-02, UX-03, and UX-06 are also implemented with [validation evidence](../validation/threshold-status-consistency-2026-11-06.md). UX-04/UX-05 are implemented with [standalone overview validation](../validation/standalone-overview-density-2026-11-06.md); the remaining recommendations are follow-up work.
 
 ## Scope and evidence
 
@@ -102,6 +102,6 @@ Retain exact lifecycle codes in Details. Stale usage should say “Last measured
 
 Implement UX-01 first, with only the copy and status changes needed to make its new summary accurate. Follow with consistent status/copy treatment across surfaces (UX-02, UX-03, UX-06), standalone density and row reachability (UX-04, UX-05), then sidebar, keyboard, terminology, and chart-error work.
 
-UX-01 and the [consistent threshold and Guard status increment](threshold-status-consistency.md) (UX-02, UX-03, UX-06) are delivered. See the [status delivery record](../validation/threshold-status-consistency-2026-11-06.md) for implementation and validation evidence. UX-04/UX-05, standalone row density and reachability, are next.
+UX-01 and the [consistent threshold and Guard status increment](threshold-status-consistency.md) (UX-02, UX-03, UX-06) are delivered. See the [status delivery record](../validation/threshold-status-consistency-2026-11-06.md) for implementation and validation evidence. UX-04/UX-05, standalone row density and reachability, are also delivered; their [implementation plan](standalone-overview-density.md) records the reproduced geometry, interaction contract, and acceptance checks, with measured results in the [delivery report](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) is next in the recommended order, followed by keyboard, terminology, and chart-error work.
 
 Evaluate keyboard-only tasks at 80×24 and 40×20: identify the nearest-threshold agent, explain Guard's current behavior, inspect a child, view its charts, and return without losing selection. Include stale, unknown, observe, suspended, and uncertain states. Check narrow fallback at 20×12, long names, CJK/emoji, deep nesting, and large families. Record actual results separately from design targets.

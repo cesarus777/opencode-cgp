@@ -8,11 +8,152 @@ import {
   thresholdDistance,
 } from "../tui/statusformat.ts";
 import type { DashboardRow, DashboardView } from "./view.ts";
+import { compactionLabel, panelStatuses } from "../tui/panelformat.ts";
 
-export function overviewRow(row: DashboardRow): string {
+export function diagnosticRow(row: DashboardRow): string {
   const s = row.snapshot;
   const valid = row.freshness === "fresh" || row.freshness === "stale";
   return `${" ".repeat(Math.min(row.depth, 12))}${row.depth ? "└ " : ""}${row.node.agent ?? "unknown agent"} / ${row.node.model ?? "unknown model"} [${row.node.sessionId}] ${row.node.status} | ${row.freshness === "stale" ? "Last measured" : "Context"} ${quantity(valid ? s?.measurement?.tokens : undefined)}/${quantity(s?.capacityTokens)} | occupancy ${row.utilizationPercent?.toFixed(1) ?? "?"}% | threshold ${quantity(s?.policy.triggerTokens)} · ${thresholdDistance(row)} | ${pressureLabel(row)} | compact ${s?.compaction.phase ?? "unavailable"} | performance ${s?.performance?.status ?? "unavailable"} | live TPS ${quantity(row.performanceAvailable && row.performanceFreshness !== "invalid" ? s?.performance?.liveTps : undefined)} | age ${row.measurementAgeMs === undefined ? "unknown" : `${Math.floor(row.measurementAgeMs / 1000)}s`} | inventory ${row.inventoryStale ? "stale" : "fresh"}, live ${row.liveStale ? "stale" : "fresh"}, usage ${row.freshness}, performance ${row.performanceFreshness}${s?.measurement?.confidence === "approximate" ? " estimated" : ""}${s?.performance?.tokenSource === "estimated" ? " estimated TPS" : ""}${s?.performance?.partial ? " partial" : ""}${row.hidden ? ` | ${row.hidden} hidden descendants` : ""}`;
+}
+
+function pad(value: string, width: number): string {
+  const text = clip(value, width);
+  return text + " ".repeat(Math.max(0, width - cells(text)));
+}
+
+function overviewColumns(
+  identity: string,
+  state: string,
+  context: string,
+  threshold: string,
+  width: number,
+): string {
+  return `${pad(identity, width - 44)} ${pad(state, 7)} ${pad(context, 7)} ${pad(threshold, 27)}`;
+}
+
+export function overviewHeading(width: number): string[] {
+  return width >= 72
+    ? [overviewColumns("Agent / model", "State", "Context", "Threshold", width)]
+    : [];
+}
+
+/** Stable ID suffixes when unique; position is the bounded fallback. */
+export function overviewLabels(rows: readonly DashboardRow[]): string[] {
+  const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+  const suffixes = rows.map((row) =>
+    [...segmenter.segment(clip(row.node.sessionId, 4096))]
+      .slice(-8)
+      .map((part) => part.segment)
+      .join(""),
+  );
+  const counts = new Map<string, number>();
+  for (const suffix of suffixes)
+    counts.set(suffix, (counts.get(suffix) ?? 0) + 1);
+  return suffixes.map((suffix, index) =>
+    counts.get(suffix) === 1 ? suffix : `#${index + 1}`,
+  );
+}
+
+/** Each row is already cell-bounded; overview cards never wrap diagnostics. */
+export function overviewRowLines(
+  row: DashboardRow,
+  width: number,
+  selected: boolean,
+  label: string,
+  position: number,
+  maxLines = 3,
+): string[] {
+  const valid = row.freshness === "fresh" || row.freshness === "stale";
+  const percent = `${valid && row.snapshot?.measurement?.confidence === "approximate" ? "~" : ""}${valid && row.utilizationPercent !== undefined ? Math.round(row.utilizationPercent) : "?"}%`;
+  const context = `${row.freshness === "stale" ? "Last measured " : ""}${percent}`;
+  const distance = thresholdDistance(row, true);
+  const threshold = (
+    distance === "At threshold · requires more"
+      ? "At threshold; requires more"
+      : distance
+  ).replace(" · Threshold reached", " · reached");
+  const state =
+    width < 28
+      ? {
+          running: "RUN",
+          idle: "IDLE",
+          completed: "DONE",
+          failed: "FAIL",
+          unknown: "?",
+        }[row.node.status]
+      : panelStatuses[row.node.status];
+  const identityWidth =
+    width >= 72 ? width - 44 : Math.max(1, width - cells(state) - 1);
+  const marker = selected ? "> " : "  ";
+  const tag = width >= 100 ? ` [${label}]` : ` #${position + 1}`;
+  // Indentation must never consume the agent's entire identity budget.
+  const indent =
+    row.depth && identityWidth >= 22
+      ? `${" ".repeat(Math.min(row.depth, Math.max(0, Math.floor(identityWidth / 8) - 1)))}└ `
+      : "";
+  const name = `${row.node.agent ?? "unknown agent"}${width >= 40 ? ` / ${row.node.model ?? "unknown model"}` : ""}`;
+  const identity =
+    marker +
+    indent +
+    clip(name, Math.max(1, identityWidth - cells(marker + indent + tag))) +
+    tag;
+  const metric = `${context} context · ${threshold}`;
+  const shortThreshold = threshold
+    .replace("pressure unknown", "?")
+    .replace("At threshold; requires more", "At; needs more")
+    .replace(" · Near threshold", " near")
+    .replace(" · reached", " reached")
+    .replace("Threshold reached", "Reached");
+  const shortMetric = `${context} · T ${shortThreshold}`;
+  const pressure =
+    row.freshness !== "fresh" || row.pressure === "unknown"
+      ? "Threshold ?"
+      : row.pressure === "crossed"
+        ? "Reached"
+        : row.triggerDeltaTokens === 0
+          ? "At; needs more"
+          : row.pressure === "near"
+            ? "Near threshold"
+            : "Below threshold";
+  const metrics = [metric, shortMetric, `${context} · ${pressure}`];
+  const fittedMetric = metrics.find((line) => cells(line) <= width);
+  const lines =
+    width >= 72
+      ? [
+          overviewColumns(
+            identity,
+            state,
+            row.freshness === "stale" ? "Last" : percent,
+            threshold,
+            width,
+          ),
+        ]
+      : [`${pad(identity, identityWidth)} ${state}`, fittedMetric ?? context];
+  const exceptions = [
+    ...(width >= 72 && row.freshness === "stale" ? [context] : []),
+    ...(width < 72 && !fittedMetric ? [pressure] : []),
+    ...(row.node.status === "failed" ? ["Agent failed"] : []),
+    ...(row.node.interrupted ? ["Interrupted"] : []),
+    ...(compactionLabel(row) ? [compactionLabel(row)] : []),
+    ...(row.freshness !== "fresh" ? [`Usage ${row.freshness}`] : []),
+    ...(row.inventoryStale ? ["Inventory stale"] : []),
+    ...(row.liveStale ? ["Live data stale"] : []),
+    ...(row.hidden ? [`${row.hidden} hidden descendants`] : []),
+  ].filter((value): value is string => value !== undefined);
+  if (exceptions.length) {
+    let shown = 1;
+    let text = exceptions[0] ?? "";
+    while (
+      shown < exceptions.length &&
+      cells(text + " · " + exceptions[shown]) <= width - 6
+    ) {
+      text += " · " + exceptions[shown++];
+    }
+    const more =
+      shown < exceptions.length ? ` +${exceptions.length - shown}` : "";
+    lines.push(clip(text, Math.max(0, width - cells(more))) + more);
+  }
+  return lines.slice(0, Math.max(1, maxLines)).map((line) => clip(line, width));
 }
 
 // Explicit paths include absent optional fields. Unknown is never rendered as zero.
@@ -100,9 +241,11 @@ const scalar = (value: unknown) =>
 export function terminalDetail(row: DashboardRow | undefined): string[] {
   if (!row) return ["No selected session; choose one in overview."];
   return [
-    overviewRow(row),
+    diagnosticRow(row),
     `Session ID: ${row.node.sessionId}`,
     `Parent ID: ${row.node.parentId ?? "unknown/unavailable"}`,
+    ...(row.node.interrupted ? ["Agent execution interrupted"] : []),
+    ...(compactionLabel(row) ? [compactionLabel(row) ?? ""] : []),
     "All snapshot fields (timestamps are Unix milliseconds):",
     ...snapshotFields.map(
       (path) => `${path}: ${scalar(pathValue(row.snapshot, path))}`,
@@ -218,6 +361,9 @@ export const terminalHelp = [
   "Models charts: Left/Right metric · w window · [/] bucket · d request details",
   "Models list/request details: n/p pages · f exact agent filter · r refresh",
   "Up/Down or j/k: select session in overview; scroll other screens",
+  "Overview: compact columns/cards; Enter or 2 for full identity and diagnostics",
+  "Overview PageUp/PageDown selects by visible rows; #N identifies a row in narrow layouts",
+  "Overview T means threshold; +N means more diagnostics in Details",
   "PageUp/PageDown: move by a page · Home/End: first/last",
   "Left/Right: history metric (six metrics) · w: cycle 5m/1h/24h/7d",
   "[ / ]: previous/next exact history sample or request",

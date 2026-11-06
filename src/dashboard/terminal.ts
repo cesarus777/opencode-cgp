@@ -12,7 +12,9 @@ import { clip } from "../tui/format.ts";
 import {
   headerLines,
   historyObservations,
-  overviewRow,
+  overviewHeading,
+  overviewLabels,
+  overviewRowLines,
   terminalDetail,
   terminalHelp,
   terminalHistory,
@@ -44,6 +46,8 @@ export class TerminalShell {
   input = "";
   notice = "";
   private rowOffset = 0;
+  private overviewScope = "";
+  private overviewPage = 1;
   private historyIdentity = "";
   constructor(
     readonly controller: DashboardController,
@@ -318,7 +322,18 @@ export class TerminalShell {
           ? 0
           : name === "end"
             ? view.rows.length - 1
-            : Math.max(0, Math.min(view.rows.length - 1, index + delta));
+            : Math.max(
+                0,
+                Math.min(
+                  view.rows.length - 1,
+                  index +
+                    (name === "pagedown"
+                      ? this.overviewPage
+                      : name === "pageup"
+                        ? -this.overviewPage
+                        : delta),
+                ),
+              );
       const row = view.rows[next];
       if (row && (delta || name === "home" || name === "end"))
         this.controller.selectSession(row.node.sessionId);
@@ -364,9 +379,17 @@ export class TerminalShell {
     }
     const footer = this.editor
       ? `${this.editor}> ${this.input} [Enter apply; Esc cancel${this.editor === "location" ? "; Tab remembered" : ""}]`
-      : width < 40
-        ? "? help q quit"
-        : "? help q quit · 1 overview 2 detail 3 history 4 models · / search f filters l location r refresh";
+      : view.screen === "overview" && !this.help
+        ? width < 40
+          ? width >= 22
+            ? "2 detail ? help q quit"
+            : "2 detail ? q quit"
+          : width < 72
+            ? "2 detail · q quit · ? help · ↑↓ select"
+            : "Enter detail · q quit · ? help · ↑↓ select · 3 history 4 models / search f filters l location r refresh"
+        : width < 40
+          ? "? help q quit"
+          : "? help q quit · 1 overview 2 detail 3 history 4 models · / search f filters l location r refresh";
     if (height < 5)
       return [
         clip("Context Guard · ? help · q quit", width),
@@ -375,8 +398,23 @@ export class TerminalShell {
         .slice(0, height)
         .join("\n");
     const header = headerLines(view, width, height);
+    if (view.screen === "overview" && !this.help) {
+      // Inventory/location/selected summary is optional; retain room for the row.
+      while (
+        header.length > height - 2 &&
+        /^(Known |Location: |Selected: )/.test(header.at(-1) ?? "")
+      )
+        header.pop();
+      // Below usable geometry, bound the fallback rather than overflow the PTY.
+      header.splice(Math.max(0, height - 2));
+    }
     const available = Math.max(0, height - header.length - 1);
     const notices = [
+      ...(view.screen === "overview" &&
+      view.selectedSessionId &&
+      !view.rows.some((row) => row.node.sessionId === view.selectedSessionId)
+        ? ["Selection hidden by filters · ↑↓ selects a visible session"]
+        : []),
       ...view.notices,
       ...view.inventory.notices,
       ...(view.screen === "detail" ? (view.health?.reasons ?? []) : []),
@@ -390,14 +428,36 @@ export class TerminalShell {
     let body: string[];
     if (this.help) body = wrapped(terminalHelp, width);
     else if (view.screen === "overview") {
-      // Variable-height rows wrap every field, even in narrow layouts. Track the
-      // selected identity through sorting/updates rather than a frontend index.
-      const rows = view.rows.map((row) =>
-        wrapped(
-          [
-            `${row.node.sessionId === view.selectedSessionId ? "> " : "  "}${overviewRow(row)}`,
-          ],
+      const scope = JSON.stringify([view.location, view.filters]);
+      if (scope !== this.overviewScope) {
+        this.rowOffset = 0;
+        this.overviewScope = scope;
+      }
+      const heading = available >= 4 ? overviewHeading(width) : [];
+      const noticeBudget = Math.min(
+        notices.length,
+        Math.floor((available - heading.length) / 4),
+      );
+      const status = notices
+        .slice(0, noticeBudget)
+        .map((notice, index) =>
+          clip(
+            index === noticeBudget - 1 && notices.length > noticeBudget
+              ? `${notices.length} notices · see Details`
+              : notice,
+            width,
+          ),
+        );
+      const budget = Math.max(1, available - heading.length - status.length);
+      const labels = overviewLabels(view.rows);
+      const rows = view.rows.map((row, index) =>
+        overviewRowLines(
+          row,
           width,
+          row.node.sessionId === view.selectedSessionId,
+          labels[index] ?? `#${index + 1}`,
+          index,
+          budget,
         ),
       );
       const selected = view.rows.findIndex(
@@ -407,11 +467,6 @@ export class TerminalShell {
         .slice(0, Math.max(0, selected))
         .reduce((n, row) => n + row.length, 0);
       const end = start + (rows[selected]?.length ?? 0);
-      const status = wrapped(notices, width);
-      const budget = Math.max(
-        1,
-        available - Math.min(status.length, Math.floor(available / 3)),
-      );
       if (start < this.rowOffset) this.rowOffset = start;
       if (end > this.rowOffset + budget)
         this.rowOffset = Math.max(start, end - budget);
@@ -420,11 +475,27 @@ export class TerminalShell {
         0,
         Math.min(this.rowOffset, Math.max(0, flat.length - budget)),
       );
+      // A page measures session rows, not terminal lines or header assumptions.
+      let cursor = 0;
+      this.overviewPage = Math.max(
+        1,
+        rows.filter((row) => {
+          const start = cursor;
+          cursor += row.length;
+          return start >= this.rowOffset && cursor <= this.rowOffset + budget;
+        }).length,
+      );
       body = [
-        ...status.slice(0, available - budget),
+        ...status,
+        ...heading,
         ...(flat.length
           ? flat.slice(this.rowOffset, this.rowOffset + budget)
-          : ["No matching sessions; / search, f filters, r refresh."]),
+          : [
+              clip(
+                "No matching sessions; / search, f filters, r refresh.",
+                width,
+              ),
+            ]),
       ];
       return [
         ...header,

@@ -111,14 +111,25 @@ try:
         if native_ready:
             break
     assert native_ready, "native TUI must initialize its independent terminal"
+    key("2")
     action("prompt")
     expect("performance streaming")
     expect("live TPS")
-    key("2")
     expect("measurement.provenance: provider-normalized")
     key("\x1b[6~")
     expect("performance.")
     key("1")
+    for cols, rows in [(80, 24), (40, 20), (20, 12)]:
+        resize(cols, rows)
+        expect("q quit")
+        expect("detail")
+        for _ in range(3):
+            assert any(line.startswith("> ") and "#" in line for line in screen.display), "selected overview identity must stay visible"
+            key("j")
+        if cols >= 40:
+            for position in [1, 2, 3]:
+                expect("#" + str(position))
+    resize(180, 50)
     # Select root and both concurrent children by their full scalar identity.
     for session_id in connection["ids"]:
         key("/")
@@ -182,6 +193,7 @@ try:
     action("stop")
     expect("stale")
     expect("pressure unknown")
+    key("2")
     expect("Last measured 1.2k/128.0k")
     action("start")
     key("r")
