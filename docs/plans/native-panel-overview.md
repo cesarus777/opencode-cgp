@@ -2,6 +2,8 @@
 
 Date: 2026-11-06. Status: implemented and locally validated; see the [delivery record](../validation/native-panel-overview-2026-11-06.md). Implements UX-01 from the [TUI UX review](tui-ux-review.md).
 
+The design targets below retain this increment's scope. Later [keyboard/help delivery](../validation/native-keyboard-help-2026-11-06.md) adds native help, inventory feedback, and optional child keyboard entry; constrained footers now prioritize help/close, with inspection controls available through help when omitted. Use [current configuration](../configuration.md#native-context-guard-view) for the supported controls.
+
 ## Problem and outcome
 
 Before this change, opening `/context-guard` rendered a context history chart, expanded route-session diagnostics, and optional inspected-child diagnostics before the family list. The user's first comparison task required scrolling past information that is useful mainly during investigation.

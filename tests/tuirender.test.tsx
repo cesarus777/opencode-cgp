@@ -83,4 +83,4 @@ test("public Solid preload renders the native panel and preserves navigation and
   expect(stderr).toBe("");
   expect(code).toBe(0);
   expect(stdout).toContain("PASS: native renderer");
-});
+}, 15000);

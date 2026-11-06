@@ -1,6 +1,6 @@
 # Context Guard TUI UX review
 
-Date: 2026-11-06. Status: recommendations documented; UX-01 is implemented with [validation evidence](../validation/native-panel-overview-2026-11-06.md). Its [implementation plan](native-panel-overview.md) records the scope. UX-02, UX-03, and UX-06 are also implemented with [validation evidence](../validation/threshold-status-consistency-2026-11-06.md). UX-04/UX-05 are implemented with [standalone overview validation](../validation/standalone-overview-density-2026-11-06.md); the remaining recommendations are follow-up work.
+Date: 2026-11-06. Status: recommendations documented; UX-01 is implemented with [validation evidence](../validation/native-panel-overview-2026-11-06.md). Its [implementation plan](native-panel-overview.md) records the scope. UX-02, UX-03, and UX-06 are also implemented with [validation evidence](../validation/threshold-status-consistency-2026-11-06.md). UX-04/UX-05 are implemented with [standalone overview validation](../validation/standalone-overview-density-2026-11-06.md); UX-08 is implemented with [native keyboard/help validation](../validation/native-keyboard-help-2026-11-06.md). UX-07, UX-09, and UX-10 remain follow-up work.
 
 ## Scope and evidence
 
@@ -66,6 +66,8 @@ Group completed agents under “Completed (N)” without hiding active descendan
 
 ## Keyboard follow-up
 
+The findings below are historical; [UX-08 delivery](../validation/native-keyboard-help-2026-11-06.md) implements native help, contextual controls, inventory feedback, and optional child keyboard entry. Existing bindings remain unchanged.
+
 Add `?` help to the native panel and explicit page navigation for long content. Show only relevant footer actions and preserve essential actions at narrow widths. Show Load more when inventory is partial, with feedback about progress or the discovery bound.
 
 Review existing conflicts before choosing a shared convention: `l` means load more in the panel and location in the dashboard; brackets change the window in the panel and select observations in the dashboard. Preserve documented bindings until a migration is specified.
@@ -102,8 +104,10 @@ Retain exact lifecycle codes in Details. Stale usage should say “Last measured
 
 Implement UX-01 first, with only the copy and status changes needed to make its new summary accurate. Follow with consistent status/copy treatment across surfaces (UX-02, UX-03, UX-06), standalone density and row reachability (UX-04, UX-05), then sidebar, keyboard, terminology, and chart-error work.
 
-UX-01 and the [consistent threshold and Guard status increment](threshold-status-consistency.md) (UX-02, UX-03, UX-06) are delivered. See the [status delivery record](../validation/threshold-status-consistency-2026-11-06.md) for implementation and validation evidence. UX-04/UX-05, standalone row density and reachability, are also delivered; their [implementation plan](standalone-overview-density.md) records the reproduced geometry, interaction contract, and acceptance checks, with measured results in the [delivery report](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) is next in the recommended order, followed by keyboard, terminology, and chart-error work.
+UX-01 and the [consistent threshold and Guard status increment](threshold-status-consistency.md) (UX-02, UX-03, UX-06) are delivered. See the [status delivery record](../validation/threshold-status-consistency-2026-11-06.md) for implementation and validation evidence. UX-04/UX-05, standalone row density and reachability, are also delivered; their [implementation plan](standalone-overview-density.md) records the reproduced geometry, interaction contract, and acceptance checks, with measured results in the [delivery report](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) remains the next proposed increment; keyboard/help (UX-08) has been delivered independently, leaving terminology and chart-error work afterward.
 
 The [proposed sidebar density plan](sidebar-density.md) records current source evidence, compact defaults, safe completed grouping, diagnostics relocation, and acceptance checks for UX-07. Implementation has not started.
+
+UX-08 is implemented independently of UX-07: native help, contextual controls, inventory feedback, and opt-in child-route keyboard access. Its [implementation plan](native-keyboard-help.md) records the public-host keybind limitation and the `openShortcut` solution; see the [delivery record](../validation/native-keyboard-help-2026-11-06.md) for validation. Page navigation was already delivered in UX-01. UX-07 remains unimplemented.
 
 Evaluate keyboard-only tasks at 80×24 and 40×20: identify the nearest-threshold agent, explain Guard's current behavior, inspect a child, view its charts, and return without losing selection. Include stale, unknown, observe, suspended, and uncertain states. Check narrow fallback at 20×12, long names, CJK/emoji, deep nesting, and large families. Record actual results separately from design targets.

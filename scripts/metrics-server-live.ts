@@ -21,6 +21,7 @@ import {
 } from "../src/rpc.ts";
 import { readPerformanceHistory } from "../src/history.ts";
 
+const binary = process.env.GUARD_SYNTHETIC_BINARY ?? "opencode";
 const root = await mkdtemp(join(tmpdir(), "guard-metrics-live-"));
 const project = join(root, "project"),
   archive = join(root, "history");
@@ -235,7 +236,7 @@ async function start() {
   const log = join(root, "server.log");
   await writeFile(log, "");
   host = Bun.spawn(
-    ["opencode", "serve", "--hostname", "127.0.0.1", "--port", "0"],
+    [binary, "serve", "--hostname", "127.0.0.1", "--port", "0"],
     {
       cwd: project,
       env,
@@ -320,7 +321,7 @@ async function waitFor(check: () => Promise<boolean>, label: string) {
   throw new Error(`Timed out: ${label}`);
 }
 try {
-  const version = Bun.spawnSync(["opencode", "--version"], {
+  const version = Bun.spawnSync([binary, "--version"], {
     cwd: project,
     env,
   });
@@ -785,15 +786,29 @@ try {
     await mkdir(env.XDG_CONFIG_HOME, { recursive: true });
     await writeFile(
       join(env.XDG_CONFIG_HOME, "opencode", "cli.json"),
-      JSON.stringify({ plugins: [{ package: pluginPath }] }),
+      JSON.stringify({
+        plugins: [
+          { package: pluginPath, options: { openShortcut: "<leader>v" } },
+        ],
+      }),
     ).catch(async () => {
       await mkdir(join(env.XDG_CONFIG_HOME, "opencode"), { recursive: true });
       await writeFile(
         join(env.XDG_CONFIG_HOME, "opencode", "cli.json"),
-        JSON.stringify({ plugins: [{ package: pluginPath }] }),
+        JSON.stringify({
+          plugins: [
+            { package: pluginPath, options: { openShortcut: "<leader>v" } },
+          ],
+        }),
       );
     });
-    const counts = { history: 0, monitor: 0, cancelled: 0, delay: false };
+    const counts = {
+      history: 0,
+      monitor: 0,
+      cancelled: 0,
+      delayed: 0,
+      delay: false,
+    };
     const proxy = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -877,8 +892,9 @@ try {
             counts.history++;
             if (counts.delay) {
               counts.delay = false;
+              counts.delayed++;
               await new Promise<void>((resolve) => {
-                const timer = setTimeout(finish, 4000);
+                const timer = setTimeout(finish, 10000);
                 function finish() {
                   clearTimeout(timer);
                   req.signal.removeEventListener("abort", cancel);
@@ -922,6 +938,7 @@ try {
         join(root, "connection.json"),
         JSON.stringify({
           env,
+          binary,
           url: `http://127.0.0.1:${proxy.port}`,
           project,
           sessionId: parent.id,
@@ -932,6 +949,7 @@ try {
       const tty = Bun.spawn(
         [
           "python3",
+          "-u",
           resolve("scripts/fixtures/metrics-tui.py"),
           join(root, "connection.json"),
         ],

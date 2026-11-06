@@ -14,6 +14,39 @@ export interface Inventory {
   readonly scanned: ReadonlySet<string>;
   readonly damaged: boolean;
 }
+
+export interface InventoryStatus {
+  readonly discovered: number;
+  readonly limit: number;
+  readonly scanning: boolean;
+  readonly failed: boolean;
+  readonly damaged: boolean;
+  readonly pending: number;
+  readonly pages: number;
+  readonly complete: boolean;
+  readonly canLoadMore: boolean;
+}
+
+export function inventoryStatus(
+  inventory: Inventory | undefined,
+  limit: number,
+  scanning: boolean,
+  failed: boolean,
+): InventoryStatus {
+  const discovered = inventory?.sessions.size ?? 0;
+  const pending = inventory?.pending.length ?? 0;
+  return {
+    discovered,
+    limit,
+    scanning,
+    failed,
+    damaged: inventory?.damaged ?? false,
+    pending,
+    pages: inventory?.pages ?? 0,
+    complete: !failed && (inventory?.complete ?? false),
+    canLoadMore: !scanning && pending > 0 && discovered < 2048,
+  };
+}
 export async function discoverFamily(
   client: Pick<OpenCodeClient, "session">,
   currentId: string,

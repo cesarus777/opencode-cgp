@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import type { Plugin } from "@opencode/plugin/tui";
-import type { PanelInput } from "@opencode/plugin/tui/context";
+import type { KeymapCommand, PanelInput } from "@opencode/plugin/tui/context";
 import {
   createSignal,
   createMemo,
@@ -20,8 +20,9 @@ import {
   panelSummary,
 } from "./panelformat.ts";
 import { chartMetrics } from "./chartformat.ts";
-import { clip, wrap } from "./format.ts";
+import { cells, clip, wrap } from "./format.ts";
 import { connectionLabel, monitorStatusLines } from "./statusformat.ts";
+import { footerActions, inventoryMessages } from "./panelcontrols.ts";
 
 type PanelView = "overview" | "details" | "charts";
 export function GuardPanel(props: {
@@ -37,6 +38,8 @@ export function GuardPanel(props: {
     ),
   );
   onCleanup(() => consumer.release());
+  const [help, setHelp] = createSignal(false);
+  let sourceScroll = 0;
   const [view, setView] = createSignal<PanelView>("overview");
   const [metricIndex, setMetricIndex] = createSignal(0);
   const [viewportWidth, setViewportWidth] = createSignal<number>();
@@ -78,6 +81,8 @@ export function GuardPanel(props: {
       (id) => {
         setSelected(id);
         setOrder([]);
+        setHelp(false);
+        sourceScroll = 0;
         setView("overview");
       },
     ),
@@ -96,17 +101,33 @@ export function GuardPanel(props: {
     if (follow) props.context.renderer.removeFrameCallback(follow);
     follow = undefined;
   }
-  function revealSelection() {
+  function afterLayout(action: () => void) {
     if (!props.context.renderer) return;
     cancelFollow();
     let frames = 0;
     follow = async () => {
-      scroll?.scrollChildIntoView(`context-guard.row.${selected()}`);
+      action();
       if (++frames >= 2) cancelFollow();
       else props.context.renderer.requestRender();
     };
     props.context.renderer.setFrameCallback(follow);
     props.context.renderer.requestRender();
+  }
+  function revealSelection() {
+    afterLayout(() =>
+      scroll?.scrollChildIntoView(`context-guard.row.${selected()}`),
+    );
+  }
+  function toggleHelp() {
+    cancelFollow();
+    if (!help()) {
+      sourceScroll = scroll?.scrollTop ?? 0;
+      setHelp(true);
+      afterLayout(() => scroll?.scrollTo(0));
+    } else {
+      setHelp(false);
+      afterLayout(() => scroll?.scrollTo(sourceScroll));
+    }
   }
   onCleanup(cancelFollow);
   createEffect(() => {
@@ -115,7 +136,7 @@ export function GuardPanel(props: {
     rows();
     width();
     height();
-    if (view() === "overview") revealSelection();
+    if (!help() && view() === "overview") revealSelection();
   });
   function changeView(next: PanelView) {
     if (next !== "overview" && !selectedRow()) return;
@@ -140,7 +161,7 @@ export function GuardPanel(props: {
     });
   }
   function page(delta: number) {
-    if (view() === "overview")
+    if (!help() && view() === "overview")
       move(
         delta *
           Math.max(
@@ -154,136 +175,195 @@ export function GuardPanel(props: {
       scroll?.scrollBy(delta * Math.max(1, (scroll.viewport.height ?? 1) - 1));
   }
   function edge(last: boolean) {
-    if (view() === "overview") move(last ? rows().length : -rows().length);
+    if (!help() && view() === "overview")
+      move(last ? rows().length : -rows().length);
     else scroll?.scrollTo(last ? scroll.scrollHeight : 0);
   }
+  const inventory = () => props.state.inventoryStatus();
+  const expandable = () => {
+    const row = selectedRow();
+    return (
+      !!row &&
+      (row.hidden > 0 ||
+        (row.node.status === "completed" &&
+          rows().some((r) => r.node.parentId === row.node.sessionId)))
+    );
+  };
+  function command(
+    name: string,
+    title: string,
+    bind: string,
+    run: () => void,
+    enabled: () => boolean = () => !help(),
+  ): KeymapCommand {
+    return {
+      id: `context-guard.${name}`,
+      title,
+      bind,
+      enabled,
+      run: () => {
+        if (props.input.focused && enabled()) run();
+      },
+    };
+  }
+  const commands = () => [
+    command(
+      "close",
+      "Close Context Guard",
+      "q",
+      () => props.input.close(),
+      () => true,
+    ),
+    command("help", "Toggle native panel help", "?", toggleHelp, () => true),
+    command("help-back", "Return from help", "escape", toggleHelp, help),
+    command(
+      "chart-previous",
+      "Previous chart metric",
+      "left",
+      () =>
+        setMetricIndex(
+          (i) => (i + chartMetrics.length - 1) % chartMetrics.length,
+        ),
+      () => !help() && view() === "charts",
+    ),
+    command(
+      "chart-next",
+      "Next chart metric",
+      "right",
+      () => setMetricIndex((i) => (i + 1) % chartMetrics.length),
+      () => !help() && view() === "charts",
+    ),
+    command(
+      "charts",
+      "Toggle performance charts",
+      "c",
+      () => changeView(view() === "charts" ? "overview" : "charts"),
+      () => !help() && !!selectedRow(),
+    ),
+    command(
+      "chart-shorter",
+      "Shorter chart window",
+      "[",
+      () => setWindowIndex((i) => Math.max(0, i - 1)),
+      () => !help() && view() === "charts",
+    ),
+    command(
+      "chart-longer",
+      "Longer chart window",
+      "]",
+      () => setWindowIndex((i) => Math.min(windows.length - 1, i + 1)),
+      () => !help() && view() === "charts",
+    ),
+    command(
+      "inspect",
+      "Toggle selected session details",
+      "i",
+      () => changeView(view() === "details" ? "overview" : "details"),
+      () => !help() && !!selectedRow(),
+    ),
+    command(
+      "refresh",
+      "Refresh inventory, measurements and active charts",
+      "r",
+      () => {
+        setOrder([]);
+        props.state.refresh();
+        setChartRefresh((n) => n + 1);
+      },
+    ),
+    command(
+      "load-more",
+      "Load more family",
+      "l",
+      () => props.state.loadMore(),
+      () => !help() && view() === "overview" && inventory().canLoadMore,
+    ),
+    command(
+      "next",
+      "Next session or scroll down",
+      "down",
+      () => (help() || view() === "details" ? scroll?.scrollBy(1) : move(1)),
+      () => true,
+    ),
+    command(
+      "previous",
+      "Previous session or scroll up",
+      "up",
+      () => (help() || view() === "details" ? scroll?.scrollBy(-1) : move(-1)),
+      () => true,
+    ),
+    command(
+      "page-next",
+      "Next page",
+      "pagedown",
+      () => page(1),
+      () => true,
+    ),
+    command(
+      "page-previous",
+      "Previous page",
+      "pageup",
+      () => page(-1),
+      () => true,
+    ),
+    command(
+      "first",
+      "First row or top",
+      "home",
+      () => edge(false),
+      () => true,
+    ),
+    command(
+      "last",
+      "Last row or bottom",
+      "end",
+      () => edge(true),
+      () => true,
+    ),
+    command(
+      "expand",
+      "Toggle selected branch",
+      "space",
+      () => {
+        const row = selectedRow();
+        if (row) props.state.expand(row.node.sessionId);
+      },
+      () => !help() && view() === "overview" && expandable(),
+    ),
+    command(
+      "open",
+      "Open selected session",
+      "return",
+      () => open(selectedRow()),
+      () => !help() && !!selectedRow(),
+    ),
+  ];
   props.context.keymap.layer(() => ({
     enabled: () => props.input.focused,
-    commands: [
-      {
-        id: "context-guard.close",
-        title: "Close Context Guard",
-        bind: "q",
-        run: () => props.input.close(),
-      },
-      {
-        id: "context-guard.chart-previous",
-        title: "Previous chart metric",
-        bind: "left",
-        run: () => {
-          if (view() === "charts")
-            setMetricIndex(
-              (i) => (i + chartMetrics.length - 1) % chartMetrics.length,
-            );
-        },
-      },
-      {
-        id: "context-guard.chart-next",
-        title: "Next chart metric",
-        bind: "right",
-        run: () => {
-          if (view() === "charts")
-            setMetricIndex((i) => (i + 1) % chartMetrics.length);
-        },
-      },
-      {
-        id: "context-guard.charts",
-        title: "Toggle performance charts",
-        bind: "c",
-        run: () => changeView(view() === "charts" ? "overview" : "charts"),
-      },
-      {
-        id: "context-guard.chart-shorter",
-        title: "Shorter chart window",
-        bind: "[",
-        run: () => {
-          if (view() === "charts") setWindowIndex((i) => Math.max(0, i - 1));
-        },
-      },
-      {
-        id: "context-guard.chart-longer",
-        title: "Longer chart window",
-        bind: "]",
-        run: () => {
-          if (view() === "charts")
-            setWindowIndex((i) => Math.min(windows.length - 1, i + 1));
-        },
-      },
-      {
-        id: "context-guard.inspect",
-        title: "Toggle selected session details",
-        bind: "i",
-        run: () => changeView(view() === "details" ? "overview" : "details"),
-      },
-      {
-        id: "context-guard.refresh",
-        title: "Refresh Context Guard",
-        bind: "r",
-        run: () => {
-          setOrder([]);
-          props.state.refresh();
-          setChartRefresh((n) => n + 1);
-        },
-      },
-      {
-        id: "context-guard.load-more",
-        title: "Load more family",
-        bind: "l",
-        run: () => {
-          if (view() === "overview" && !props.state.complete())
-            props.state.loadMore();
-        },
-      },
-      {
-        id: "context-guard.next",
-        bind: "down",
-        run: () => (view() === "details" ? scroll?.scrollBy(1) : move(1)),
-      },
-      {
-        id: "context-guard.previous",
-        bind: "up",
-        run: () => (view() === "details" ? scroll?.scrollBy(-1) : move(-1)),
-      },
-      {
-        id: "context-guard.page-next",
-        title: "Next page",
-        bind: "pagedown",
-        run: () => page(1),
-      },
-      {
-        id: "context-guard.page-previous",
-        title: "Previous page",
-        bind: "pageup",
-        run: () => page(-1),
-      },
-      {
-        id: "context-guard.first",
-        title: "First row or top",
-        bind: "home",
-        run: () => edge(false),
-      },
-      {
-        id: "context-guard.last",
-        title: "Last row or bottom",
-        bind: "end",
-        run: () => edge(true),
-      },
-      {
-        id: "context-guard.expand",
-        bind: "space",
-        run: () => {
-          const row = selectedRow();
-          if (view() === "overview" && row)
-            props.state.expand(row.node.sessionId);
-        },
-      },
-      {
-        id: "context-guard.open",
-        bind: "return",
-        run: () => open(selectedRow()),
-      },
-    ],
+    commands: commands(),
   }));
+  const shortcut = (name: string) =>
+    props.context.keymap.shortcuts(`context-guard.${name}`).join("/");
+  const helpLines = () =>
+    [
+      "Native OpenCode panel — keyboard help",
+      `Return to ${view()}; selected session: ${selectedRow()?.node.agent ?? selected() ?? "none"}`,
+      "> marks selection; * marks the current OpenCode route. Open selected session navigates there and closes the panel.",
+      "Overview: arrows select agents. Details: arrows scroll. Charts: arrows select sessions; Left/Right changes metric and brackets change window.",
+      "PageUp/PageDown moves selection in Overview and scrolls Details/Charts/help. Home/End reaches the first/last row or top/bottom.",
+      "Space toggles a branch in Overview. Load more resumes pending family discovery when available.",
+      ...inventoryMessages(inventory()),
+      `Discovered ${inventory().discovered} · node limit ${inventory().limit} · pages ${inventory().pages} · pending branches ${inventory().pending}`,
+      "Refresh rescans inventory and measurements; it cannot resume suspended enforcement. Reload/repair instructions remain in Guard status.",
+      "Configured native bindings (unbound actions have no shortcut):",
+      ...commands().map(
+        (c) =>
+          `${props.context.keymap.shortcuts(c.id ?? "").join(" / ") || "Unbound"}: ${c.title}`,
+      ),
+      "Default bindings differ: native l loads more; standalone l edits location. Native brackets change windows; standalone brackets inspect observations and w changes windows.",
+      "Open Context Guard is also available in the root prompt slash menu and command palette. Set the client plugin option openShortcut for keyboard entry from a child composer.",
+      "End of native panel help",
+    ].flatMap((line) => wrap(line, width()));
   const statusLines = () =>
     monitorStatusLines(
       props.state.connection(),
@@ -293,36 +373,50 @@ export function GuardPanel(props: {
     ).flatMap((line) => wrap(line, width()));
   const notice = () => compactionLabel(selectedRow());
   const actions = () => {
-    const info = {
+    const action = (name: string, label: string) => ({
+      id: name,
       label:
-        view() === "details" ? "i back" : width() < 28 ? "i info" : "i details",
-      run: () => changeView(view() === "details" ? "overview" : "details"),
-    };
-    const charts = {
-      label: view() === "charts" ? "c back" : "c charts",
-      run: () => changeView(view() === "charts" ? "overview" : "charts"),
-    };
-    return [
-      ...(width() < 28
-        ? [view() === "charts" ? charts : info]
-        : view() === "charts"
-          ? [charts, info]
-          : [info, charts]),
-      { label: "q close", run: () => props.input.close() },
-    ];
+        ["help", "close"].includes(name) &&
+        cells(`${shortcut(name)} ${label}`) > Math.floor((width() - 1) / 2)
+          ? label
+          : `${shortcut(name) ? shortcut(name) + " " : ""}${label}`,
+      run: () => {
+        commands()
+          .find((c) => c.id === `context-guard.${name}`)
+          ?.run();
+      },
+    });
+    const optional = help()
+      ? [action("help-back", "back")]
+      : [
+          ...(view() === "overview" && inventory().canLoadMore
+            ? [action("load-more", "more")]
+            : []),
+          ...(view() === "charts" ? [action("charts", "back")] : []),
+          ...(selectedRow()
+            ? [action("inspect", view() === "details" ? "back" : "details")]
+            : []),
+          ...(view() !== "charts" && selectedRow()
+            ? [action("charts", "charts")]
+            : []),
+          ...(view() === "overview" && expandable()
+            ? [action("expand", "branch")]
+            : []),
+        ];
+    return footerActions(
+      [action("help", help() ? "back" : "help"), action("close", "close")],
+      optional,
+      width(),
+    );
   };
-  const hint = () =>
-    width() < 28
-      ? view() === "details"
-        ? "↑↓ scroll c chart"
-        : "↑↓ pick c chart"
-      : view() === "charts"
-        ? "←/→ metric ↑↓ session [/] window"
-        : view() === "details"
-          ? "↑↓ scroll · PgUp/PgDn · r refresh"
-          : !props.state.complete()
-            ? "↑↓ select · Enter open · l more"
-            : "↑↓ select · Enter open · r refresh";
+  const hint = () => {
+    if (help()) return `${shortcut("previous")}/${shortcut("next")} scroll`;
+    if (view() === "charts")
+      return `${shortcut("chart-previous")}/${shortcut("chart-next")} metric ${shortcut("previous")}/${shortcut("next")} session ${shortcut("chart-shorter")}/${shortcut("chart-longer")} window`;
+    if (view() === "details")
+      return `${shortcut("previous")}/${shortcut("next")} scroll · ${shortcut("page-previous")}/${shortcut("page-next")} page`;
+    return `${shortcut("previous")}/${shortcut("next")} select · ${shortcut("open")} open · ${inventory().canLoadMore ? shortcut("load-more") + " more" : shortcut("refresh") + " refresh"}`;
+  };
   return (
     <box
       flexDirection="column"
@@ -341,7 +435,7 @@ export function GuardPanel(props: {
           {clip(
             width() < 28
               ? `${connectionLabel(props.state.connection(), true)} · Guard`
-              : `${connectionLabel(props.state.connection())} · Context Guard · ${view()}`,
+              : `${connectionLabel(props.state.connection())} · Context Guard · ${help() ? "help" : view()}`,
             width(),
           )}
         </text>
@@ -371,7 +465,7 @@ export function GuardPanel(props: {
             </text>
           )}
         </Show>
-        <Show when={view() !== "overview" && selectedRow()}>
+        <Show when={(help() || view() !== "overview") && selectedRow()}>
           {(row) => (
             <text fg={props.context.theme.text.base}>
               {clip(
@@ -381,7 +475,7 @@ export function GuardPanel(props: {
             </text>
           )}
         </Show>
-        <Show when={view() === "overview"}>
+        <Show when={!help() && view() === "overview"}>
           <For
             each={panelSummary(
               selectedRow(),
@@ -399,6 +493,15 @@ export function GuardPanel(props: {
             )}
           </text>
         </Show>
+        <Show when={!help() && view() === "overview"}>
+          <For each={inventoryMessages(inventory())}>
+            {(line) => (
+              <text fg={props.context.theme.text.muted}>
+                {clip(line, width())}
+              </text>
+            )}
+          </For>
+        </Show>
       </box>
       <scrollbox
         viewportOptions={{
@@ -413,7 +516,12 @@ export function GuardPanel(props: {
         minHeight={0}
         scrollX={false}
       >
-        <Show when={view() === "overview"}>
+        <Show when={help()}>
+          <For each={helpLines()}>
+            {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
+          </For>
+        </Show>
+        <Show when={!help() && view() === "overview"}>
           <PanelOverview
             rows={rows()}
             selectedId={selected()}
@@ -425,7 +533,7 @@ export function GuardPanel(props: {
             }}
           />
         </Show>
-        <Show when={view() === "details"}>
+        <Show when={!help() && view() === "details"}>
           <PanelDetails
             row={selectedRow()}
             rows={rows()}
@@ -436,7 +544,7 @@ export function GuardPanel(props: {
             reasons={props.state.health()?.reasons ?? []}
           />
         </Show>
-        <Show when={view() === "charts" && selected()}>
+        <Show when={!help() && view() === "charts" && selected()}>
           {(id) => (
             <HistoryCharts
               sessionId={id()}
@@ -458,7 +566,7 @@ export function GuardPanel(props: {
                 fg={props.context.theme.text.muted}
                 onMouseDown={action.run}
               >
-                {`${index() ? " · " : ""}${action.label}`}
+                {`${index() ? " " : ""}${action.label}`}
               </text>
             )}
           </For>

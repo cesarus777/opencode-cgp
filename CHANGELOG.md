@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native-panel keyboard help with preserved selection, scroll position and chart settings. Pause chart polling during help, keep Guard status visible, and reserve contextual help/close controls at narrow widths.
+- Report native inventory discovery progress, actionable continuation, failures and node bounds. Add the client plugin option `openShortcut` for keyboard entry from child composers through the existing `context-guard.show` command and display its effective shortcut; it remains unbound by default. See the [native keyboard/help validation](docs/validation/native-keyboard-help-2026-11-06.md).
+
 - Compact the standalone dashboard Overview into aligned columns or narrow cards, with bounded exception lines and full diagnostics in Details. Preserve the selected identity through resizing, updates and small viewports; page by visible session rows.
 - Add distinguishing session labels, contextual details/quit hints, and filtered-selection feedback. Validate with 213 offline tests and synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2; see the [overview validation record](docs/validation/standalone-overview-density-2026-11-06.md).
 

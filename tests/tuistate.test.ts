@@ -189,3 +189,130 @@ for (const available of [false, true])
       state.dispose();
     }
   });
+
+function deferred<T>() {
+  let finish: ((value: T) => void) | undefined;
+  const promise = new Promise<T>((done) => {
+    finish = done;
+  });
+  return {
+    promise,
+    resolve(value: T) {
+      if (!finish) throw new Error("Deferred promise was not initialized");
+      finish(value);
+    },
+  };
+}
+
+test("inventory progress settles reactively, suppresses duplicate continuation, and rejects obsolete route results", async () => {
+  const root = session("r");
+  const gate = deferred<void>();
+  let held = true,
+    fail = false,
+    listCalls = 0;
+  const context = {
+    client: {
+      session: {
+        get: async ({ sessionID }: { sessionID: string }) => {
+          if (sessionID === "fatal")
+            throw new Error("private initial discovery failure");
+          return session(sessionID);
+        },
+        list: async ({ parentID }: { parentID: string }) => {
+          listCalls++;
+          if (held) await gate.promise;
+          if (fail) throw new Error("private failure must not reach status");
+          return {
+            data:
+              parentID === "r"
+                ? Array.from({ length: 1100 }, (_, i) => session(`c${i}`, "r"))
+                : [],
+            cursor: { next: null },
+          };
+        },
+      },
+      rpc: () => ({
+        read: async () => {
+          throw new Error("unavailable");
+        },
+      }),
+    },
+    data: {
+      session: {
+        get: (id: string) => (id === "r" ? root : undefined),
+        status: () => "idle",
+      },
+      listen: () => () => {},
+    },
+    storage: { store: () => [{ expanded: [] }, async () => {}] },
+  } as unknown as Plugin.Context;
+  const state = createGuardState(context);
+  const consumer = state.acquire("r");
+  try {
+    expect(state.inventoryStatus().scanning).toBe(true);
+    state.loadMore();
+    expect(state.inventoryStatus().limit).toBe(1024);
+    held = false;
+    gate.resolve();
+    await until(() => !state.inventoryStatus().scanning);
+    expect(state.inventoryStatus().discovered).toBe(1024);
+    expect(state.inventoryStatus().canLoadMore).toBe(true);
+    state.loadMore();
+    state.loadMore();
+    expect(state.inventoryStatus().scanning).toBe(true);
+    await until(() => !state.inventoryStatus().scanning);
+    expect(state.inventoryStatus().limit).toBe(2048);
+    expect(state.inventoryStatus().discovered).toBe(1101);
+    expect(state.inventoryStatus().pending).toBeGreaterThan(0);
+    expect(listCalls).toBe(101);
+    fail = true;
+    state.refresh();
+    await until(() => !state.inventoryStatus().scanning);
+    expect(state.inventoryStatus().damaged).toBe(true);
+    expect(state.complete()).toBe(false);
+    expect(JSON.stringify(state.inventoryStatus())).not.toContain("private");
+    fail = false;
+    consumer.update("new-route");
+    await until(() => !state.inventoryStatus().scanning);
+    expect(state.inventoryStatus().discovered).toBe(1);
+    expect(state.inventoryStatus().limit).toBe(1024);
+    expect(state.complete()).toBe(true);
+    consumer.update("fatal");
+    await until(() => !state.inventoryStatus().scanning);
+    expect(state.inventoryStatus().failed).toBe(true);
+    expect(state.complete()).toBe(false);
+    consumer.update("recovered");
+    await until(() => state.complete());
+    expect(state.inventoryStatus().failed).toBe(false);
+  } finally {
+    consumer.release();
+    state.dispose();
+  }
+
+  const old = deferred<ReturnType<typeof session>>();
+  const staleState = createGuardState({
+    ...context,
+    client: {
+      ...context.client,
+      session: {
+        ...context.client.session,
+        get: ({ sessionID }: { sessionID: string }) =>
+          sessionID === "old"
+            ? old.promise
+            : Promise.resolve(session(sessionID)),
+      },
+    },
+  } as unknown as Plugin.Context);
+  const staleConsumer = staleState.acquire("old");
+  try {
+    staleConsumer.update("new");
+    await until(() => staleState.complete());
+    old.resolve(session("old"));
+    await Bun.sleep(5);
+    expect(staleState.rows().map((row) => row.node.sessionId)).toEqual(["new"]);
+    expect(staleState.inventoryStatus().scanning).toBe(false);
+  } finally {
+    staleConsumer.release();
+    staleState.dispose();
+  }
+});

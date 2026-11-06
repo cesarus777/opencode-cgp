@@ -4,7 +4,7 @@ Date: 2026-11-06. Status: proposed; implementation has not started. Covers UX-07
 
 ## Recommendation and investigation
 
-Implement sidebar density next. UX-01 through UX-06 have delivery records linked from the review; UX-07 is next in its delivery order. Keyboard discovery (UX-08), broader terminology changes (UX-09), and chart-error recovery (UX-10) remain subsequent increments. Native page navigation already shipped with UX-01, so reassess the remaining keyboard work rather than implementing the original finding verbatim.
+Implement sidebar density next. UX-01 through UX-06 have delivery records linked from the review; UX-07 is next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) and chart-error recovery (UX-10) remain subsequent increments. Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
 
 The sidebar should answer which session is running, its context occupancy, which descendant needs attention, and what Guard can do. Default to a short summary and descendant tree; make history optional and move performance and aggregate diagnostics into panel Details.
 

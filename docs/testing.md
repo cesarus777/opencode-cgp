@@ -29,6 +29,10 @@ Earlier validation had no endpoint/model and executed only the explicit `test:li
 
 ## Native TUI offline and transport checks
 
+Native keyboard/help coverage is recorded in the [UX-08 delivery report](validation/native-keyboard-help-2026-11-06.md). Focused checks: `bun test tests/tuirender.test.tsx tests/tuistate.test.ts tests/tuiinventory.test.ts tests/panelcontrols.test.ts tests/dashboardterminal.test.ts`. The renderer fixture covers help round trips, Details scroll restoration, chart-request abort, shortcut labels, narrow controls, suspension, and selection/route changes. Inventory tests distinguish resumable work, bounds, failure, and obsolete route completion.
+
+Actual-host checks use `GUARD_SYNTHETIC_TUI=1 bun scripts/metrics-server-live.ts`; set `GUARD_SYNTHETIC_BINARY=/absolute/path/to/opencode` to select a supported host binary. The isolated client registers `options: { "openShortcut": "<leader>v" }` and sends real keys on root/child/grandchild routes. The proxy waits for a delayed request to begin before checking cancellation, so polling timing cannot turn the check into a test of an already-completed request. Synthetic checks use loopback/PTY access and Python `pyte`/Pillow; unavailable prerequisites are not offline passes.
+
 ```sh
 bun run format:check
 bun run test:tui-live

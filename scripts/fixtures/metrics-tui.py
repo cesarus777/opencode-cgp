@@ -28,7 +28,7 @@ stream = pyte.Stream(screen)
 decoder = codecs.getincrementaldecoder("utf-8")("replace")
 env = {**connection["env"], "TERM": "xterm-256color", "COLORTERM": "truecolor"}
 child = subprocess.Popen(
-    ["opencode", "--server", connection["url"], "--session", connection["sessionId"], connection["project"]],
+    [connection.get("binary", "opencode"), "--server", connection["url"], "--session", connection["sessionId"], connection["project"]],
     cwd=connection["project"], env=env, stdin=slave, stdout=slave, stderr=slave,
     start_new_session=True,
 )
@@ -71,6 +71,14 @@ def key(value):
 
 def counts():
     return json.load(urllib.request.urlopen(connection["url"] + "/__validation_counts"))
+
+
+def expect_count(name, baseline):
+    for _ in range(30):
+        if counts()[name] > baseline:
+            return
+        pump(0.1)
+    raise AssertionError("Validation counter did not advance: " + name)
 
 
 def context_action(action):
@@ -117,8 +125,17 @@ def capture_chart(name):
 
 try:
     expect("CONTEXT GUARD")
+    key("guard-keyboard-probe?")
+    assert "Native OpenCode panel" not in frame(), "ordinary prompt typing does not open help"
+    key("\x15")
     key("/context-guard")
     key("\r")
+    expect("c charts")
+    key("?")
+    expect("Native OpenCode panel")
+    key("\x1b[F")
+    expect("End of native panel help")
+    key("\x1b")
     expect("c charts")
     key("c")
     expect("Performance charts")
@@ -126,6 +143,17 @@ try:
     expect("1 hour")
     expect("c back")
     expect("q close")
+    before = counts()["history"]
+    key("?")
+    expect("Native OpenCode panel")
+    key("r")
+    key("c")
+    pump(6)
+    assert counts()["history"] == before, "help stops polling and consumes hidden-view shortcuts"
+    key("?")
+    expect("Performance charts")
+    expect("Live TPS")
+    expect("1 hour")
     key("\x1b[C")
     expect("Avg model")
     assert "Live TPS" not in frame(), "one metric at a time"
@@ -150,11 +178,13 @@ try:
     pump(5.5)
     urllib.request.urlopen(connection["url"] + "/__validation_delay").close()
     cancelled = counts()["cancelled"]
+    delayed = counts()["delayed"]
     key("r")
+    expect_count("delayed", delayed)
     before = counts()["history"]
     key("c")
     pump(1)
-    assert counts()["cancelled"] > cancelled, "toggle aborts outstanding history request"
+    expect_count("cancelled", cancelled)
     pump(6)
     assert counts()["history"] == before, "toggle cancels history polling"
     key("c")
@@ -163,17 +193,51 @@ try:
     expect(connection["ids"][0])
     urllib.request.urlopen(connection["url"] + "/__validation_delay").close()
     cancelled = counts()["cancelled"]
+    delayed = counts()["delayed"]
     key("r")
+    expect_count("delayed", delayed)
     key("q")
     pump(1)
     assert "Performance charts" not in frame(), "q closes the panel"
-    assert counts()["cancelled"] > cancelled, "close aborts outstanding history request"
+    expect_count("cancelled", cancelled)
     before = counts()
     pump(16)
     after = counts()
     assert after["history"] == before["history"], "panel close cancels history polling"
     assert after["monitor"] > before["monitor"], "normal live monitoring still reconciles"
     print("PASS: actual PTY TUI slash, c, windows, arrows, refresh, toggle/close polling cleanup and continued live monitoring")
+    # Configured open binding works without slash/palette in the child composer.
+    key("\x18")
+    key("v")
+    expect("c charts")
+    key("\x1b[B")
+    key("i")
+    expect(connection["ids"][1])
+    key("\r")
+    expect("Context Guard: open panel")
+    key("\x18")
+    key("v")
+    expect("c charts")
+    key("i")
+    expect(connection["ids"][1])
+    key("i")
+    if "Space expands" in frame():
+        key(" ")
+    key("\x1b[B")
+    key("i")
+    expect(connection["ids"][2])
+    key("\r")
+    expect("Context Guard: open panel")
+    key("\x18")
+    key("v")
+    expect("c charts")
+    key("i")
+    expect(connection["ids"][2])
+    key("i")
+    key("\x1b[H")
+    key("\r")
+    expect("CONTEXT GUARD")
+    print("PASS: configured keyboard entry on root/child/grandchild, help dispatch, history polling cleanup and preserved selection")
     context_action("grow")
     expect("70% used")
     pump(4)

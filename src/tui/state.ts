@@ -17,7 +17,11 @@ import {
 } from "../family.ts";
 import { ContextTraceStore } from "./contextchart.ts";
 import { SnapshotClient } from "./transport.ts";
-import { discoverFamily, type Inventory } from "./inventory.ts";
+import {
+  discoverFamily,
+  inventoryStatus,
+  type Inventory,
+} from "./inventory.ts";
 export function createGuardState(context: Plugin.Context) {
   const contextTraces = new ContextTraceStore();
   const [version, setVersion] = createSignal(0);
@@ -78,7 +82,7 @@ export function createGuardState(context: Plugin.Context) {
     inventory = undefined;
     evidence.clear();
     maxNodes = 1024;
-    let scanFailed = false;
+    scanFailed = false;
     notify();
     void scan();
   }
@@ -92,6 +96,7 @@ export function createGuardState(context: Plugin.Context) {
       controller.signal,
       AbortSignal.timeout(15000),
     ]);
+    notify();
     try {
       const next = await discoverFamily(
         context.client,
@@ -166,7 +171,10 @@ export function createGuardState(context: Plugin.Context) {
         notify();
       }
     } finally {
-      if (generation === scanGeneration) scanning = false;
+      if (generation === scanGeneration) {
+        scanning = false;
+        notify();
+      }
     }
   }
   function acquire(id: string) {
@@ -362,13 +370,21 @@ export function createGuardState(context: Plugin.Context) {
     },
     complete() {
       version();
-      return inventory?.complete ?? false;
+      return !scanFailed && (inventory?.complete ?? false);
+    },
+    inventoryStatus() {
+      version();
+      return inventoryStatus(inventory, maxNodes, scanning, scanFailed);
     },
     refresh() {
       void scan();
       for (const c of clients.values()) void c.refresh();
     },
     loadMore() {
+      if (
+        !inventoryStatus(inventory, maxNodes, scanning, scanFailed).canLoadMore
+      )
+        return;
       maxNodes = Math.min(2048, maxNodes + 1024);
       void scan(true);
     },

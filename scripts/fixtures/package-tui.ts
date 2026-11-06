@@ -12,12 +12,14 @@ let layer: (() => KeymapLayer) | undefined;
 let registrations = 0,
   opened = "";
 const context = {
+  options: {},
   app: { version: "2.0.29" },
   client: { rpc: () => ({}) },
   data: { session: { get: () => ({ parentID: parent() }) } },
   storage: { store: () => [{ expanded: [] }, async () => {}] },
   theme: { text: { muted: RGBA.fromHex("#aaaaaa") } },
   keymap: {
+    shortcuts: () => [],
     layer(factory: () => KeymapLayer) {
       layer = factory;
     },

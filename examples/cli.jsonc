@@ -1,5 +1,12 @@
 // Client-side installation for a remote V2 TUI. Register the server separately
 // in its owning location's opencode.jsonc. This path belongs to this client.
 {
-  "plugins": [{ "package": "@cesarus777/opencode-cgp" }],
+  "plugins": [
+    {
+      "package": "@cesarus777/opencode-cgp",
+      // Optional keyboard entry, including child composers; unbound by default.
+      // With the default leader, press Ctrl+X, then v. Choose an unused sequence.
+      // "options": { "openShortcut": "<leader>v" },
+    },
+  ],
 }

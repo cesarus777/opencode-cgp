@@ -43,15 +43,31 @@ const [health, setHealth] = createSignal<MonitorHealth>({
 });
 let refreshes = 0,
   loads = 0;
+const [shortcutOverrides, setShortcutOverrides] = createSignal<
+  Record<string, string[]>
+>({});
 const [complete, setComplete] = createSignal(true);
 const [connection, setConnection] = createSignal<Connection>("live");
+let holdHistory = false,
+  historyAborts = 0;
 const historyReads: { sessionId: string; windowMs: number }[] = [];
 const traceStore = new ContextTraceStore();
 const state: GuardState = {
   contextTrace: (row: Parameters<ContextTraceStore["update"]>[0]) =>
     traceStore.update(row),
   version: () => 0,
-  history: async (id, from, to) => {
+  history: async (id, from, to, signal) => {
+    if (holdHistory)
+      return new Promise((_, reject) => {
+        signal.addEventListener(
+          "abort",
+          () => {
+            historyAborts++;
+            reject(new Error("aborted"));
+          },
+          { once: true },
+        );
+      });
     historyReads.push({ sessionId: id, windowMs: to - from });
     return {
       schemaVersion: 1,
@@ -107,6 +123,17 @@ const state: GuardState = {
   health,
   connection,
   complete,
+  inventoryStatus: () => ({
+    discovered: family.length,
+    limit: 1024,
+    scanning: false,
+    failed: false,
+    damaged: false,
+    pending: complete() ? 0 : 1,
+    pages: 1,
+    complete: complete(),
+    canLoadMore: !complete(),
+  }),
   refresh() {
     refreshes++;
   },
@@ -130,6 +157,22 @@ const context = {
     },
   },
   keymap: {
+    shortcuts(id: string) {
+      const override = shortcutOverrides()[id];
+      if (override) return override;
+      const bind = layer?.().commands?.find((c) => c.id === id)?.bind;
+      if (typeof bind !== "string") return [];
+      const aliases: Record<string, string> = {
+        up: "↑",
+        down: "↓",
+        left: "←",
+        right: "→",
+        return: "Enter",
+        pageup: "pgup",
+        pagedown: "pgdn",
+      };
+      return [aliases[bind] ?? bind];
+    },
     layer(factory: () => KeymapLayer) {
       layer = factory;
     },
@@ -212,7 +255,7 @@ try {
   assert.match(host.captureCharFrame(), /Performance charts/);
   assert.match(host.captureCharFrame(), /Live TPS/);
   assert.doesNotMatch(host.captureCharFrame(), /Avg model/);
-  assert.match(host.captureCharFrame(), /c back · i details · q close/);
+  assert.match(host.captureCharFrame(), /\? help q close c back i details/);
   assert.match(host.captureCharFrame(), /←\/→ metric/);
   const readsBeforeMetric = historyReads.length;
   run("context-guard.chart-next");
@@ -236,6 +279,42 @@ try {
     1,
     "view switches do not reacquire the panel consumer",
   );
+  // Help owns input, aborts chart work, and returns to the same session/metric/window.
+  holdHistory = true;
+  run("context-guard.refresh");
+  await host.flush();
+  const beforeHelpRefreshes = refreshes;
+  const beforeHelpReads = historyReads.length;
+  run("context-guard.help");
+  await host.flush();
+  assert.equal(historyAborts, 1);
+  assert.match(host.captureCharFrame(), /Native OpenCode panel/);
+  for (const name of [
+    "refresh",
+    "load-more",
+    "open",
+    "inspect",
+    "charts",
+    "expand",
+    "chart-next",
+  ])
+    run(`context-guard.${name}`);
+  assert.equal(refreshes, beforeHelpRefreshes);
+  assert.equal(historyReads.length, beforeHelpReads);
+  run("context-guard.last");
+  await host.flush();
+  assert.match(host.captureCharFrame(), /End of native panel help/);
+  run("context-guard.first");
+  await host.flush();
+  assert.match(host.captureCharFrame(), /Native OpenCode panel/);
+  holdHistory = false;
+  run("context-guard.help-back");
+  await host.flush();
+  assert.match(host.captureCharFrame(), /Performance charts/);
+  assert.match(host.captureCharFrame(), /Live TPS/);
+  assert.equal(historyReads.at(-1)?.sessionId, "s120");
+  assert.equal(historyReads.at(-1)?.windowMs, 3600000);
+  assert.equal(consumers, 1);
   run("context-guard.chart-longer");
   await Bun.sleep(5);
   await host.flush();
@@ -338,6 +417,18 @@ try {
   run("context-guard.last");
   await chartHost.flush();
   assert.match(chartHost.captureCharFrame(), /Native Context uses different/);
+  const beforeDetailsHelp = chartHost.captureCharFrame();
+  run("context-guard.help");
+  await chartHost.flush();
+  run("context-guard.last");
+  await chartHost.flush();
+  run("context-guard.help");
+  await chartHost.flush();
+  assert.equal(
+    chartHost.captureCharFrame(),
+    beforeDetailsHelp,
+    "Details scroll is restored",
+  );
   run("context-guard.first");
   await chartHost.flush();
   assert.match(chartHost.captureCharFrame(), /Context history/);
@@ -379,10 +470,11 @@ try {
   setComplete(false);
   await chartHost.flush();
   assert.match(chartHost.captureCharFrame(), /partial/);
+  assert.match(chartHost.captureCharFrame(), /l more/);
   run("context-guard.load-more");
   assert.equal(loads, 1);
   run("context-guard.refresh");
-  assert.equal(refreshes, 1);
+  assert.equal(refreshes, 2);
   setComplete(true);
   // Critical enforcement state remains visible through every view and refresh.
   setHealth({
@@ -415,9 +507,22 @@ try {
     await chartHost.flush();
     frame = chartHost.captureCharFrame();
     assert.match(frame, /q close/);
-    assert.match(frame, /i (details|info)/);
+    assert.match(frame, /\? help/);
     assert.match(frame, /Main/);
     assert.match(frame, /explore/, `family remains visible at ${w}×${h}`);
+    run("context-guard.help");
+    await chartHost.flush();
+    assert.match(chartHost.captureCharFrame(), /Native OpenCode/);
+    assert.match(chartHost.captureCharFrame(), /q close/);
+    run("context-guard.last");
+    await chartHost.flush();
+    assert.match(
+      chartHost.captureCharFrame().replace(/\s+/g, " "),
+      /native panel help/,
+    );
+    run("context-guard.help-back");
+    await chartHost.flush();
+    assert.match(chartHost.captureCharFrame(), /Main/);
   }
   // A UI reconnect keeps server suspension explicit at each supported geometry.
   for (const reasons of [["event-stream-gap"], ["persistence-unavailable"]]) {
@@ -448,9 +553,46 @@ try {
         }
         if (reasons.includes("persistence-unavailable"))
           assert.match(text.toLowerCase(), /repair/);
+        run("context-guard.help");
+        await chartHost.flush();
+        const helpText = chartHost.captureCharFrame().replace(/\s+/g, " ");
+        assert.match(helpText, /Guard suspended/);
+        assert.match(helpText.toLowerCase(), /reload/);
+        assert.match(helpText, /q close/);
+        run("context-guard.help-back");
+        await chartHost.flush();
       }
     }
   }
+  run("context-guard.next");
+  run("context-guard.help");
+  setChartRows([root]);
+  await chartHost.flush();
+  run("context-guard.help-back");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Main/);
+  setChartRows([root, child]);
+  run("context-guard.help");
+  setSessionID("child");
+  await chartHost.flush();
+  assert.doesNotMatch(chartHost.captureCharFrame(), /Native OpenCode/);
+  assert.match(chartHost.captureCharFrame(), /explore/);
+  setSessionID("s0");
+  await chartHost.flush();
+  setShortcutOverrides({
+    "context-guard.help": ["ctrl+x shift+alt+?"],
+    "context-guard.close": [],
+    "context-guard.inspect": ["F9"],
+  });
+  setWidth(20);
+  chartHost.resize(20, 12);
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /help close/);
+  run("context-guard.help");
+  run("context-guard.last");
+  await chartHost.flush();
+  run("context-guard.help-back");
+  setShortcutOverrides({});
   setConnection("live");
   setHealth({ ...health(), enforcement: "observing", reasons: [] });
   setWidth(40);
@@ -483,6 +625,7 @@ let openedPanel = "",
   registrations = 0;
 const activationContext = {
   ...context,
+  options: { openShortcut: "<leader>v" },
   client: { rpc: () => ({}) },
   data: { session: { get: () => ({ parentID: "parent" }) } },
   storage: { store: () => [{ expanded: [] }, async () => {}] },
@@ -505,8 +648,27 @@ const activationContext = {
     },
   },
 } as unknown as Plugin.Context;
+setShortcutOverrides({ "context-guard.show": ["ctrl+x v"] });
+const defaultUnload = await entry.setup({ ...activationContext, options: {} });
+assert.equal(
+  layer?.().commands?.find((c) => c.id === "context-guard.show")?.bind,
+  undefined,
+);
+if (typeof defaultUnload === "function") await defaultUnload();
+assert.equal(registrations, 0);
+for (const invalid of ["", "   ", "x".repeat(129), "x\ny", 4]) {
+  assert.throws(
+    () =>
+      entry.setup({ ...activationContext, options: { openShortcut: invalid } }),
+    /openShortcut/,
+  );
+}
 const unload = await entry.setup(activationContext);
 assert.equal(layer?.().mode, "global");
+assert.equal(
+  layer?.().commands?.find((c) => c.id === "context-guard.show")?.bind,
+  "<leader>v",
+);
 assert.equal(registrations, 3);
 assert.ok(renderChildAction);
 const actionHost = await testRender(renderChildAction, {
@@ -516,6 +678,7 @@ const actionHost = await testRender(renderChildAction, {
 try {
   await actionHost.renderOnce();
   assert.match(actionHost.captureCharFrame(), /Context Guard: open panel/);
+  assert.match(actionHost.captureCharFrame(), /ctrl\+x v/);
   await actionHost.mockMouse.click(4, 0);
   assert.equal(openedPanel, "context-guard.monitor");
 } finally {

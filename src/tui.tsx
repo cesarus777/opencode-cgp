@@ -6,11 +6,24 @@ import { GuardPanel } from "./tui/panel.tsx";
 export default Plugin.define({
   id: "context-guard",
   setup(context) {
+    const openShortcut: unknown = context.options.openShortcut;
+    if (
+      openShortcut !== undefined &&
+      (typeof openShortcut !== "string" ||
+        !openShortcut.trim() ||
+        openShortcut.length > 128 ||
+        /[\x00-\x1f\x7f-\x9f]/.test(openShortcut))
+    ) {
+      throw new Error(
+        "Context Guard openShortcut must be a nonempty key sequence of at most 128 characters.",
+      );
+    }
     if (
       typeof context.client?.rpc !== "function" ||
       typeof context.ui?.slot !== "function" ||
       typeof context.ui?.panel?.open !== "function" ||
-      typeof context.keymap?.layer !== "function"
+      typeof context.keymap?.layer !== "function" ||
+      typeof context.keymap?.shortcuts !== "function"
     ) {
       throw new Error(
         "Context Guard TUI requires OpenCode 2.0.29 public RPC and panel APIs; use the Guard inspect CLI on unsupported hosts.",
@@ -55,7 +68,7 @@ export default Plugin.define({
                   context.ui.panel.open("context-guard.monitor")
                 }
               >
-                Context Guard: open panel
+                {`Context Guard: open panel${context.keymap.shortcuts("context-guard.show").length ? ` (${context.keymap.shortcuts("context-guard.show").join(" / ")})` : ""}`}
               </text>
             </Show>
           ),
@@ -69,7 +82,7 @@ export default Plugin.define({
             title: "Open Context Guard",
             group: "Context Guard",
             palette: true,
-            bind: false,
+            ...(typeof openShortcut === "string" ? { bind: openShortcut } : {}),
             slash: { name: "context-guard" },
             run: () => {
               context.ui.panel.open("context-guard.monitor");

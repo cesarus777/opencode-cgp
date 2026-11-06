@@ -26,7 +26,7 @@ Investigation baseline: `bun test tests/panelformat.test.ts tests/sidebar.test.t
 
 Change presentation helpers, primary status/copy, fixtures, and user documentation. Preserve policy, scheduler, accounting, transport, RPC schemas, selection, subscription ownership, and existing keyboard bindings. Keep detailed diagnostic codes and numeric fields inspectable.
 
-Standalone row density/reachability, sidebar collapse/history defaults, new shortcuts, broad lifecycle terminology work, and chart-error recovery were outside this increment. Row density/reachability has since been [delivered as UX-04/UX-05](../validation/standalone-overview-density-2026-11-06.md); the other items remain follow-up work. Limited status layout adjustments were necessary here so the new explanation remained visible. No version bump or publication is included.
+Standalone row density/reachability, sidebar collapse/history defaults, new shortcuts, broad lifecycle terminology work, and chart-error recovery were outside this increment. Row density/reachability has since been [delivered as UX-04/UX-05](../validation/standalone-overview-density-2026-11-06.md); native keyboard/help (UX-08) has also since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md). Sidebar defaults, broader terminology, and chart-error recovery remain follow-up work. Limited status layout adjustments were necessary here so the new explanation remained visible. No version bump or publication is included.
 
 ## Presentation contract
 

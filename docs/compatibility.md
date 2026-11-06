@@ -48,6 +48,8 @@ The [2026-11-06 native overview validation](validation/native-panel-overview-202
 
 The [2026-11-06 threshold/status validation](validation/threshold-status-consistency-2026-11-06.md) covers consistent occupancy/threshold labels, stale measurements, and connection/enforcement consequences across the sidebar, panel, and standalone terminal dashboard. The 209-test offline suite and both OpenCode 2.1.2 synthetic-provider PTY smokes passed. Detailed failure-message states are injected offline; the host smokes establish integration rather than every failure remedy. No new 2.0.29, remote, or genuine-provider certification is claimed.
 
+The [native keyboard/help delivery](validation/native-keyboard-help-2026-11-06.md) adds focus-scoped help, contextual controls, and read-only inventory progress. Help pauses chart polling while preserving the panel's monitor consumer and selection. Both supported hosts restrict client `keybinds` to built-in IDs; use the client plugin option `openShortcut` for the existing open command instead. It is unbound by default, displays its effective shortcut on the child action, and does not change the host's composer mode. See the delivery record for tested routes/geometries and remaining environment limits.
+
 ## npm distribution verification
 
 The prepared package is `@cesarus777/opencode-cgp@0.1.0`; the unscoped name belongs to another project. Package identity does not change the plugin ID, options, RPC contract or diagnostic storage locations.

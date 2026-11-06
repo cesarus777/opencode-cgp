@@ -65,22 +65,41 @@ Open **Context Guard** from the command palette or `/context-guard`. Root sessio
 
 The panel opens in Overview: a compact selected-session summary above a nested family list. The route defines the family scope; `>` marks selection and `*` marks the current OpenCode session. **i** switches between Overview and selected-session Details, including the context chart and full diagnostic fields. **c** switches to retained performance Charts and back to Overview. Switching views keeps selection and one live panel consumer. Mode/enforcement status remains visible in every view; refreshing the UI cannot restore suspended enforcement.
 
-| Key               | Action                                                                |
-| ----------------- | --------------------------------------------------------------------- |
-| Up / Down         | Select a family row in Overview/Charts; scroll in Details             |
-| PageUp / PageDown | Move selection by a page in Overview; scroll a page in Details/Charts |
-| Home / End        | First/last family row in Overview; top/bottom in Details/Charts       |
-| Enter             | Close this panel and navigate to selection                            |
-| Space             | Toggle the selected completed branch in Overview                      |
-| i                 | Open selected-session Details; return to Overview from Details        |
-| r                 | Refresh inventory/measurements and active charts                      |
-| l                 | Resume partial inventory discovery in Overview                        |
-| c                 | Open performance Charts; return to Overview from Charts               |
-| Left / Right      | Previous/next performance chart metric (wraps)                        |
-| [ / ]             | Shorter/longer performance chart time window                          |
-| q                 | Close the panel                                                       |
+Press **?** for native-panel help and **?** or **Escape** to return to the same view, selection, chart settings, and scroll position. Help scrolls with arrows and page/boundary keys. While help is open, commands for the underlying view are inactive and chart polling stops; returning to Charts performs its normal initial read. Guard status stays visible. Footer controls show configured shortcuts and reserve help/close at narrow widths; unusually long bindings use clickable action names with full shortcuts in help.
 
-Overview uses aligned rows when at least 72 content cells are available and compact cards below that width. Identity and context occupancy stay in a fixed summary; policy, provenance, cumulative totals, throughput, and full IDs live in Details. Small panel heights reduce the fixed summary so family rows and close/details access remain reachable. Threshold distance says below/over threshold, not a promise that compaction will occur. Stale usage is labeled last measured and has unknown current pressure. Details and Charts are also available through clickable footer actions.
+The open command is unbound by default. Set the client plugin option `openShortcut` in `cli.json` to enable keyboard entry, including from child composers:
+
+```json
+{
+  "plugins": [
+    {
+      "package": "@cesarus777/opencode-cgp",
+      "options": { "openShortcut": "<leader>v" }
+    }
+  ]
+}
+```
+
+Add the option to the client's existing plugin registration. `openShortcut` must be a nonempty key sequence of at most 128 characters, without control characters; binding syntax is parsed by the host. With the default leader, press **Ctrl+X**, then **v**. The child action displays the effective shortcut. OpenCode 2.0.29 and 2.1.2 accept only built-in IDs in `keybinds`, so a `keybinds["context-guard.show"]` override does not work; use the plugin option. Choose an unused binding for your host configuration; no new global shortcut is installed by default. Native and standalone bindings retain their existing differences: native **l** loads more while standalone **l** edits location; native brackets change chart windows while standalone brackets inspect observations and **w** changes windows.
+
+| Key               | Action                                                                     |
+| ----------------- | -------------------------------------------------------------------------- |
+| Up / Down         | Select a family row in Overview/Charts; scroll in Details/help             |
+| PageUp / PageDown | Move selection by a page in Overview; scroll a page in Details/Charts/help |
+| Home / End        | First/last family row in Overview; top/bottom in Details/Charts/help       |
+| Enter             | Close this panel and navigate to selection                                 |
+| Space             | Toggle the selected expandable branch in Overview                          |
+| i                 | Open selected-session Details; return to Overview from Details             |
+| r                 | Refresh inventory/measurements and active charts                           |
+| l                 | Resume partial inventory discovery in Overview                             |
+| c                 | Open performance Charts; return to Overview from Charts                    |
+| Left / Right      | Previous/next performance chart metric (wraps)                             |
+| [ / ]             | Shorter/longer performance chart time window                               |
+| q                 | Close the panel                                                            |
+| ?                 | Toggle native-panel help                                                   |
+| Escape (in help)  | Return to the source view                                                  |
+
+Overview uses aligned rows when at least 72 content cells are available and compact cards below that width. Identity and context occupancy stay in a fixed summary; policy, provenance, cumulative totals, throughput, and full IDs live in Details. Small panel heights reduce the fixed summary so family rows and help/close access remain reachable; help lists actions omitted from narrow footers. Threshold distance says below/over threshold, not a promise that compaction will occur. Stale usage is labeled last measured and has unknown current pressure. Details and Charts are also available through clickable footer actions when space permits.
 
 The sidebar lists the current session's discovered descendants, with local folding, completed-agent visibility and pressure/activity sorting controls. Overview renders a moving window of at most 25 family rows; Details shows only the selected session. Completed branches collapse unless they contain the current ancestry, running work, crossed pressure, or blocked/uncertain compaction. Expanded-branch preferences are persisted as at most 1024 IDs; measurements and execution caches are transient.
 
@@ -95,6 +114,8 @@ The sidebar, panel, and standalone dashboard share Guard/connection wording. Obs
 Snapshots work with telemetry disabled. Public RPC reads and live events carry only allowlisted scalar metadata and numeric usage. Snapshot reads may restore idle sessions' last matching-model usage through the public session context, retaining only numeric usage and its original timestamp/identity. Content is transient and never retained or sent through plugin RPC. Reads cannot admit compaction or restore suspended enforcement. Native inventory discovers ancestors and paginated descendants outside rendering; discovered but unmonitored sessions retain unknown Guard values.
 
 Automatic inventory is bounded to 1024 nodes, depth 64 and 100 list pages per scan, with one list request at a time. `l` resumes pending pages and permits up to 2048 resident client nodes, still with 100 pages per action. A partial marker remains when a bound, cycle, missing parent or failed branch prevents completeness. A visible family rescan runs every 30 seconds. Each owning location has a separate cancellable transport, reads at most 128 IDs per call with concurrency two, and reconciles every 15 seconds with a 5-second deadline. Live batches coalesce on the existing 100 ms worker. Gaps, reconnects, incompatible payloads and missing services are visible; transient errors retain last-known measurements. Hiding the last consumer aborts requests, streams, listeners and timers.
+
+Native Overview reports discovery in progress, resumable work, or incomplete discovery requiring a rescan. Load-more is disabled during scanning and unavailable when the 2048-node bound prevents further growth; failed/damaged discovery retains an incomplete warning. Help contains the full inventory messages, discovered count, node limit, accumulated pages, and pending branch count when narrow headers abbreviate them. These counts describe discovered inventory, not an estimate of total agents.
 
 ## Standalone terminal dashboard
 
