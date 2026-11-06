@@ -52,6 +52,8 @@ The [native keyboard/help delivery](validation/native-keyboard-help-2026-11-06.m
 
 The [2026-11-06 compact-sidebar validation](validation/sidebar-density-2026-11-06.md) records 22-line default fixtures at 39/35 columns, conservative completed grouping, collapsed-history continuity, and route-family statistics in Details. Its native PTY checks pass on OpenCode 2.0.29 and 2.1.2 with synthetic provider usage. Host-controlled sidebar placement and the remote/platform/provider limits above remain unchanged.
 
+The [plain-language terminology delivery](validation/plain-language-terminology-2026-11-07.md) covers measurement/lifecycle labels, readable Details with exact diagnostic codes, performance explanations and context legends. Offline coverage preserves narrow layouts, stale/unknown distinctions, route-family scope and cleanup. The delivery report records synthetic-provider host results and rerun limitations separately; it does not extend genuine-provider, remote or platform certification.
+
 ## npm distribution verification
 
 The prepared package is `@cesarus777/opencode-cgp@0.1.0`; the unscoped name belongs to another project. Package identity does not change the plugin ID, options, RPC contract or diagnostic storage locations.

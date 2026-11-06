@@ -3,6 +3,123 @@ import type { MonitorHealth } from "../snapshot.ts";
 import type { Connection } from "./transport.ts";
 import { tokens } from "./quantity.ts";
 
+/** A stored reading's confidence is independent of its freshness and scope. */
+export function freshnessLabel(row: GuardRow | undefined): string | undefined {
+  switch (row?.freshness) {
+    case "fresh":
+      return undefined;
+    case "stale":
+      return "Measurement out of date";
+    case "invalid":
+      return "Usage unavailable";
+    default:
+      return "Usage unknown";
+  }
+}
+
+export function measurementLabel(
+  row: GuardRow | undefined,
+  ageMs?: number,
+): string {
+  const m = row?.snapshot?.measurement;
+  if (!m || row?.freshness === "missing") return "Usage unknown";
+  if (row?.freshness === "invalid") return "Usage unavailable";
+  const age =
+    ageMs === undefined
+      ? ""
+      : ` · measured ${Math.floor(Math.max(0, ageMs) / 1000)}s ago`;
+  return `${m.confidence === "reported" ? "Provider reported" : "Estimated"}${age}${row?.freshness === "stale" ? " · out of date" : ""}`;
+}
+
+export function measurementExplanation(row: GuardRow): readonly string[] {
+  const m = row.snapshot?.measurement;
+  if (!m || row.freshness === "missing") return ["No measurement available."];
+  if (row.freshness === "invalid")
+    return ["Measurement cannot be used for this session."];
+  return [
+    m.scope === "completed-request"
+      ? "Usage from the last completed request; not the next request's size."
+      : "Usage for the prepared request; not a completed request.",
+    m.provenance === "serialized-estimate"
+      ? "Estimate from serialized request content."
+      : "Provider usage includes input and cache tokens.",
+  ];
+}
+
+export function compactionLabel(
+  row: GuardRow | undefined,
+  compact = false,
+): string | undefined {
+  const phase = row?.snapshot?.compaction.phase;
+  if (!phase || phase === "idle") return undefined;
+  if (compact)
+    return {
+      requesting: "Requesting",
+      accepted: "Waiting",
+      running: "Compacting",
+      "awaiting-measurement": "Checking",
+      blocked: "Retry held",
+      uncertain: "Unconfirmed",
+    }[phase];
+  return {
+    requesting: "Requesting compaction",
+    accepted: "Compaction request accepted · waiting to start",
+    running: "Compaction running",
+    "awaiting-measurement": "Compaction ended · checking context reduction",
+    blocked: "Automatic compaction retry suppressed",
+    uncertain: "Completion unconfirmed · automatic retry suppressed",
+  }[phase];
+}
+
+/** Only translate reasons with established semantics; unknown codes stay in diagnostics. */
+export function reasonExplanation(reason: string): string {
+  switch (reason) {
+    case "below-threshold":
+      return "Context is below the policy threshold.";
+    case "threshold-crossed":
+      return "Context reached the policy threshold; this does not guarantee compaction.";
+    case "missing-usage":
+      return "No measurement available for the policy decision.";
+    case "model-changed":
+      return "The measurement belongs to a different model.";
+    case "invalid-usage":
+      return "The measurement cannot be used for the policy decision.";
+    case "stale-usage":
+      return "The policy measurement is out of date.";
+    case "missing-model-budget":
+      return "Model capacity is unavailable for this threshold.";
+    case "incompatible-model-budget":
+      return "The threshold is incompatible with model capacity.";
+    case "compaction-failed":
+      return "Compaction failed; automatic retries are limited after repeated failures.";
+    case "reclaim-unverifiable":
+      return "Context reduction could not be verified with comparable provider readings.";
+    case "insufficient-reclaim":
+      return "Measured context reduction was below the required minimum.";
+    case "admission-outcome-unknown":
+      return "Whether the compaction request was accepted is unconfirmed.";
+    case "completion-event-timeout":
+      return "No confirming completion event arrived within the waiting period.";
+    case "restart-needs-lifecycle-evidence":
+      return "The previous request needs confirming lifecycle evidence after restart.";
+    case "event-stream-gap":
+      return "Automatic requests are suspended after an event gap; reload required.";
+    case "persistence-unavailable":
+      return "Safety storage is unavailable; repair storage and reload.";
+    case "capacity-exceeded":
+      return "Monitoring limit reached; some sessions are unavailable.";
+    case "model-metadata-unavailable":
+      return "Some model limits are unavailable.";
+    default:
+      return "See diagnostic codes.";
+  }
+}
+
+export const contextHistoryLegend = [
+  "Recent samples → now · ┄ threshold",
+  "Dim = last known context",
+] as const;
+
 export function pressureLabel(row: GuardRow | undefined): string {
   if (row?.freshness !== "fresh") return "Threshold pressure unknown";
   switch (row.pressure) {

@@ -417,7 +417,11 @@ export class TerminalShell {
         : []),
       ...view.notices,
       ...view.inventory.notices,
-      ...(view.screen === "detail" ? (view.health?.reasons ?? []) : []),
+      ...(view.screen === "detail"
+        ? (view.health?.reasons.map(
+            (reason) => `Health reason code: ${reason}`,
+          ) ?? [])
+        : []),
       ...(this.notice ? [this.notice] : []),
       ...(view.screen !== "models" && Object.values(view.filters).some(Boolean)
         ? [

@@ -133,6 +133,16 @@ test("detail exposes all fields and unknown, stale, partial, blocked and uncerta
     expect(detail).toContain("unknown/unavailable");
     expect(detail).toContain("uncertain");
     expect(detail).toContain("partial");
+    expect(detail).toContain("Usage from the last completed request");
+    expect(detail).toContain("TPS: tokens per second");
+    expect(detail).toContain("TTFT: time to first output");
+    expect(detail).toContain("Incomplete timing coverage");
+    expect(detail.indexOf("Completion unconfirmed")).toBeLessThan(
+      detail.indexOf("Diagnostic codes"),
+    );
+    expect(detail.indexOf("Diagnostic codes")).toBeLessThan(
+      detail.indexOf("measurement.scope:"),
+    );
     controller.selectSession("child-a");
     expect(terminalDetail(controller.getView().selected).join(" ")).toContain(
       "blocked",
@@ -273,10 +283,30 @@ test("overview formats threshold boundaries, stale usage, lifecycle exceptions a
       ).join("\n"),
     ).toContain("~70%");
     for (const [phase, label] of [
+      ["accepted", "Waiting"],
+      ["awaiting-measurement", "Checking"],
+      ["uncertain", "Unconfirmed"],
+    ] as const) {
+      const narrow = overviewRowLines(
+        {
+          ...row,
+          snapshot: {
+            ...row.snapshot,
+            compaction: { ...row.snapshot.compaction, phase },
+          },
+        },
+        20,
+        true,
+        "id",
+        0,
+      ).join(" ");
+      expect(narrow).toContain(label);
+    }
+    for (const [phase, label] of [
       ["accepted", "waiting to start"],
       ["running", "Compaction running"],
       ["awaiting-measurement", "checking context reduction"],
-      ["blocked", "automatic retry suppressed"],
+      ["blocked", "Automatic compaction retry suppressed"],
       ["uncertain", "Completion unconfirmed"],
     ] as const) {
       expect(

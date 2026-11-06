@@ -1,8 +1,17 @@
 import type { GuardRow } from "../family.ts";
-import { cells, clip } from "./format.ts";
+import { cells, clip, wrap } from "./format.ts";
 import { tokens } from "./quantity.ts";
-import { thresholdDistance } from "./statusformat.ts";
-export { thresholdDistance, panelStatus } from "./statusformat.ts";
+import {
+  compactionLabel,
+  freshnessLabel,
+  measurementLabel,
+  thresholdDistance,
+} from "./statusformat.ts";
+export {
+  compactionLabel,
+  thresholdDistance,
+  panelStatus,
+} from "./statusformat.ts";
 
 export const panelStatuses = {
   running: "RUNNING",
@@ -11,19 +20,6 @@ export const panelStatuses = {
   failed: "FAILED",
   unknown: "UNKNOWN",
 } as const;
-
-export function compactionLabel(row: GuardRow | undefined): string | undefined {
-  const phase = row?.snapshot?.compaction.phase;
-  if (!phase || phase === "idle") return undefined;
-  return {
-    requesting: "Compaction requested",
-    accepted: "Accepted · waiting to start",
-    running: "Compaction running",
-    "awaiting-measurement": "Ended · checking context reduction",
-    blocked: "Compaction blocked · automatic retry suppressed",
-    uncertain: "Completion unconfirmed · automatic retry suppressed",
-  }[phase];
-}
 
 export function panelSummary(
   row: GuardRow | undefined,
@@ -37,7 +33,7 @@ export function panelSummary(
   const prefix = row.freshness === "stale" ? "Last measured" : "Context";
   const percent = `${row.utilizationPercent === undefined ? "?" : Math.round(row.utilizationPercent)}%`;
   const estimate =
-    snapshot?.measurement?.confidence === "approximate" ? "~" : "";
+    valid && snapshot?.measurement?.confidence === "approximate" ? "~" : "";
   const identity = `${width < 28 ? ">" : "Selected:"} ${row.node.agent ?? row.node.sessionId}${row.current ? (width < 28 ? " *" : " (current)") : ""}`;
   const threshold = `Threshold ${tokens(snapshot?.policy.triggerTokens)} · ${thresholdDistance(row)}`;
   const occupancy = compact
@@ -56,10 +52,7 @@ export function panelSummary(
             `${row.node.model ?? snapshot?.model ?? "Model unknown"} · ${panelStatuses[row.node.status]}`,
             width,
           ),
-          clip(
-            `${snapshot?.measurement?.confidence ?? "Usage unknown"}${snapshot?.measurement ? ` · ${Math.floor(Math.max(0, age) / 1000)}s ago` : ""} · ${row.freshness}`,
-            width,
-          ),
+          ...wrap(measurementLabel(row, age), width),
         ]
       : []),
   ];
@@ -95,7 +88,7 @@ export function panelRowLines(
     " ".repeat(Math.min(row.depth, Math.floor(width / 24))) +
     (row.depth ? "└ " : "");
   const identity = `${marker} ${indent}${row.node.agent ?? row.node.sessionId}`;
-  const percent = `${row.snapshot?.measurement?.confidence === "approximate" ? "~" : ""}${row.utilizationPercent === undefined ? "?" : Math.round(row.utilizationPercent)}%`;
+  const percent = `${(row.freshness === "fresh" || row.freshness === "stale") && row.snapshot?.measurement?.confidence === "approximate" ? "~" : ""}${row.utilizationPercent === undefined ? "?" : Math.round(row.utilizationPercent)}%`;
   const status =
     width < 28
       ? {
@@ -119,13 +112,13 @@ export function panelRowLines(
           clip(`${percent} context · ${distance}`, width),
         ];
   const exception = [
-    row.freshness !== "fresh" ? row.freshness.toUpperCase() : "",
+    freshnessLabel(row),
     compactionLabel(row),
     row.node.interrupted ? "interrupted" : "",
     row.hidden ? `+${row.hidden} hidden · Space expands` : "",
   ]
     .filter(Boolean)
     .join(" · ");
-  if (exception) lines.push(clip(exception, width));
+  if (exception) lines.push(...wrap(exception, width));
   return lines.map((line) => clip(line, width));
 }

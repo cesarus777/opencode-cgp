@@ -2,7 +2,7 @@
 
 Current status: the terminal dashboard and Models screen are shipped through 0.4.0; the [threshold/status consistency increment](threshold-status-consistency.md) and [standalone overview density/reachability increment](standalone-overview-density.md) (UX-04/UX-05) are implemented for the next release. Browser delivery and durable analytics storage remain pending. The dated progress entries below preserve their original delivery context.
 
-Native [sidebar density](sidebar-density.md) (UX-07) is implemented; see its [validation record](../validation/sidebar-density-2026-11-06.md). Standalone dashboard behavior is unchanged by that increment. Terminology cleanup (UX-09) and chart-error recovery (UX-10) remain follow-ups.
+Native [sidebar density](sidebar-density.md) (UX-07) is implemented; see its [validation record](../validation/sidebar-density-2026-11-06.md). Standalone dashboard behavior is unchanged by that increment. [Plain-language terminology](plain-language-terminology.md) (UX-09) is also implemented across native and standalone session views; see its [delivery record](../validation/plain-language-terminology-2026-11-07.md). Chart-error recovery (UX-10) remains the next follow-up.
 
 ## Goal and scope
 

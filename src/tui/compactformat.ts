@@ -7,7 +7,13 @@ import type { GuardRow } from "../family.ts";
 import { cells, clip, wrap } from "./format.ts";
 import { tokens } from "./quantity.ts";
 import { compactionLabel } from "./panelformat.ts";
-import { pressureLabel, thresholdDistance } from "./statusformat.ts";
+import {
+  contextHistoryLegend,
+  freshnessLabel,
+  measurementLabel,
+  pressureLabel,
+  thresholdDistance,
+} from "./statusformat.ts";
 export { tokens } from "./quantity.ts";
 
 export function columns(left: string, right: string, width: number): string[] {
@@ -91,10 +97,7 @@ export function mainSections(
     },
     {
       tone: "measurement",
-      lines: wrap(
-        `${m?.confidence ?? "Usage unknown"}${m ? ` · measured ${Math.floor(Math.max(0, age) / 1000)}s ago` : ""}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}`,
-        width,
-      ),
+      lines: wrap(measurementLabel(row, age), width),
     },
     {
       tone: "base",
@@ -132,15 +135,12 @@ export function historySections(
     ),
     {
       tone: "measurement",
-      lines: [
-        ...wrap("Recent samples → now", width),
-        ...wrap("muted held · last known context", width),
-      ],
+      lines: contextHistoryLegend.flatMap((line) => wrap(line, width)),
     },
     {
       tone: "pressure",
       lines: wrap(
-        `Policy threshold ${tokens(s?.policy.triggerTokens)} · ${row?.freshness === "fresh" && row.pressureRatio !== undefined ? Math.round(row.pressureRatio * 100) : "?"}% of threshold · ┄ trigger`,
+        `Policy threshold ${tokens(s?.policy.triggerTokens)} · ${row?.freshness === "fresh" && row.pressureRatio !== undefined ? Math.round(row.pressureRatio * 100) : "?"}% of threshold`,
         width,
       ),
     },
@@ -188,7 +188,7 @@ export function agentLines(row: GuardRow, width: number) {
       ? wrap(row.node.status.toUpperCase(), width)
       : []),
     ...(row.freshness !== "fresh"
-      ? wrap(row.freshness.toUpperCase(), width)
+      ? wrap(freshnessLabel(row) ?? "", width)
       : []),
     ...(row.node.interrupted ? wrap("Interrupted", width) : []),
     ...(lifecycle ? wrap(lifecycle, width) : []),

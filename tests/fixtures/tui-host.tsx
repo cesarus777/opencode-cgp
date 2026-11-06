@@ -437,6 +437,18 @@ try {
   run("context-guard.inspect");
   await chartHost.flush();
   assert.match(chartHost.captureCharFrame(), /Context history/);
+  assert.match(chartHost.captureCharFrame(), /Dim = last known context/);
+  const detailsFrames: string[] = [];
+  for (let page = 0; page < 8; page++) {
+    detailsFrames.push(chartHost.captureCharFrame());
+    run("context-guard.page-next");
+    await chartHost.flush();
+  }
+  const detailText = detailsFrames.join("\n");
+  assert.match(detailText, /Provider reported/);
+  assert.match(detailText, /last\s+completed\s+request/);
+  assert.match(detailText, /Diagnostic codes and accounting/);
+  assert.match(detailText, /Measurement scope:\s+completed-request/);
   run("context-guard.last");
   await chartHost.flush();
   assert.match(chartHost.captureCharFrame(), /Native Context uses different/);

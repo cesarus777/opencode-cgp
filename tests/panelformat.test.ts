@@ -29,7 +29,7 @@ test("overview distinguishes occupancy, threshold distance and exact comparison 
   const summary = panelSummary(row, 76, 3000).join("\n");
   expect(summary).toContain("112K/500K · 22%");
   expect(summary).toContain("Threshold 160K · 48K tokens below threshold");
-  expect(summary).toContain("reported · 3s ago");
+  expect(summary).toContain("Provider reported · measured 3s ago");
   expect(summary).not.toContain("until compaction");
   for (const comparison of [">", ">="] as const) {
     const snapshot = {
@@ -146,4 +146,127 @@ test("compaction and enforcement copy preserves admission and uncertainty distin
       reasons: ["event-stream-gap"],
     }),
   ).toContain("reload required");
+});
+
+test("measurement wording separates source, scope and freshness without claiming current usage", async () => {
+  const { mainLines, agentLines } = await import("../src/tui/compactformat.ts");
+  const { detailLines } = await import("../src/tui/format.ts");
+  const base = measured();
+  for (const confidence of ["reported", "approximate"] as const)
+    for (const scope of ["completed-request", "prepared-request"] as const) {
+      const snapshot = {
+        ...base.snapshot,
+        measurement: { ...base.snapshot.measurement, confidence, scope },
+      };
+      const row = { ...base, snapshot, ...metric(snapshot, 4000, 300000) };
+      for (const text of [
+        mainLines(row, 35, 3000).join(" "),
+        panelSummary(row, 76, 3000).join(" "),
+      ]) {
+        expect(text).toContain(
+          confidence === "reported" ? "Provider reported" : "Estimated",
+        );
+        expect(text).toContain("measured 3s ago");
+        expect(text).not.toContain("fresh");
+      }
+      const detail = detailLines(row, 80, true, 3000).join(" ");
+      expect(detail).toContain(
+        scope === "completed-request"
+          ? "last completed request"
+          : "prepared request",
+      );
+      expect(detail).toContain(`Measurement confidence: ${confidence}`);
+      expect(detail).toContain(`Measurement scope: ${scope}`);
+      const stale = { ...row, ...metric(snapshot, 400000, 300000) };
+      expect(mainLines(stale, 35, 399000).join(" ")).toContain("out of date");
+      expect(panelSummary(stale, 76, 399000).join(" ")).toContain(
+        "Last measured",
+      );
+      expect(agentLines(stale, 35).join(" ")).toContain(
+        "Measurement out of date",
+      );
+      expect(thresholdDistance(stale)).toBe("pressure unknown");
+      for (const invalidSnapshot of [
+        { ...snapshot, model: "changed" },
+        { ...snapshot, measurement: { ...snapshot.measurement, at: 5000 } },
+      ]) {
+        const invalid = {
+          ...row,
+          snapshot: invalidSnapshot,
+          ...metric(invalidSnapshot, 4000, 300000),
+        };
+        expect(panelSummary(invalid, 76, 0).join(" ")).toContain(
+          "Usage unavailable",
+        );
+        expect(mainLines(invalid, 35, 0).join(" ")).not.toContain(
+          "Provider reported",
+        );
+        expect(detailLines(invalid, 80).join(" ")).toContain(
+          "Measurement cannot be used",
+        );
+        expect(detailLines(invalid, 80).join(" ")).not.toContain("112.0k");
+      }
+    }
+});
+
+test("lifecycle exceptions remain readable at narrow widths and codes remain in Details", async () => {
+  const { detailLines } = await import("../src/tui/format.ts");
+  const base = measured();
+  for (const phase of [
+    "idle",
+    "requesting",
+    "accepted",
+    "running",
+    "awaiting-measurement",
+    "blocked",
+    "uncertain",
+  ] as const) {
+    const row = {
+      ...base,
+      snapshot: {
+        ...base.snapshot,
+        compaction: { ...base.snapshot.compaction, phase, armed: false },
+      },
+    };
+    const detail = detailLines(row, 80, true).join(" ");
+    expect(detail).toContain(`Compaction phase: ${phase}`);
+    expect(detail).toContain("Armed: false (one eligibility condition");
+    expect(detail).not.toContain("ready");
+    if (phase === "idle")
+      expect(detail).toContain("No compaction request in progress");
+    for (const width of [16, 20, 35, 76]) {
+      const lines = panelRowLines(row, width, true);
+      expect(lines.every((line) => cells(line) <= width)).toBe(true);
+      if (phase === "accepted")
+        expect(lines.join(" ")).toContain("waiting to start");
+      if (phase === "uncertain")
+        expect(lines.join(" ")).toContain("Completion unconfirmed");
+      if (phase === "awaiting-measurement")
+        expect(lines.join(" ")).toContain("checking context reduction");
+    }
+  }
+  for (const [blockedReason, explanation] of [
+    ["reclaim-unverifiable", "could not be verified"],
+    ["insufficient-reclaim", "below the required minimum"],
+    ["compaction-failed", "Compaction failed"],
+    ["new-reason\u001b[31m", "See diagnostic codes"],
+  ] as const) {
+    const row = {
+      ...base,
+      snapshot: {
+        ...base.snapshot,
+        compaction: {
+          ...base.snapshot.compaction,
+          blockedReason,
+          phase: "blocked" as const,
+        },
+      },
+    };
+    const detail = detailLines(row, 80, true).join(" ");
+    expect(detail).toContain(explanation ?? "");
+    expect(detail).toContain(
+      `Blocked reason: ${blockedReason?.replace(/\u001b\[31m/g, "")}`,
+    );
+    expect(detail).not.toContain("\u001b");
+  }
 });

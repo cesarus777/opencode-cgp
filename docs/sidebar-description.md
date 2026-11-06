@@ -12,7 +12,7 @@ The current offline renderer fixture at 39 columns:
 │ Context                 112K / 500K │
 │ ███████░░░░░░░░░░░░░░░░░░░░░░░░ 22% │
 │ 48K tokens below threshold          │
-│ reported · measured 3s ago          │
+│ Provider reported · measured 3s ago │
 │ Live                                │
 │ Observing · Guard won't request     │
 │ compaction                          │
@@ -31,15 +31,15 @@ The current offline renderer fixture at 39 columns:
 ╰─────────────────────────────────────╯
 ```
 
-The same fixture occupies 22 rendered lines at both 39 and 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
+The same fixture occupies 22 rendered lines at 39 columns and 23 at 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
 
 ## History and diagnostics
 
-History starts collapsed. Click `History: show` or use **Show or hide sidebar context history** in the command palette (`context-guard.history`, no default shortcut). The expanded chart uses effective input capacity, a separate threshold line, and muted held values. Disclosure resets on route changes and remounts; the bounded shared trace continues collecting while collapsed and survives sidebar/panel transitions. Model/capacity changes reset the trace. Disclosure creates no additional monitor consumer or retained-history reads.
+History starts collapsed. Click `History: show` or use **Show or hide sidebar context history** in the command palette (`context-guard.history`, no default shortcut). The expanded chart uses effective input capacity, a separate threshold line labeled “┄ threshold,” and dimmed retained values labeled “Dim = last known context.” Disclosure resets on route changes and remounts; the bounded shared trace continues collecting while collapsed and survives sidebar/panel transitions. Model/capacity changes reset the trace. Disclosure creates no additional monitor consumer or retained-history reads.
 
-The occupancy bar always represents the measured value. Held values apply only to the history graph. Approximate usage is marked `~`; stale usage says “Last measured” and current threshold pressure is unknown. Above-capacity percentages remain textual even though the bar clips visually. Crossing a threshold does not promise compaction. Non-idle compaction and interruptions remain explicit.
+The occupancy bar always represents the measured value. Held values apply only to the history graph. Summaries say “Provider reported” or “Estimated,” with age; estimates also retain `~`. Stale usage says “Last measured” and “out of date,” with unknown current threshold pressure. Missing measurements say “Usage unknown”; unusable measurements say “Usage unavailable.” Above-capacity percentages remain textual even though the bar clips visually. Crossing a threshold does not promise compaction. Non-idle compaction and interruptions remain explicit. Accepted requests say “waiting to start”; ended compaction says “checking context reduction.” Unconfirmed completion retains automatic retry suppression.
 
-Per-session throughput and timing remain in panel Details. **Route family statistics** there includes the route session and all discovered descendants, regardless of selection, grouping, or folding. Its route identity and partial state are labeled; independent peak sums are not a combined context window or lifetime total.
+Per-session throughput and timing remain in panel Details, which explains measurement scope, lifecycle states and TPS/TTFT before labeled diagnostic codes and accounting. Exact confidence, scope, provenance, phase and reason codes remain inspectable. **Route family statistics** there includes the route session and all discovered descendants, regardless of selection, grouping, or folding. Its route identity and partial state are labeled; independent peak sums are not a combined context window or lifetime total.
 
 ## Agent tree and controls
 
@@ -54,4 +54,4 @@ Click an identity to navigate. Click a branch disclosure to fold it; folded bran
 
 Connection and Guard messages remain visible, including last-known measurements/status, suspension, storage repair, and reload instructions. Reconnecting or expanding history cannot resume suspended enforcement. Monitoring is read-only and retains existing bounds, privacy, and disposal behavior.
 
-See [configuration](configuration.md#native-context-guard-view), the [implementation plan](plans/sidebar-density.md), and [validation](validation/sidebar-density-2026-11-06.md).
+See [configuration](configuration.md#native-context-guard-view), the [implementation plan](plans/sidebar-density.md), [sidebar validation](validation/sidebar-density-2026-11-06.md), and [terminology delivery](validation/plain-language-terminology-2026-11-07.md).

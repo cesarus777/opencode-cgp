@@ -1,7 +1,8 @@
 import { chartMetrics, metricPlot } from "../tui/chartformat.ts";
-import { cells, clip, wrap, quantity } from "../tui/format.ts";
+import { cells, clip, wrap, quantity, detailLines } from "../tui/format.ts";
 import {
   connectionLabel,
+  freshnessLabel,
   monitorStatusLines,
   panelStatus,
   pressureLabel,
@@ -129,13 +130,16 @@ export function overviewRowLines(
           ),
         ]
       : [`${pad(identity, identityWidth)} ${state}`, fittedMetric ?? context];
+  const lifecycle = compactionLabel(row);
   const exceptions = [
     ...(width >= 72 && row.freshness === "stale" ? [context] : []),
     ...(width < 72 && !fittedMetric ? [pressure] : []),
     ...(row.node.status === "failed" ? ["Agent failed"] : []),
     ...(row.node.interrupted ? ["Interrupted"] : []),
-    ...(compactionLabel(row) ? [compactionLabel(row)] : []),
-    ...(row.freshness !== "fresh" ? [`Usage ${row.freshness}`] : []),
+    ...(lifecycle
+      ? [cells(lifecycle) <= width - 6 ? lifecycle : compactionLabel(row, true)]
+      : []),
+    ...(row.freshness !== "fresh" ? [freshnessLabel(row)] : []),
     ...(row.inventoryStale ? ["Inventory stale"] : []),
     ...(row.liveStale ? ["Live data stale"] : []),
     ...(row.hidden ? [`${row.hidden} hidden descendants`] : []),
@@ -241,11 +245,12 @@ const scalar = (value: unknown) =>
 export function terminalDetail(row: DashboardRow | undefined): string[] {
   if (!row) return ["No selected session; choose one in overview."];
   return [
-    diagnosticRow(row),
     `Session ID: ${row.node.sessionId}`,
-    `Parent ID: ${row.node.parentId ?? "unknown/unavailable"}`,
+    ...detailLines(row, 4096, false, row.measurementAgeMs),
     ...(row.node.interrupted ? ["Agent execution interrupted"] : []),
-    ...(compactionLabel(row) ? [compactionLabel(row) ?? ""] : []),
+    "Diagnostic codes and accounting:",
+    diagnosticRow(row),
+    `Parent ID: ${row.node.parentId ?? "unknown/unavailable"}`,
     "All snapshot fields (timestamps are Unix milliseconds):",
     ...snapshotFields.map(
       (path) => `${path}: ${scalar(pathValue(row.snapshot, path))}`,

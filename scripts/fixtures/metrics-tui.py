@@ -61,7 +61,8 @@ def expect(text):
         if text in frame():
             return
     # Never print content from the session screen.
-    raise AssertionError("TUI did not show " + text)
+    markers = {label: label in frame() for label in ["History: show", "History: hide", "CONTEXT GUARD", "Context history", "100%│", "SUBAGENTS"]}
+    raise AssertionError("TUI did not show " + text + "; scalar UI markers: " + repr(markers))
 
 
 def key(value):
@@ -108,8 +109,17 @@ def expand_sidebar_history():
 def capture_chart(name):
     # Retain only the scalar chart rectangle, never session messages or titles.
     from PIL import Image, ImageDraw, ImageFont
+    # A prompt result can precede the next sidebar paint. Wait for chart geometry,
+    # rather than accepting a percentage elsewhere on the host screen.
+    for _ in range(60):
+        if any("100%│" in line for line in screen.display):
+            break
+        pump(0.2)
     lines = screen.display
-    top = next(i for i, line in enumerate(lines) if "100%│" in line)
+    top = next((i for i, line in enumerate(lines) if "100%│" in line), None)
+    if top is None:
+        markers = {label: label in frame() for label in ["History: show", "History: hide", "CONTEXT GUARD", "Context history"]}
+        raise AssertionError("Chart unavailable after repaint: " + repr(markers))
     left = lines[top].index("100%│")
     bottom = next((i for i in range(top + 1, len(lines)) if "└" in lines[i] and "┘" in lines[i]), None)
     if bottom is None:
@@ -254,7 +264,7 @@ try:
     context_action("grow")
     expect("70%")
     pump(4)
-    expect("muted held")
+    expect("Dim = last known context")
     capture_chart("wide-pause")
     context_action("permission")
     pump(4)

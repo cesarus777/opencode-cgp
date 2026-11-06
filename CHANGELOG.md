@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use plain-language measurement and compaction labels across the native sidebar/panel and standalone session dashboard. Distinguish provider-reported, estimated, stale, missing and unusable readings, accepted requests, context-reduction checks and unconfirmed completion.
+- Lead Details with readable explanations and a performance glossary while retaining exact diagnostic codes and accounting fields. Clarify context-chart legends with “Dim = last known context” and “┄ threshold”; preserve trace geometry and compaction semantics.
+- Validate UX-09 with 222 offline tests and native/standalone synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2. The sidebar fixture occupies 22 lines at 39 columns and 23 at 35 columns. See the [terminology delivery record](docs/validation/plain-language-terminology-2026-11-07.md).
+
 - Compact the native sidebar to identity-first occupancy, early panel access, expandable history and two-line ordinary descendant rows. Group completed subtrees only when discovery and their measurement/lifecycle states are trustworthy; preserve attention-bearing ancestry and hidden-fold feedback.
 - Move sidebar throughput and aggregate diagnostics into panel Details, with route-family statistics independent of selection/folding. The ordinary fixture shrinks from 63 to 22 lines at 39 columns; validate with 220 offline tests and synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2. See the [sidebar validation record](docs/validation/sidebar-density-2026-11-06.md).
 

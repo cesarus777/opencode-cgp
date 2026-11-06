@@ -1,5 +1,12 @@
 import type { GuardRow } from "../family.ts";
-import { pressureLabel, thresholdDistance } from "./statusformat.ts";
+import {
+  compactionLabel,
+  measurementLabel,
+  measurementExplanation,
+  reasonExplanation,
+  pressureLabel,
+  thresholdDistance,
+} from "./statusformat.ts";
 export function quantity(n: number | undefined): string {
   return n === undefined || !Number.isFinite(n)
     ? "?"
@@ -114,19 +121,41 @@ export function detailLines(
   const valid = row.freshness === "fresh" || row.freshness === "stale";
   const lines = [
     `${s.agent ?? "?"} / ${s.model ?? "?"}`,
-    ...performanceLines(row, width),
     `${row.freshness === "stale" ? "Last measured" : "Context"} ${valid && m?.confidence === "approximate" ? "~" : ""}${quantity(valid ? m?.tokens : undefined)} / ${quantity(s.capacityTokens)} input`,
     `${valid ? (row.utilizationPercent?.toFixed(1) ?? "?") : "?"}% capacity · ${pressureLabel(row)}`,
-    `Trigger ${threshold.type === "ratio" ? `${threshold.value * 100}%` : `${threshold.value} ${threshold.type}`} (${s.policy.comparison})`,
-    `Resolved trigger ${s.policy.triggerTokens ?? "?"}`,
-    thresholdDistance(row),
-    `Compact: ${s.compaction.phase}`,
-    `${s.compaction.armed ? "armed" : "disarmed"}${s.compaction.blockedReason ? ` / ${s.compaction.blockedReason}` : ""}`,
-    m ? `${m.confidence} ${m.scope}` : "measurement unknown",
-    m ? `${Math.floor(Math.max(0, ageMs) / 1000)}s ago; ${row.freshness}` : "",
+    `Threshold ${quantity(s.policy.triggerTokens)} · ${thresholdDistance(row)}`,
+    measurementLabel(row, ageMs),
+    ...measurementExplanation(row),
+    compactionLabel(row) ?? "No compaction request in progress.",
+    ...(s.compaction.blockedReason
+      ? [reasonExplanation(s.compaction.blockedReason)]
+      : []),
+    `Recorded policy decision: ${reasonExplanation(s.policy.reason)}`,
+    ...performanceLines(row, width),
+    ...(s.performance
+      ? [
+          "TPS: tokens per second. TTFT: time to first output (text or reasoning); approximate.",
+          "Live TPS is estimated; completed rates use provider output including reasoning and matched timing.",
+          "Model average uses matched request durations; session average includes idle and tool time.",
+          ...(s.performance.partial
+            ? [
+                "Incomplete timing coverage for model averages; only matched observed durations are included.",
+              ]
+            : []),
+        ]
+      : []),
   ];
   if (expanded)
     lines.push(
+      "Diagnostic codes and accounting:",
+      `Compaction phase: ${s.compaction.phase}`,
+      `Armed: ${s.compaction.armed} (one eligibility condition, not permission to compact)`,
+      `Blocked reason: ${s.compaction.blockedReason ?? "?"}`,
+      `Measurement confidence: ${m?.confidence ?? "?"}`,
+      `Measurement scope: ${m?.scope ?? "?"}`,
+      `Measurement freshness: ${row.freshness}`,
+      `Trigger ${threshold.type === "ratio" ? `${threshold.value * 100}%` : `${threshold.value} ${threshold.type}`} (${s.policy.comparison})`,
+      `Resolved trigger ${s.policy.triggerTokens ?? "?"}`,
       `Policy ${s.policy.id}: ${s.policy.reason}`,
       `Pressure code: ${row.pressure}`,
       `Recorded tokens: ${quantity(m?.tokens)}`,

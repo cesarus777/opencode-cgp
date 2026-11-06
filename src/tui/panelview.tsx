@@ -5,6 +5,7 @@ import type { ContextTrace } from "./contextchart.ts";
 import { contextChart } from "./contextchart.ts";
 import { detailLines, wrap } from "./format.ts";
 import { statistics } from "./compactformat.ts";
+import { contextHistoryLegend, reasonExplanation } from "./statusformat.ts";
 import { panelRowLines } from "./panelformat.ts";
 
 export function PanelOverview(props: {
@@ -99,7 +100,10 @@ export function PanelDetails(props: {
       `Session: ${row.node.sessionId}${row.current ? " (current)" : ""}`,
       ...detailLines(row, props.width, true, props.age),
       `Ancestry: ${ancestry.join(" / ")}`,
-      ...props.reasons,
+      ...props.reasons.flatMap((reason) => [
+        reasonExplanation(reason),
+        `Health reason code: ${reason}`,
+      ]),
       `Route family statistics: ${props.routeID}${props.familyComplete ? "" : " · partial"}`,
       ...statistics(
         props.familyRows,
@@ -146,10 +150,7 @@ export function PanelDetails(props: {
         )}
       </For>
       <For
-        each={wrap(
-          "Recent samples → now · ┄ trigger · muted held",
-          props.width,
-        )}
+        each={contextHistoryLegend.flatMap((line) => wrap(line, props.width))}
       >
         {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
       </For>

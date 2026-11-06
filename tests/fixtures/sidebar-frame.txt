@@ -3,7 +3,7 @@
 │ Context                 112K / 500K │
 │ ███████░░░░░░░░░░░░░░░░░░░░░░░░ 22% │
 │ 48K tokens below threshold          │
-│ reported · measured 3s ago          │
+│ Provider reported · measured 3s ago │
 │ Live                                │
 │ Observing · Guard won't request     │
 │ compaction                          │

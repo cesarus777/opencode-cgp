@@ -4,7 +4,7 @@ Date: 2026-11-06. Status: implemented; see the [delivery record](../validation/s
 
 ## Original recommendation and investigation
 
-The investigation selected sidebar density next. UX-01 through UX-06 already had delivery records linked from the review; UX-07 was next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) and chart-error recovery (UX-10) remain subsequent increments. Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
+The investigation selected sidebar density next. UX-01 through UX-06 already had delivery records linked from the review; UX-07 was next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) has since been [delivered](../validation/plain-language-terminology-2026-11-07.md). Chart-error recovery (UX-10) remains the next increment. Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
 
 The sidebar should answer which session is running, its context occupancy, which descendant needs attention, and what Guard can do. Default to a short summary and descendant tree; make history optional and move performance and aggregate diagnostics into panel Details.
 
@@ -23,7 +23,7 @@ Investigation validation: `bun test tests/sidebar.test.ts tests/tuirender.test.t
 
 ## Implementation readiness review
 
-Before implementation, rechecked after UX-08 on 2026-11-06 at commit `ca4c31c`. The next increment was UX-07: the reviewed default frame still had **63 lines at 39 columns**, and `compact.tsx` still rendered history, descendant diagnostics, and statistics before panel access. UX-09 and UX-10 remain separate follow-ups. Reuse `compactionLabel` from `panelformat.ts` for sidebar exceptions rather than introducing another lifecycle translation.
+Before implementation, rechecked after UX-08 on 2026-11-06 at commit `ca4c31c`. The next increment was UX-07: the reviewed default frame still had **63 lines at 39 columns**, and `compact.tsx` still rendered history, descendant diagnostics, and statistics before panel access. At that point UX-09 and UX-10 were separate follow-ups; UX-09 has since been delivered. Reuse `compactionLabel` from `panelformat.ts` for sidebar exceptions rather than introducing another lifecycle translation.
 
 The refreshed baseline command, `bun test tests/sidebar.test.ts tests/tuirender.test.tsx tests/statusformat.test.ts tests/tuistate.test.ts`, passed **17 tests, 0 failures**. This is evidence for the current implementation only. That planning update included no implementation or new actual-host validation; subsequent results are in the delivery record.
 

@@ -30,10 +30,10 @@ test("sidebar preserves occupancy and threshold text with a capacity-scaled char
     expect(history.join(" ")).toContain("70%");
     expect(history.join(" ")).toContain("100%");
     expect(history.join(" ")).toContain("┄");
-    expect(history.join(" ")).toContain("muted held");
+    expect(history.join(" ")).toContain("Dim = last known context");
   }
   const stale: GuardRow = { ...row, ...metric(row.snapshot, 400000, 300000) };
-  expect(mainLines(stale, 35, 399000).join(" ")).toContain("STALE");
+  expect(mainLines(stale, 35, 399000).join(" ")).toContain("out of date");
   const staleText = mainLines(stale, 35, 399000).join(" ");
   expect(staleText).toContain("112K");
   expect(staleText).toContain("Last measured");

@@ -220,7 +220,13 @@ try {
   ]);
   await host.renderOnce();
   assert.match(frame(), /reviewer/);
-  assert.match(frame(), /Accepted · waiting to start/);
+  assert.match(
+    frame()
+      .split("\n")
+      .map((line) => line.replace(/│/g, "").trim())
+      .join(" "),
+    /Compaction request accepted · waiting to start/,
+  );
   setRows(sidebarFamily());
   await host.renderOnce();
   assert.doesNotMatch(frame(), /reviewer/);
@@ -301,7 +307,13 @@ try {
     "new measurements keep the earlier sample without an extra held column",
   );
   assertMainChart();
-  assert.match(frame(), /Ended · checking context reduction/);
+  assert.match(
+    frame()
+      .split("\n")
+      .map((line) => line.replace(/│/g, "").trim())
+      .join(" "),
+    /Compaction ended · checking context reduction/,
+  );
   const nearRows = rows();
   const criticalSnapshot = {
     ...snapshot,
@@ -345,7 +357,7 @@ try {
   ]);
   await host.renderOnce();
   assertMainChart(palette.muted);
-  assertColor("STALE", palette.warning);
+  assertColor("out of date", palette.warning);
   const { measurement: _measurement, ...unknownSnapshot } = criticalSnapshot;
   setRows([
     {

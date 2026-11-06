@@ -1,6 +1,6 @@
 # Context Guard TUI UX review
 
-Date: 2026-11-06. Status: recommendations documented; UX-01 is implemented with [validation evidence](../validation/native-panel-overview-2026-11-06.md). Its [implementation plan](native-panel-overview.md) records the scope. UX-02, UX-03, and UX-06 are also implemented with [validation evidence](../validation/threshold-status-consistency-2026-11-06.md). UX-04/UX-05 are implemented with [standalone overview validation](../validation/standalone-overview-density-2026-11-06.md); UX-08 is implemented with [native keyboard/help validation](../validation/native-keyboard-help-2026-11-06.md). UX-07 is implemented with [sidebar density validation](../validation/sidebar-density-2026-11-06.md). UX-09 and UX-10 remain follow-up work.
+Date: 2026-11-06. Status: recommendations documented; UX-01 is implemented with [validation evidence](../validation/native-panel-overview-2026-11-06.md). Its [implementation plan](native-panel-overview.md) records the scope. UX-02, UX-03, and UX-06 are also implemented with [validation evidence](../validation/threshold-status-consistency-2026-11-06.md). UX-04/UX-05 are implemented with [standalone overview validation](../validation/standalone-overview-density-2026-11-06.md); UX-08 is implemented with [native keyboard/help validation](../validation/native-keyboard-help-2026-11-06.md). UX-07 is implemented with [sidebar density validation](../validation/sidebar-density-2026-11-06.md). UX-09 is implemented with [plain-language terminology validation](../validation/plain-language-terminology-2026-11-07.md). UX-10 remains follow-up work.
 
 ## Scope and evidence
 
@@ -32,6 +32,8 @@ P1 denotes the first usability work; P2 denotes follow-up improvements. IDs are 
 | UX-08 | P2       | Keyboard behavior differs across surfaces and some actions are difficult to discover.                                         | Add native-panel help and page navigation, use contextual footers, provide keyboard child-route access, and review conflicting keys across surfaces.                                          |
 | UX-09 | P2       | Raw lifecycle and accounting terminology requires users to understand implementation concepts.                                | Translate primary labels into plain language; retain exact codes under Details.                                                                                                               |
 | UX-10 | P2       | Chart failures use a generic message suggesting unsupported server history, including for temporary failures.                 | Distinguish unsupported capability from transient failure, preserve clearly marked stale results where available, and provide an accurate retry action.                                       |
+
+The [plain-language lifecycle and measurement labels](plain-language-terminology.md) increment (UX-09) is implemented. Shared measurement/lifecycle wording, readable Details, a performance glossary and clearer context legends preserve exact diagnostic codes and accounting semantics; see the [delivery report](../validation/plain-language-terminology-2026-11-07.md). UX-10 chart failure/recovery remains a separate follow-up.
 
 ## Native panel hierarchy
 
@@ -76,6 +78,8 @@ The native child-composer action currently uses a mouse handler. Provide keyboar
 
 ## Suggested copy
 
+These are the original review suggestions. Delivered wording and diagnostics are recorded in the [UX-09 delivery report](../validation/plain-language-terminology-2026-11-07.md).
+
 | Existing wording           | Suggested primary wording                               |
 | -------------------------- | ------------------------------------------------------- |
 | Observe: no admission      | Observe mode · Guard won't request compaction           |
@@ -104,7 +108,7 @@ Retain exact lifecycle codes in Details. Stale usage should say “Last measured
 
 Implement UX-01 first, with only the copy and status changes needed to make its new summary accurate. Follow with consistent status/copy treatment across surfaces (UX-02, UX-03, UX-06), standalone density and row reachability (UX-04, UX-05), then sidebar, keyboard, terminology, and chart-error work.
 
-UX-01 and the [consistent threshold and Guard status increment](threshold-status-consistency.md) (UX-02, UX-03, UX-06) are delivered. See the [status delivery record](../validation/threshold-status-consistency-2026-11-06.md) for implementation and validation evidence. UX-04/UX-05, standalone row density and reachability, are also delivered; their [implementation plan](standalone-overview-density.md) records the reproduced geometry, interaction contract, and acceptance checks, with measured results in the [delivery report](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) and independently delivered keyboard/help (UX-08) are now implemented, leaving terminology and chart-error work afterward.
+UX-01 and the [consistent threshold and Guard status increment](threshold-status-consistency.md) (UX-02, UX-03, UX-06) are delivered. See the [status delivery record](../validation/threshold-status-consistency-2026-11-06.md) for implementation and validation evidence. UX-04/UX-05, standalone row density and reachability, are also delivered; their [implementation plan](standalone-overview-density.md) records the reproduced geometry, interaction contract, and acceptance checks, with measured results in the [delivery report](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) and independently delivered keyboard/help (UX-08) are now implemented, followed by the delivered terminology increment (UX-09). Chart-error work (UX-10) remains.
 
 The [sidebar density plan](sidebar-density.md) records source evidence, compact defaults, safe completed grouping, diagnostics relocation, and acceptance checks for UX-07. Its [delivery record](../validation/sidebar-density-2026-11-06.md) records measured results and validation limits.
 
