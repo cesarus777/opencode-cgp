@@ -141,6 +141,8 @@ async function start() {
   );
   return client;
 }
+let historyMode = "none";
+let inventoryReads = 0;
 const proxy = Bun.serve({
   hostname: "127.0.0.1",
   port: 0,
@@ -149,8 +151,21 @@ const proxy = Bun.serve({
     const url = new URL(req.url);
     if (url.pathname.startsWith("/__test/")) {
       const action = url.pathname.slice(8);
+      if (action.startsWith("history-")) {
+        const mode = action.slice(8);
+        assert.ok(
+          ["none", "unsupported", "transient", "timeout"].includes(mode),
+        );
+        historyMode = mode;
+        return Response.json({ ok: true });
+      }
       if (action === "counts")
-        return Response.json({ streams, historyReads, analyticsReads });
+        return Response.json({
+          streams,
+          historyReads,
+          analyticsReads,
+          inventoryReads,
+        });
       if (action === "prompt") {
         await Promise.all(
           ids.map((sessionID) =>
@@ -222,9 +237,44 @@ const proxy = Bun.serve({
       }
       return Response.json({ ok: true });
     }
+    if (
+      url.pathname === "/api/session" &&
+      [null, "null"].includes(url.searchParams.get("parentID"))
+    )
+      inventoryReads++;
     const body = req.method === "POST" ? await req.arrayBuffer() : undefined;
-    if (body && new TextDecoder().decode(body).includes(historyRpc.id))
+    if (
+      url.pathname.includes(historyRpc.id) ||
+      (body && new TextDecoder().decode(body).includes(historyRpc.id))
+    ) {
       historyReads++;
+      if (historyMode === "unsupported")
+        return Response.json(
+          {
+            _tag: "RpcError",
+            type: "rpc.unavailable",
+            message: "private-history-error-canary",
+          },
+          { status: 400 },
+        );
+      if (historyMode === "transient") {
+        historyMode = "none";
+        return new Response("private-history-error-canary", { status: 503 });
+      }
+      if (historyMode === "timeout") {
+        historyMode = "none";
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(finish, 10000);
+          function finish() {
+            clearTimeout(timer);
+            req.signal.removeEventListener("abort", finish);
+            resolve();
+          }
+          req.signal.addEventListener("abort", finish, { once: true });
+          if (req.signal.aborted) finish();
+        });
+      }
+    }
     if (url.pathname.includes(analyticsRpc.id)) analyticsReads++;
     // Public SSE route; count connection attempts without retaining any payload.
     if (url.pathname.includes("event")) streams++;

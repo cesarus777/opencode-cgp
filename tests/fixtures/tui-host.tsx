@@ -50,13 +50,16 @@ const [complete, setComplete] = createSignal(true);
 const [connection, setConnection] = createSignal<Connection>("live");
 let holdHistory = false,
   historyAborts = 0;
+let historyError: unknown;
 const historyReads: { sessionId: string; windowMs: number }[] = [];
 const traceStore = new ContextTraceStore();
 const state: GuardState = {
   contextTrace: (row: Parameters<ContextTraceStore["update"]>[0]) =>
     traceStore.update(row),
   version: () => 0,
+  historyLocation: () => "/fixture",
   history: async (id, from, to, signal) => {
+    if (historyError) throw historyError;
     if (holdHistory)
       return new Promise((_, reject) => {
         signal.addEventListener(
@@ -280,6 +283,37 @@ try {
     "view switches do not reacquire the panel consumer",
   );
   // Help owns input, aborts chart work, and returns to the same session/metric/window.
+  historyError = { type: "rpc.unavailable", message: "private-canary" };
+  run("context-guard.refresh");
+  await host.flush();
+  assert.match(host.captureCharFrame(), /History service is unavailable/);
+  assert.match(host.captureCharFrame(), /Showing previous results/);
+  assert.doesNotMatch(host.captureCharFrame(), /private-canary/);
+  for (const [columns, rows] of [
+    [80, 24],
+    [40, 20],
+    [20, 12],
+  ] as const) {
+    setWidth(columns);
+    host.resize(columns, rows);
+    await host.flush();
+    const frame = host.captureCharFrame();
+    assert.match(frame, /Performance/);
+    assert.match(frame, /History/);
+    assert.match(frame, /r refresh/);
+    assert.doesNotMatch(frame, /private-canary/);
+    run("context-guard.last");
+    await host.flush();
+    run("context-guard.first");
+    await host.flush();
+  }
+  setWidth(40);
+  host.resize(40, 28);
+  historyError = undefined;
+  run("context-guard.refresh");
+  await host.flush();
+  assert.match(host.captureCharFrame(), /Live TPS/);
+  assert.doesNotMatch(host.captureCharFrame(), /Showing previous|unavailable/);
   holdHistory = true;
   run("context-guard.refresh");
   await host.flush();
@@ -524,7 +558,11 @@ try {
   run("context-guard.load-more");
   assert.equal(loads, 1);
   run("context-guard.refresh");
-  assert.equal(refreshes, 2);
+  assert.equal(
+    refreshes,
+    4,
+    "chart retries and inventory refreshes reach shared state",
+  );
   setComplete(true);
   // Critical enforcement state remains visible through every view and refresh.
   setHealth({

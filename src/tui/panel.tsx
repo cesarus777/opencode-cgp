@@ -416,7 +416,7 @@ export function GuardPanel(props: {
   const hint = () => {
     if (help()) return `${shortcut("previous")}/${shortcut("next")} scroll`;
     if (view() === "charts")
-      return `${shortcut("chart-previous")}/${shortcut("chart-next")} metric ${shortcut("previous")}/${shortcut("next")} session ${shortcut("chart-shorter")}/${shortcut("chart-longer")} window`;
+      return `${shortcut("refresh")} refresh · ${shortcut("chart-previous")}/${shortcut("chart-next")} metric ${shortcut("previous")}/${shortcut("next")} session ${shortcut("chart-shorter")}/${shortcut("chart-longer")} window`;
     if (view() === "details")
       return `${shortcut("previous")}/${shortcut("next")} scroll · ${shortcut("page-previous")}/${shortcut("page-next")} page`;
     return `${shortcut("previous")}/${shortcut("next")} select · ${shortcut("open")} open · ${inventory().canLoadMore ? shortcut("load-more") + " more" : shortcut("refresh") + " refresh"}`;

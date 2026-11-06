@@ -12,6 +12,7 @@ import type {
   HistoryChartResult,
 } from "../src/historycharts.ts";
 import type { ChartRequest } from "../src/charts.ts";
+import { HistoryFailure } from "../src/historyclient.ts";
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -560,6 +561,7 @@ test("history distinguishes disabled, unavailable and wrong-session responses an
     await controller.start();
     controller.setScreen("history");
     await until(() => controller.getView().history.status === "ready");
+    const original = controller.getView().history;
     source.historyOverride = async () => {
       throw new Error("private-canary");
     };
@@ -567,12 +569,16 @@ test("history distinguishes disabled, unavailable and wrong-session responses an
     await until(() => controller.getView().history.status === "unavailable");
     expect(controller.getView().history.result).toBeDefined();
     expect(controller.getView().history.stale).toBe(true);
+    expect(controller.getView().history.reason).toBe("unavailable");
+    expect(controller.getView().history.loadedAt).toBe(original.loadedAt);
+    expect(controller.getView().history.to).toBe(original.to);
     expect(JSON.stringify(controller.getView())).not.toContain(
       "private-canary",
     );
     source.historyOverride = async () => history("foreign");
     await controller.refresh();
     await until(() => controller.getView().history.status === "unavailable");
+    expect(controller.getView().history.reason).toBe("incompatible");
     expect(controller.getView().history.result?.data.series[0]?.sessionId).toBe(
       "root",
     );
@@ -585,6 +591,36 @@ test("history distinguishes disabled, unavailable and wrong-session responses an
     expect(
       controller.getView().history.summary?.averageModelTps,
     ).toBeUndefined();
+    for (const reason of [
+      "unsupported",
+      "timeout",
+      "incompatible",
+      "rejected",
+      "unavailable",
+    ] as const) {
+      source.historyOverride = async () => {
+        throw new HistoryFailure(reason);
+      };
+      await controller.refresh();
+      await until(() => controller.getView().history.status === "unavailable");
+      expect(controller.getView().history.reason).toBe(reason);
+      expect(controller.getView().history.stale).toBe(true);
+    }
+    source.historyOverride = async (input) => history(input.sessionId);
+    const pending = deferred<HistoryChartResult>();
+    source.historyOverride = () => pending.promise;
+    await controller.refresh();
+    controller.selectSession("child");
+    expect(controller.getView().history.reason).toBeUndefined();
+    expect(controller.getView().history.result).toBeUndefined();
+    source.historyOverride = async (input) => history(input.sessionId);
+    pending.resolve(history("root"));
+    await until(() => controller.getView().history.status === "ready");
+    expect(controller.getView().history.reason).toBeUndefined();
+    expect(controller.getView().history.stale).toBe(false);
+    expect(controller.getView().history.result?.data.series[0]?.sessionId).toBe(
+      "child",
+    );
   } finally {
     controller.stop();
   }

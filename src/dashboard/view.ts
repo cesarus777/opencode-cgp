@@ -1,3 +1,4 @@
+import type { HistoryFailureReason } from "../historyclient.ts";
 import type { GuardRow } from "../family.ts";
 import type { MonitorHealth } from "../snapshot.ts";
 import type { HistoryChartResult } from "../historycharts.ts";
@@ -33,6 +34,8 @@ export interface HistorySummary {
   readonly averageModelTps?: number;
 }
 export interface DashboardHistory {
+  readonly reason?: HistoryFailureReason;
+  readonly loadedAt?: number;
   readonly status: "idle" | "loading" | "ready" | "disabled" | "unavailable";
   readonly windowMs: HistoryWindow;
   readonly maxWindowMs: 604800000;

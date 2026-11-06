@@ -808,6 +808,7 @@ try {
       cancelled: 0,
       delayed: 0,
       delay: false,
+      historyMode: "none",
     };
     const proxy = Bun.serve({
       hostname: "127.0.0.1",
@@ -877,6 +878,14 @@ try {
           } else throw new Error("Unknown context validation action");
           return Response.json({ ok: true });
         }
+        if (incoming.pathname.startsWith("/__validation_history/")) {
+          const mode = incoming.pathname.split("/").at(-1);
+          assert.ok(
+            mode === "none" || mode === "unsupported" || mode === "transient",
+          );
+          counts.historyMode = mode;
+          return Response.json({ ok: true });
+        }
         if (incoming.pathname === "/__validation_delay") {
           counts.delay = true;
           return Response.json({ ok: true });
@@ -890,6 +899,21 @@ try {
             body.includes(historyRpc.id)
           ) {
             counts.history++;
+            if (counts.historyMode === "unsupported")
+              return Response.json(
+                {
+                  _tag: "RpcError",
+                  type: "rpc.unavailable",
+                  message: "private-history-error-canary",
+                },
+                { status: 400 },
+              );
+            if (counts.historyMode === "transient") {
+              counts.historyMode = "none";
+              return new Response("private-history-error-canary", {
+                status: 503,
+              });
+            }
             if (counts.delay) {
               counts.delay = false;
               counts.delayed++;

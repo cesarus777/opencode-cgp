@@ -9,8 +9,97 @@ import { session } from "./fixtures/session.ts";
 import { analyticsFixture } from "./fixtures/analytics.ts";
 import { isAnalyticsRead } from "../src/rpc.ts";
 import { AnalyticsUnavailable } from "../src/dashboard/port.ts";
+import { HistoryFailure } from "../src/historyclient.ts";
+import { retainedHistory } from "./fixtures/history.ts";
 
 const signal = () => AbortSignal.timeout(3000);
+
+test("history SDK failures preserve only approved reasons and validate session ownership", async () => {
+  for (const [response, reason] of [
+    [
+      Response.json(
+        {
+          _tag: "RpcError",
+          type: "rpc.unavailable",
+          message: "private-canary",
+        },
+        { status: 400 },
+      ),
+      "unsupported",
+    ],
+    [
+      Response.json(
+        {
+          _tag: "RpcError",
+          type: "rpc.method_not_found",
+          message: "private-canary",
+        },
+        { status: 400 },
+      ),
+      "unsupported",
+    ],
+    [
+      Response.json(
+        {
+          _tag: "RpcError",
+          type: "rpc.invalid_input",
+          message: "private-canary",
+        },
+        { status: 400 },
+      ),
+      "rejected",
+    ],
+    [
+      Response.json(
+        {
+          _tag: "RpcError",
+          type: "rpc.invalid_output",
+          message: "private-canary",
+        },
+        { status: 400 },
+      ),
+      "incompatible",
+    ],
+    [
+      Response.json(
+        { _tag: "RpcError", type: "rpc.internal", message: "private-canary" },
+        { status: 500 },
+      ),
+      "unavailable",
+    ],
+    [new Response("private-canary", { status: 404 }), "unavailable"],
+    [new Response("private-canary", { status: 503 }), "unavailable"],
+    [Response.json({ output: retainedHistory("foreign") }), "incompatible"],
+    [
+      Response.json({
+        output: { schemaVersion: 1, content: "private-canary" },
+      }),
+      "incompatible",
+    ],
+  ] as const) {
+    const connection = await connectDashboard(
+      { directory: "/project", server: "https://example.test" },
+      network(() => response),
+    );
+    try {
+      await connection.history(
+        {
+          schemaVersion: 1,
+          sessionId: "s",
+          from: 0,
+          to: 1000000,
+          maxPoints: 240,
+        },
+        signal(),
+      );
+      throw new Error("Expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(HistoryFailure);
+      if (error instanceof HistoryFailure) expect(error.reason).toBe(reason);
+      expect(String(error)).not.toContain("private-canary");
+    }
+  }
+});
 const snapshot = () =>
   new SnapshotStore(parseConfig({ enabled: false }), () => new Map()).read({
     schemaVersion: 1,

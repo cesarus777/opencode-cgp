@@ -194,6 +194,35 @@ try:
     expect(connection["ids"][2])
     key("\x1b[A")
     expect(connection["ids"][1])
+    # History faults affect charts only; retry retains matching measurements.
+    urllib.request.urlopen(connection["url"] + "/__validation_history/unsupported").close()
+    key("r")
+    expect("History service is unavailable")
+    expect("Showing previous results")
+    expect("last loaded")
+    before = counts()["history"]
+    pump(5.5)
+    assert counts()["history"] == before, "missing history service pauses native polling"
+    assert "private-history-error-canary" not in frame(), "history error privacy"
+    urllib.request.urlopen(connection["url"] + "/__validation_history/none").close()
+    key("r")
+    expect("Live TPS")
+    assert "Showing previous results" not in frame(), "successful retry clears stale warning"
+    urllib.request.urlopen(connection["url"] + "/__validation_history/transient").close()
+    key("r")
+    expect("History could not be loaded")
+    expect("Showing previous results")
+    key("r")
+    expect("Live TPS")
+    assert "History could not be loaded" not in frame(), "retry recovers transient failure"
+    urllib.request.urlopen(connection["url"] + "/__validation_delay").close()
+    key("r")
+    expect("History request timed out")
+    expect("Showing previous results")
+    key("r")
+    expect("Live TPS")
+    assert "History request timed out" not in frame(), "retry recovers timeout"
+    print("PASS: native history missing capability, transient failure, timeout, retained results and retry")
     before = counts()["history"]
     key("r")
     assert counts()["history"] > before, "refresh makes another history read"

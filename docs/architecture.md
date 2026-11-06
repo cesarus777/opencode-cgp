@@ -83,6 +83,8 @@ The snapshot store projects performance at the configured cadence. Both monitor 
 
 The CLI builds a self-contained offline HTML/SVG report with escaped embedded JSON, DOM text nodes for identities, and a network-blocking content policy. It is shipped as the Bun-backed `context-guard` executable as well as the checkout's `charts`/`inspect` scripts. The terminal panel keeps the shared live transport mounted and independently polls the new history RPC only in chart mode. History requests are serialized per location service, have capped windows/results, and accept no filesystem path from the client.
 
+`src/historyclient.ts` validates retained-history responses and normalizes structured RPC failures to approved reason codes and fixed display text. Both native and standalone views use its recovery wording; arbitrary server errors never enter projected diagnostics. `src/tui/historystate.ts` owns a mounted native chart's single retained query, coalesced retry, generation-checked cancellation, and five-second polling after settlement. Its query includes resolved location, full session identity, and window; retained plots preserve their original range and successful receipt time. Missing/incompatible/rejected services and disabled recording pause native polling until an explicit check. Standalone history retains its existing serialized queue and bounded cache, adding failure reason and receipt time to its immutable projection.
+
 ## Retained model analytics
 
 `src/modelanalytics.ts` reconciles scalar request identities once and shares its completed-request summaries with the CLI and `src/modelseries.ts` time buckets. Ratios use summed matched tokens/durations; quantiles use eligible request TTFTs, independently of pagination or plot resolution.

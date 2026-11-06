@@ -1,3 +1,4 @@
+import { historyStatusLines } from "../historyclient.ts";
 import { chartMetrics, metricPlot } from "../tui/chartformat.ts";
 import { cells, clip, wrap, quantity, detailLines } from "../tui/format.ts";
 import {
@@ -269,6 +270,7 @@ export function historyObservations(
   metricIndex: number,
 ): Observation[] {
   const metric = chartMetrics[metricIndex] ?? chartMetrics[0];
+  if (!view.history.result?.enabled) return [];
   return (
     view.history.result?.data.series
       .flatMap<Observation>((series) =>
@@ -320,16 +322,17 @@ export function terminalHistory(
   const selected =
     observations[Math.min(sample, Math.max(0, observations.length - 1))];
   return [
-    `History: ${h.status}${h.stale ? " · stale cached results" : ""} · ${h.windowMs / 60000} minutes · ${metric.label} (${metric.unit})`,
+    `History: ${h.status} · ${h.windowMs / 60000} minutes · ${metric.label} (${metric.unit})`,
+    ...historyStatusLines(h),
     "Left/Right metric · w window · [/] exact sample/request · Up/Down scroll",
     "Retention bounded to seven days; maximum 500 points and 500 requests per session.",
     ...h.notices,
-    ...(h.summary
+    ...(h.result?.enabled && h.summary
       ? [
           `Matched requests ${h.summary.matchedRequests}/${h.summary.observedRequests}; output ${scalar(h.summary.outputTokens)}; duration ms ${scalar(h.summary.durationMs)}; average model TPS ${scalar(h.summary.averageModelTps)}${h.summary.partial ? " · partial" : ""}`,
         ]
       : []),
-    ...(h.from === undefined || h.to === undefined
+    ...(!h.result?.enabled || h.from === undefined || h.to === undefined
       ? []
       : [
           `${new Date(h.from).toISOString()} → ${new Date(h.to).toISOString()}`,
@@ -353,9 +356,11 @@ export function terminalHistory(
           ),
           `Selected ${metric.label}: ${scalar(selected.value)} ${metric.unit}`,
         ]
-      : [
-          "No retained measurements for this metric; values unknown/unavailable.",
-        ]),
+      : h.status === "ready" && h.result?.enabled
+        ? [
+            "No retained measurements for this metric; values unknown/unavailable.",
+          ]
+        : []),
   ];
 }
 

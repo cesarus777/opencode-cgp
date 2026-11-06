@@ -1,3 +1,4 @@
+import { checkedHistory, historyFailure } from "../historyclient.ts";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { SessionInfo } from "@opencode/client";
 import { createSignal } from "solid-js";
@@ -6,7 +7,6 @@ import {
   performanceRpc,
   isPerformanceResult,
   historyRpc,
-  isHistoryResult,
 } from "../rpc.ts";
 import {
   executionStatus,
@@ -326,18 +326,27 @@ export function createGuardState(context: Plugin.Context) {
   return {
     version,
     acquire,
-    async history(id: string, from: number, to: number, signal: AbortSignal) {
+    historyLocation(id: string) {
+      version();
       const info = inventory?.sessions.get(id);
-      if (!info) throw new Error("Session location unavailable");
-      const result = await context.client
-        .rpc(historyRpc)
-        .read(
-          { schemaVersion: 1, sessionId: id, from, to, maxPoints: 240 },
-          { location: info.location, signal },
+      return info ? locationKey(info.location) : "unknown";
+    },
+    async history(id: string, from: number, to: number, signal: AbortSignal) {
+      try {
+        const info = inventory?.sessions.get(id);
+        if (!info) throw new Error("Session location unavailable");
+        return checkedHistory(
+          await context.client
+            .rpc(historyRpc)
+            .read(
+              { schemaVersion: 1, sessionId: id, from, to, maxPoints: 240 },
+              { location: info.location, signal },
+            ),
+          id,
         );
-      if (!isHistoryResult(result))
-        throw new Error("Incompatible history service");
-      return result;
+      } catch (error) {
+        throw historyFailure(error, signal);
+      }
     },
     rows,
     contextTrace: (row: GuardRow | undefined) => contextTraces.update(row),

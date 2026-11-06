@@ -4,7 +4,7 @@ Date: 2026-11-06. Status: implemented; validation is recorded in the [delivery r
 
 ## Recommendation
 
-UX-09 follows delivered UX-01 through UX-08. The original recommendation was to finish primary vocabulary before changing chart failure/recovery behavior; UX-10 remains the next open item. This is a bounded presentation increment across the native sidebar, native panel, and standalone session dashboard.
+UX-09 follows delivered UX-01 through UX-08. The original recommendation was to finish primary vocabulary before changing chart failure/recovery behavior; UX-10 has since been [delivered](../validation/chart-failure-recovery-2026-11-07.md). This is a bounded presentation increment across the native sidebar, native panel, and standalone session dashboard.
 
 Users should be able to explain where a context measurement came from, whether it is usable, and what a compaction state means without interpreting internal codes. Keep exact values in labeled diagnostics for troubleshooting. Preserve the compact layouts, threshold semantics, controls, and selected-session behavior already delivered.
 
@@ -97,4 +97,4 @@ Write a separate validation report using the actual delivery date, then mark UX-
 
 No scheduler, policy, accounting, persistence, telemetry, transport, RPC/schema, public export, dependency, version or publication changes are needed. Use existing host APIs. Package-install checks are required only if distribution boundaries change.
 
-UX-10 remains next: distinguish unsupported history capability from transient failures, preserve clearly marked stale results only for the matching query, and make retry accurate. It needs its own error/state investigation and cancellation tests; changing the generic error message alone would not complete it.
+UX-10 subsequently delivered error classification, matching-query retention, and accurate retry behavior with its own request-state and cancellation tests. See the [chart recovery plan](chart-failure-recovery.md) and [delivery report](../validation/chart-failure-recovery-2026-11-07.md).

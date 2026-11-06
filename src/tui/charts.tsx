@@ -1,8 +1,9 @@
-import { createEffect, createSignal, onCleanup, For } from "solid-js";
+import { createEffect, createSignal, on, onCleanup, For } from "solid-js";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { GuardState } from "./state.ts";
 import { historyChartLines } from "./chartformat.ts";
-import type { HistoryChartResult } from "../historycharts.ts";
+import { historyStatusLines } from "../historyclient.ts";
+import { HistoryState, type HistoryView } from "./historystate.ts";
 import { wrap } from "./format.ts";
 export function HistoryCharts(props: {
   sessionId: string;
@@ -13,62 +14,42 @@ export function HistoryCharts(props: {
   state: GuardState;
   context: Plugin.Context;
 }) {
-  const [result, setResult] = createSignal<HistoryChartResult>();
-  const [status, setStatus] = createSignal("Loading retained history...");
-  const [range, setRange] = createSignal({ from: 0, to: 0 });
-  createEffect(() => {
-    const id = props.sessionId,
-      windowMs = props.windowMs;
-    props.refresh;
-    let pending = false,
-      disposed = false;
-    let controller: AbortController | undefined;
-    setResult(undefined);
-    async function read() {
-      if (pending || disposed) return;
-      pending = true;
-      controller = new AbortController();
-      const to = Date.now(),
-        from = Math.max(0, to - windowMs);
-      try {
-        const next = await props.state.history(
-          id,
-          from,
-          to,
-          AbortSignal.any([controller.signal, AbortSignal.timeout(5000)]),
-        );
-        if (!disposed) {
-          setResult(next);
-          setRange({ from, to });
-          setStatus("");
-        }
-      } catch {
-        if (!disposed)
-          setStatus(
-            "History unavailable. The owning server must support chart history RPC. Press r to retry.",
-          );
-      } finally {
-        pending = false;
-      }
-    }
-    void read();
-    const timer = setInterval(() => {
-      void read();
-    }, 5000);
-    onCleanup(() => {
-      disposed = true;
-      controller?.abort();
-      clearInterval(timer);
-    });
+  const [view, setView] = createSignal<HistoryView>({
+    status: "loading",
+    stale: false,
   });
+  const history = new HistoryState({
+    read: (id, from, to, signal) => props.state.history(id, from, to, signal),
+    changed: setView,
+  });
+  createEffect(
+    on(
+      () =>
+        [
+          props.sessionId,
+          props.windowMs,
+          props.state.historyLocation(props.sessionId),
+        ] as const,
+      ([sessionId, windowMs, location]) =>
+        history.setQuery({ sessionId, windowMs, location }),
+    ),
+  );
+  createEffect(
+    on(
+      () => props.refresh,
+      () => history.refresh(),
+      { defer: true },
+    ),
+  );
+  onCleanup(() => history.dispose());
   const lines = () => {
-    const current = result();
+    const current = view().result;
     return current
       ? historyChartLines(
           current,
           Math.max(4, props.width),
-          range().from,
-          range().to,
+          view().from ?? 0,
+          view().to ?? 0,
           props.metricIndex,
         )
       : [];
@@ -93,7 +74,11 @@ export function HistoryCharts(props: {
       >
         {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
       </For>
-      <For each={wrap(status(), props.width)}>
+      <For
+        each={historyStatusLines(view()).flatMap((line) =>
+          wrap(line, props.width),
+        )}
+      >
         {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
       </For>
       <box flexDirection="column" paddingTop={1}>

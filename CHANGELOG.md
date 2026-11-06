@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Distinguish missing history service, timeout, incompatible response, rejected request and temporary failure in native Charts and standalone History. Preserve matching previous results with their successful-load timestamp and original range during refresh/failure; provide accurate keyboard retry without exposing server errors.
+- Coalesce native chart retries, discard obsolete responses, pause polling when recording/service compatibility needs attention, and keep refresh visible at narrow widths. Validate UX-10 with 233 offline tests and native/standalone synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2; see the [chart recovery delivery record](docs/validation/chart-failure-recovery-2026-11-07.md).
+
 - Use plain-language measurement and compaction labels across the native sidebar/panel and standalone session dashboard. Distinguish provider-reported, estimated, stale, missing and unusable readings, accepted requests, context-reduction checks and unconfirmed completion.
 - Lead Details with readable explanations and a performance glossary while retaining exact diagnostic codes and accounting fields. Clarify context-chart legends with “Dim = last known context” and “┄ threshold”; preserve trace geometry and compaction semantics.
 - Validate UX-09 with 222 offline tests and native/standalone synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2. The sidebar fixture occupies 22 lines at 39 columns and 23 at 35 columns. See the [terminology delivery record](docs/validation/plain-language-terminology-2026-11-07.md).

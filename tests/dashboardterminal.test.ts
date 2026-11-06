@@ -14,6 +14,7 @@ import {
 } from "../src/dashboard/terminalview.ts";
 import { cells } from "../src/tui/format.ts";
 import { terminalFixture } from "./fixtures/dashboard-terminal.ts";
+import type { HistoryFailureReason } from "../src/historyclient.ts";
 
 async function settle(check: () => boolean) {
   for (let i = 0; i < 100; i++) {
@@ -22,6 +23,88 @@ async function settle(check: () => boolean) {
   }
   throw new Error("terminal fixture did not settle");
 }
+
+test("terminal history puts accurate recovery messages before retained charts and omits phantom empty results", async () => {
+  const { controller } = terminalFixture();
+  try {
+    await controller.start();
+    controller.setScreen("history");
+    await settle(() => controller.getView().history.status === "ready");
+    const view = controller.getView();
+    for (const reason of [
+      "unsupported",
+      "timeout",
+      "incompatible",
+      "rejected",
+      "unavailable",
+    ] satisfies HistoryFailureReason[]) {
+      const failed = {
+        ...view,
+        history: {
+          ...view.history,
+          status: "unavailable" as const,
+          reason,
+          stale: true,
+        },
+      };
+      for (const width of [20, 40, 80]) {
+        const text = terminalHistory(failed, width, 0, 0).join("\n");
+        expect(text).toContain("Press r");
+        expect(text).toContain("Showing previous results · last loaded");
+        expect(text.indexOf("Showing previous results")).toBeLessThan(
+          text.indexOf("│"),
+        );
+        expect(text).not.toContain("NaN");
+      }
+    }
+    const {
+      result: _,
+      loadedAt: __,
+      from: ___,
+      to: ____,
+      summary: _____,
+      ...noResult
+    } = view.history;
+    const initial = terminalHistory(
+      {
+        ...view,
+        history: {
+          ...noResult,
+          status: "unavailable",
+          reason: "timeout",
+          stale: true,
+        },
+      },
+      40,
+      0,
+      0,
+    ).join(" ");
+    expect(initial).toContain("timed out");
+    expect(initial).not.toContain("previous results");
+    expect(initial).not.toContain("No retained measurements");
+    expect(initial).not.toContain("│");
+    const result = view.history.result;
+    if (!result) throw new Error("Expected retained history");
+    const disabled = terminalHistory(
+      {
+        ...view,
+        history: {
+          ...view.history,
+          status: "disabled",
+          result: { ...result, enabled: false },
+        },
+      },
+      80,
+      0,
+      0,
+    ).join(" ");
+    expect(disabled).toContain("configuration changes");
+    expect(disabled).not.toContain("│");
+    expect(disabled).not.toContain("Exact sample");
+  } finally {
+    controller.stop();
+  }
+});
 
 test("dashboard command validates mode/options and keeps server paths and credentials scoped", () => {
   expect(

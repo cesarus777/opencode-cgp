@@ -149,7 +149,9 @@ try:
             key("\x1b[C")
             expect(name)
         key("]")
-        assert action("counts")["historyReads"] == baseline["historyReads"], "metric/sample changes must not read history"
+        after = action("counts")
+        # The production controller refreshes inventory/history every 30 seconds.
+        assert after["historyReads"] - baseline["historyReads"] <= after["inventoryReads"] - baseline["inventoryReads"], "metric/sample changes must not add history reads beyond periodic refresh"
         assert action("counts")["streams"] == baseline["streams"], "navigation must not add streams"
         key("1")
         key("/")
@@ -161,6 +163,18 @@ try:
         key("w")
         expect(str(minutes) + " minutes")
         expect("History: ready")
+    for mode, message in [("unsupported", "History service is unavailable"), ("transient", "History could not be loaded"), ("timeout", "History request timed out")]:
+        action("history-" + mode)
+        key("r")
+        expect(message)
+        expect("Showing previous results")
+        expect("last loaded")
+        assert "private-history-error-canary" not in output, "history error privacy"
+        action("history-none")
+        key("r")
+        expect("History: ready")
+        assert "Showing previous results" not in frame(), "retry clears stale history warning"
+    print("PASS: standalone history missing capability, transient failure, timeout, retained results and retry")
     action("analytics")
     key("4")
     expect("Models")
@@ -174,7 +188,8 @@ try:
         key("\x1b[C")
         expect(name)
     key("]")
-    assert action("counts")["analyticsReads"] == baseline["analyticsReads"], "metric/bucket navigation must not query analytics"
+    after = action("counts")
+    assert after["analyticsReads"] - baseline["analyticsReads"] <= after["inventoryReads"] - baseline["inventoryReads"], "metric/bucket navigation must not add analytics reads beyond periodic refresh"
     key("d")
     expect("Request page 1")
     key("d")

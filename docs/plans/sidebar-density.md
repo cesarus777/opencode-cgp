@@ -4,7 +4,7 @@ Date: 2026-11-06. Status: implemented; see the [delivery record](../validation/s
 
 ## Original recommendation and investigation
 
-The investigation selected sidebar density next. UX-01 through UX-06 already had delivery records linked from the review; UX-07 was next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) has since been [delivered](../validation/plain-language-terminology-2026-11-07.md). Chart-error recovery (UX-10) remains the next increment. Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
+The investigation selected sidebar density next. UX-01 through UX-06 already had delivery records linked from the review; UX-07 was next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) has since been [delivered](../validation/plain-language-terminology-2026-11-07.md). Chart-error recovery (UX-10) has since been [delivered](../validation/chart-failure-recovery-2026-11-07.md). Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
 
 The sidebar should answer which session is running, its context occupancy, which descendant needs attention, and what Guard can do. Default to a short summary and descendant tree; make history optional and move performance and aggregate diagnostics into panel Details.
 

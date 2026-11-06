@@ -1,7 +1,11 @@
 import { familyRows, executionStatus } from "../family.ts";
 import type { ContextSnapshot, MonitorHealth } from "../snapshot.ts";
 import type { HistoryChartResult } from "../historycharts.ts";
-import { isHistoryResult } from "../rpc.ts";
+import {
+  checkedHistory,
+  historyFailure,
+  type HistoryFailureReason,
+} from "../historyclient.ts";
 import { SnapshotClient, type Connection } from "../tui/transport.ts";
 import {
   discoverInventory,
@@ -43,6 +47,7 @@ interface LocationState {
   probing?: Promise<void>;
 }
 interface CachedHistory {
+  loadedAt: number;
   directory: string;
   valid: boolean;
   result: HistoryChartResult;
@@ -85,6 +90,7 @@ export class DashboardController {
   private pendingHistory: HistoryTask | undefined;
   private historyAbort: AbortController | undefined;
   private historyBusy = false;
+  private historyReason: HistoryFailureReason | undefined;
   private historyStatus: DashboardHistory["status"] = "idle";
   private refreshTimer: ReturnType<typeof setInterval> | undefined;
   private ageTimer: ReturnType<typeof setInterval> | undefined;
@@ -407,6 +413,7 @@ export class DashboardController {
   }
   private cancelHistory() {
     this.historyGeneration++;
+    this.historyReason = undefined;
     this.pendingHistory = undefined;
     this.historyAbort?.abort();
   }
@@ -467,13 +474,10 @@ export class DashboardController {
         signal,
       );
       if (signal.aborted || task.generation !== this.historyGeneration) return;
-      if (
-        !isHistoryResult(result) ||
-        result.data.series.some((series) => series.sessionId !== task.sessionId)
-      )
-        throw new Error("Invalid history response");
+      checkedHistory(result, task.sessionId);
       this.cache.set(task.key, {
         directory: task.state.port.location.directory,
+        loadedAt: this.now(),
         valid: true,
         result: structuredClone(result),
         from,
@@ -484,16 +488,20 @@ export class DashboardController {
         if (oldest !== undefined) this.cache.delete(oldest);
       }
       this.historyStatus = result.enabled ? "ready" : "disabled";
-    } catch {
-      if (task.generation === this.historyGeneration && !task.scope.aborted)
+    } catch (error) {
+      if (task.generation === this.historyGeneration && !task.scope.aborted) {
         this.historyStatus = "unavailable";
+        this.historyReason = historyFailure(error, signal).reason;
+      }
     } finally {
       if (
         task.generation === this.historyGeneration &&
         signal.aborted &&
         !task.scope.aborted
-      )
+      ) {
         this.historyStatus = "unavailable";
+        this.historyReason = historyFailure(undefined, signal).reason;
+      }
       this.historyBusy = false;
       if (this.historyAbort === controller) this.historyAbort = undefined;
       if (this.running) this.publish();
@@ -614,6 +622,7 @@ export class DashboardController {
       ...(selected ? { selected } : {}),
       history: {
         status: this.historyStatus,
+        ...(this.historyReason ? { reason: this.historyReason } : {}),
         windowMs: this.windowMs,
         maxWindowMs: 604800000,
         maxPoints: 500,
@@ -622,7 +631,9 @@ export class DashboardController {
           this.historyStatus === "unavailable" ||
           !this.running,
         ...(state.selected ? { sessionId: state.selected } : {}),
-        ...(cached ? { from: cached.from, to: cached.to } : {}),
+        ...(cached
+          ? { from: cached.from, to: cached.to, loadedAt: cached.loadedAt }
+          : {}),
         ...(projected
           ? { result: projected.result, summary: projected.summary }
           : {}),

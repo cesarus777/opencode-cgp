@@ -1,3 +1,4 @@
+import { checkedHistory, historyFailure } from "../historyclient.ts";
 import { OpenCode } from "@opencode/client";
 import { Service, type Endpoint } from "@opencode/client/service";
 import { isAbsolute } from "node:path";
@@ -8,7 +9,6 @@ import {
   isResult,
   isPerformanceResult,
   isHistoryRead,
-  isHistoryResult,
   analyticsRpc,
   isAnalyticsRead,
   isAnalyticsResult,
@@ -267,16 +267,14 @@ export async function connectDashboard(
           throw new Error(
             "History requires one session, at most seven days and 16–500 points",
           );
+        const requestSignal = deadline(signal);
         try {
           const result = await client
             .rpc(historyRpc)
-            .read(input, { location, signal: deadline(signal) });
-          if (!isHistoryResult(result)) throw new Error();
-          return result;
-        } catch {
-          throw new Error(
-            "Context Guard history unavailable or incompatible in this location",
-          );
+            .read(input, { location, signal: requestSignal });
+          return checkedHistory(result, input.sessionId);
+        } catch (error) {
+          throw historyFailure(error, requestSignal);
         }
       },
     };

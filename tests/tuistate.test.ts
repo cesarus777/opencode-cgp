@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import type { Plugin } from "@opencode/plugin/tui";
 import { createGuardState, sameLocation } from "../src/tui/state.ts";
 import { session } from "./fixtures/session.ts";
+import { retainedHistory } from "./fixtures/history.ts";
+import { SnapshotStore } from "../src/snapshot.ts";
+import { parseConfig } from "../src/config.ts";
+import { HistoryFailure } from "../src/historyclient.ts";
 
 async function until(check: () => boolean) {
   for (let i = 0; i < 100; i++) {
@@ -10,6 +14,78 @@ async function until(check: () => boolean) {
   }
   throw new Error("State did not settle");
 }
+
+test("native history uses the owning location and sanitizes missing RPC and incompatible responses", async () => {
+  const info = session("r");
+  const baseline = new SnapshotStore(
+    parseConfig({ enabled: false }),
+    () => new Map(),
+  ).read({ schemaVersion: 1, sessionIds: [] });
+  let response: unknown = retainedHistory("r");
+  let failure: unknown;
+  let location: unknown;
+  const state = createGuardState({
+    client: {
+      session: { get: async () => info, list: async () => ({ data: [] }) },
+      rpc: (definition: { id: string }) => ({
+        read: async (_input: unknown, options: { location: unknown }) => {
+          if (definition.id.includes("history")) {
+            location = options.location;
+            if (failure) throw failure;
+            return response;
+          }
+          return baseline;
+        },
+        events: {
+          subscribe: async function* (
+            _name: string,
+            { signal }: { signal: AbortSignal },
+          ) {
+            await new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+              if (signal.aborted) resolve();
+            });
+          },
+        },
+      }),
+    },
+    data: {
+      session: { get: () => info, status: () => "idle" },
+      listen: () => () => {},
+    },
+    storage: { store: () => [{ expanded: [] }, async () => {}] },
+  } as unknown as Plugin.Context);
+  const consumer = state.acquire("r");
+  try {
+    await until(() => state.complete());
+    expect(state.historyLocation("r")).toContain("/test");
+    expect(
+      await state.history("r", 0, 1000000, new AbortController().signal),
+    ).toEqual(retainedHistory("r"));
+    expect(location).toEqual(info.location);
+    failure = { type: "rpc.method_not_found", message: "private-canary" };
+    try {
+      await state.history("r", 0, 1000000, new AbortController().signal);
+      throw new Error("Expected failure");
+    } catch (error) {
+      expect(error).toBeInstanceOf(HistoryFailure);
+      if (error instanceof HistoryFailure)
+        expect(error.reason).toBe("unsupported");
+      expect(String(error)).not.toContain("private-canary");
+    }
+    failure = undefined;
+    response = retainedHistory("foreign");
+    await expect(
+      state.history("r", 0, 1000000, new AbortController().signal),
+    ).rejects.toThrow("History incompatible");
+    await expect(
+      state.history("unknown", 0, 1000000, new AbortController().signal),
+    ).rejects.toThrow("History unavailable");
+  } finally {
+    consumer.release();
+    state.dispose();
+  }
+});
 test("sidebar and panel share one visible transport and repeated disposal aborts work", async () => {
   let reads = 0,
     active = 0,

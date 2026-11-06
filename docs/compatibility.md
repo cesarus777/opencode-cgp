@@ -72,6 +72,8 @@ Both `context-guard.monitor.v1` and `.v2` are served; v1 retains its closed payl
 
 Charts require retained scalar history. Existing history records remain readable without migration. The updated terminal chart mode needs `context-guard.history.v1` on the owning server; older servers keep live/context views and show an unavailable-history message. Offline reports require JavaScript for interaction and embed all selected scalar identities/metrics; no external assets or service are used. Native chart formatting/rendering and HTML generation are tested offline; this does not certify a live remote provider.
 
+The [2026-11-07 chart recovery validation](validation/chart-failure-recovery-2026-11-07.md) records UX-10 error classification, matching-query retention, retry, cancellation, and polling evidence. Missing history registration is distinguished from temporary failure without asserting permanent host incompatibility. Raw server errors are suppressed. The history RPC/archive contracts and enforcement behavior are unchanged; chart recovery does not extend provider, remote, or platform certification.
+
 ## Standalone terminal
 
 `context-guard dashboard tui` uses one shared dashboard controller and the existing monitor/history RPCs, independently of the native TUI. Its terminal runtime is Bun >=1.3.0; the pinned `@opentui/core@0.5.17` renderer is installed automatically with the package. Keep optional platform dependencies enabled. It uses public core text rendering without Solid or `@opencode/plugin/tui`. Renderer loading stays dynamic in the built CLI, and preflight failures occur before alternate-screen takeover. Existing server/core/diagnostic commands retain Bun >=1.1.34 support and require no renderer peers. The SDK remains pinned to 2.0.29.
