@@ -78,6 +78,21 @@ export function HistoryCharts(props: {
       <For each={wrap(`Performance charts · ${props.sessionId}`, props.width)}>
         {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
       </For>
+      <For
+        each={wrap(
+          `Window: ${
+            new Map([
+              [300000, "5 minutes"],
+              [3600000, "1 hour"],
+              [86400000, "24 hours"],
+              [604800000, "7 days"],
+            ]).get(props.windowMs) ?? `${props.windowMs / 60000} minutes`
+          } · [ / ] changes`,
+          props.width,
+        )}
+      >
+        {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
+      </For>
       <For each={wrap(status(), props.width)}>
         {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
       </For>

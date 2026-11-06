@@ -44,6 +44,8 @@ The inspected host controls sidebar visibility and suppresses it for child route
 
 The actual local server/TUI passed authenticated RPC reads/live updates, root sidebar rendering, slash access, child/grandchild navigation, child panel actions and 160×50, 80×30 and 40×20 terminal layouts with synthetic provider usage. Startup catalog recovery was verified and regression-tested. Real-provider compaction, cross-machine remote TUI, tmux, Neovim terminal and long-running resource behavior remain unverified. Unknown/evicted historical sessions do not acquire fabricated measurements. Reconnecting the UI never re-enables enforcement suspended by a server event-stream gap.
 
+The [2026-11-06 native overview validation](validation/native-panel-overview-2026-11-06.md) additionally covers the Overview/Details/Charts layout and controls. Offline geometry includes 80×24, 40×20 and 20×12 panels; actual OpenCode 2.1.2 synthetic-provider PTY checks cover slash entry, chart controls, family selection, resizing and cleanup. This increment retains the pinned 2.0.29 SDK baseline without claiming a new interactive 2.0.29 certification. Existing remote, terminal-environment and genuine-provider limitations still apply.
+
 ## npm distribution verification
 
 The prepared package is `@cesarus777/opencode-cgp@0.1.0`; the unscoped name belongs to another project. Package identity does not change the plugin ID, options, RPC contract or diagnostic storage locations.

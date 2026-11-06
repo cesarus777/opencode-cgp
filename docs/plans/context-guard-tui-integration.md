@@ -2,6 +2,8 @@
 
 Planning baseline: 2026-10-15. Status: implemented with offline validation on 2026-10-16; local live-host checks now pass with a synthetic provider; external-provider/environment gates remain open. The architecture/evidence below retains the original planning baseline. See [validation results](../testing.md#native-tui-offline-and-transport-checks) and [runtime controls and bounds](../configuration.md#native-context-guard-view). Follow the repository's Markdown/Prettier conventions. New paths below are proposed files, not claims that those files already exist.
 
+The original expanded-panel layout below is superseded by the [native panel overview implementation](native-panel-overview.md) and its [2026-11-06 validation](../validation/native-panel-overview-2026-11-06.md). Use [current configuration](../configuration.md#native-context-guard-view) for Overview, Details, Charts and keyboard behavior; the original design and evidence remain below for historical context.
+
 ## A. Executive summary
 
 Native integration is feasible on the repository's pinned OpenCode V2 **2.0.29** SDK and matching inspected host source. The installed `@opencode/plugin` package exports `./tui`; its declarations support `Plugin.define`, Solid/OpenTUI components, and `context.ui.slot({ append: "sidebar.content", render })`. Public RPC methods and RPC events support a server-to-TUI bridge without files, a custom port, or a fork.

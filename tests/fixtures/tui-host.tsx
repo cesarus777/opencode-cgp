@@ -5,6 +5,8 @@ import type { Plugin } from "@opencode/plugin/tui";
 import type { KeymapLayer } from "@opencode/plugin/tui/context";
 import { ContextTraceStore } from "../../src/tui/contextchart.ts";
 import type { GuardState } from "../../src/tui/state.ts";
+import type { MonitorHealth } from "../../src/snapshot.ts";
+import { metric } from "../../src/family.ts";
 import type { GuardRow } from "../../src/family.ts";
 import { GuardPanel } from "../../src/tui/panel.tsx";
 import { sidebarFamily } from "./sidebar.ts";
@@ -14,7 +16,8 @@ import assert from "node:assert/strict";
 const [sessionID, setSessionID] = createSignal("s0");
 const [width, setWidth] = createSignal(40);
 const [focused, setFocused] = createSignal(true);
-let consumers = 0,
+let acquisitions = 0,
+  consumers = 0,
   closed = false,
   destination = "";
 const family: GuardRow[] = Array.from({ length: 150 }, (_, i) => ({
@@ -29,6 +32,17 @@ const chartSnapshot = sidebarFamily()[0]?.snapshot;
 assert.ok(chartSnapshot);
 const firstRow = family[0];
 assert.ok(firstRow);
+const [health, setHealth] = createSignal<MonitorHealth>({
+  enabled: true,
+  mode: "observe",
+  enforcement: "observing",
+  reasons: [],
+  staleMs: 300000,
+  maxSessions: 1024,
+});
+let refreshes = 0,
+  loads = 0;
+const [complete, setComplete] = createSignal(true);
 const historyReads: { sessionId: string; windowMs: number }[] = [];
 const traceStore = new ContextTraceStore();
 const state: GuardState = {
@@ -76,6 +90,7 @@ const state: GuardState = {
     };
   },
   acquire: () => {
+    acquisitions++;
     consumers++;
     return {
       update() {},
@@ -87,11 +102,15 @@ const state: GuardState = {
   rows: () => family,
   dispose() {},
   age: () => 0,
-  health: () => undefined,
+  health,
   connection: () => "live",
-  complete: () => true,
-  refresh() {},
-  loadMore() {},
+  complete,
+  refresh() {
+    refreshes++;
+  },
+  loadMore() {
+    loads++;
+  },
   expand() {},
 };
 let layer: (() => KeymapLayer) | undefined;
@@ -151,7 +170,7 @@ const host = await testRender(
 );
 try {
   Object.assign(context, { renderer: host.renderer });
-  await host.renderOnce();
+  await host.flush();
   assert.equal(consumers, 1);
   assert.match(host.captureCharFrame(), /Context Guard/);
   assert.ok(
@@ -162,14 +181,22 @@ try {
     "panel has horizontal padding",
   );
   assert.match(host.captureCharFrame(), /q close/);
+  assert.doesNotMatch(host.captureCharFrame(), /100%│|Provenance|Cumulative/);
   const run = (id: string) => {
     const command = layer?.().commands?.find((command) => command.id === id);
     assert.ok(command);
     return command.run();
   };
   for (let i = 0; i < 120; i++) run("context-guard.next");
-  await host.renderOnce();
+  await host.flush();
   assert.match(host.captureCharFrame(), /agent120/);
+  assert.ok(
+    host
+      .captureCharFrame()
+      .split("\n")
+      .some((line) => line.includes("agent120") && line.includes(">")),
+    "selected row remains visible after windowing",
+  );
   assert.doesNotMatch(host.captureCharFrame(), /agent0 RUN/);
   assert.match(
     host.captureCharFrame(),
@@ -179,15 +206,15 @@ try {
   host.resize(40, 28);
   run("context-guard.charts");
   await Bun.sleep(5);
-  await host.renderOnce();
+  await host.flush();
   assert.match(host.captureCharFrame(), /Performance charts/);
   assert.match(host.captureCharFrame(), /Live TPS/);
   assert.doesNotMatch(host.captureCharFrame(), /Avg model/);
-  assert.match(host.captureCharFrame(), /c back · q close/);
-  assert.match(host.captureCharFrame(), /← \/ → metric/);
+  assert.match(host.captureCharFrame(), /c back · i details · q close/);
+  assert.match(host.captureCharFrame(), /←\/→ metric/);
   const readsBeforeMetric = historyReads.length;
   run("context-guard.chart-next");
-  await host.renderOnce();
+  await host.flush();
   assert.match(host.captureCharFrame(), /Avg model/);
   assert.doesNotMatch(host.captureCharFrame(), /Live TPS/);
   assert.equal(
@@ -197,17 +224,22 @@ try {
   );
   run("context-guard.chart-previous");
   run("context-guard.chart-previous");
-  await host.renderOnce();
+  await host.flush();
   assert.match(host.captureCharFrame(), /Cumulative output/);
   run("context-guard.chart-next");
   assert.equal(consumers, 1);
   assert.equal(historyReads.at(-1)?.sessionId, "s120");
+  assert.equal(
+    acquisitions,
+    1,
+    "view switches do not reacquire the panel consumer",
+  );
   run("context-guard.chart-longer");
   await Bun.sleep(5);
-  await host.renderOnce();
+  await host.flush();
   assert.equal(historyReads.at(-1)?.windowMs, 86400000);
   run("context-guard.charts");
-  await host.renderOnce();
+  await host.flush();
   assert.doesNotMatch(host.captureCharFrame(), /Performance charts/);
   run("context-guard.close");
   assert.equal(closed, true);
@@ -218,7 +250,7 @@ try {
   setSessionID("s3");
   setWidth(20);
   host.resize(20, 50);
-  await host.renderOnce();
+  await host.flush();
   assert.match(host.captureCharFrame(), /agent3/);
   setFocused(false);
   const enabled = layer?.().enabled;
@@ -230,27 +262,165 @@ assert.equal(consumers, 0);
 setSessionID("s0");
 setWidth(40);
 setFocused(true);
-const chartRows: GuardRow[] = [
-  {
-    ...firstRow,
-    snapshot: { ...chartSnapshot, sessionId: "s0" },
-    freshness: "fresh",
-    pressure: "normal",
+const root: GuardRow = {
+  ...firstRow,
+  node: { ...firstRow.node, agent: "Main", model: "deepseek-flash" },
+  snapshot: { ...chartSnapshot, sessionId: "s0" },
+  ...metric(chartSnapshot, 4000, 300000),
+};
+const childSnapshot = {
+  ...chartSnapshot,
+  sessionId: "child",
+  parentId: "s0",
+  agent: "explore",
+};
+const child: GuardRow = {
+  ...root,
+  node: {
+    sessionId: "child",
+    parentId: "s0",
+    agent: "explore",
+    status: "running",
   },
-];
+  snapshot: childSnapshot,
+  current: false,
+  depth: 1,
+};
+const [chartRows, setChartRows] = createSignal<GuardRow[]>([root, child]);
+Object.assign(context, { renderer: undefined });
 const chartHost = await testRender(
   () => (
     <GuardPanel
       input={input}
       context={context}
-      state={{ ...state, rows: () => chartRows }}
+      state={{ ...state, rows: chartRows }}
     />
   ),
-  { width: 40, height: 50 },
+  { width: 40, height: 20 },
 );
+Object.assign(context, { renderer: chartHost.renderer });
+const run = (id: string) => {
+  const command = layer?.().commands?.find((command) => command.id === id);
+  assert.ok(command);
+  command.run();
+};
 try {
-  await chartHost.renderOnce();
-  await chartHost.renderOnce();
+  await chartHost.flush();
+  let frame = chartHost.captureCharFrame();
+  assert.match(frame, /Selected: Main/);
+  assert.match(frame, /112K\/500K/);
+  assert.match(frame, /48K below/);
+  assert.match(frame, /explore/);
+  assert.doesNotMatch(frame, /100%│|Provenance|Cumulative/);
+  assert.equal(consumers, 1);
+  // Footer actions are independent mouse targets, sharing the keyboard transitions.
+  const clickAction = async (label: string) => {
+    const lines = chartHost.captureCharFrame().split("\n");
+    const y = lines.findIndex((line) => line.includes(label));
+    assert.ok(y >= 0);
+    const x = lines[y]?.indexOf(label) ?? -1;
+    assert.ok(x >= 0);
+    await chartHost.mockMouse.click(x + 1, y);
+    await chartHost.flush();
+  };
+  await clickAction("c charts");
+  assert.match(chartHost.captureCharFrame(), /Performance charts/);
+  await clickAction("i details");
+  assert.match(chartHost.captureCharFrame(), /Context history/);
+  await clickAction("i back");
+  assert.match(chartHost.captureCharFrame(), /Selected: Main/);
+  // Inspecting the current session is now an explicit view with keyboard reachability.
+  run("context-guard.inspect");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Context history/);
+  run("context-guard.last");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Native Context uses different/);
+  run("context-guard.first");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Context history/);
+  run("context-guard.inspect");
+  run("context-guard.next");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Selected: explore/);
+  run("context-guard.inspect");
+  await chartHost.flush();
+  run("context-guard.last");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Main \/ explore/);
+  run("context-guard.charts");
+  await Bun.sleep(5);
+  await chartHost.flush();
+  assert.equal(historyReads.at(-1)?.sessionId, "child");
+  run("context-guard.charts");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Selected: explore/);
+  assert.equal(consumers, 1, "view switches preserve one consumer");
+  assert.equal(acquisitions, 2);
+  // Value/order changes preserve identity; removal falls back to the route session.
+  setChartRows([child, root]);
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Selected: explore/);
+  setChartRows([root]);
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Selected: Main/);
+  setChartRows([]);
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /No sessions/);
+  closed = false;
+  run("context-guard.open");
+  assert.equal(closed, false, "empty family cannot navigate");
+  setChartRows([root, child]);
+  // Conditional load-more and refresh actions retain their existing state ports.
+  run("context-guard.load-more");
+  assert.equal(loads, 0);
+  setComplete(false);
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /partial/);
+  run("context-guard.load-more");
+  assert.equal(loads, 1);
+  run("context-guard.refresh");
+  assert.equal(refreshes, 1);
+  setComplete(true);
+  // Critical enforcement state remains visible through every view and refresh.
+  setHealth({
+    ...health(),
+    enforcement: "suspended",
+    reasons: ["event-stream-gap"],
+  });
+  await chartHost.flush();
+  assert.match(
+    chartHost.captureCharFrame(),
+    /Guard suspended · reload required/,
+  );
+  run("context-guard.inspect");
+  await chartHost.flush();
+  assert.match(
+    chartHost.captureCharFrame(),
+    /Guard suspended · reload required/,
+  );
+  run("context-guard.inspect");
+  setHealth({ ...health(), enforcement: "observing", reasons: [] });
+  // Use the measured container height, including a tiny terminal fallback.
+  for (const [w, h] of [
+    [80, 24],
+    [40, 20],
+    [20, 12],
+  ]) {
+    setWidth(w ?? 40);
+    chartHost.resize(w ?? 40, h ?? 20);
+    await chartHost.flush();
+    await chartHost.flush();
+    frame = chartHost.captureCharFrame();
+    assert.match(frame, /q close/);
+    assert.match(frame, /i (details|info)/);
+    assert.match(frame, /Main/);
+    assert.match(frame, /explore/, `family remains visible at ${w}×${h}`);
+  }
+  setWidth(40);
+  chartHost.resize(40, 50);
+  run("context-guard.inspect");
+  await chartHost.flush();
   const initialFrame = chartHost.captureCharFrame().split("\n");
   const chartTop = initialFrame.findIndex((line) => line.includes("100%│"));
   assert.ok(chartTop >= 0);
@@ -261,6 +431,7 @@ try {
     "┘",
     "chart uses nine rows without line wrapping",
   );
+  assert.equal(consumers, 1);
 } finally {
   chartHost.renderer.destroy();
 }

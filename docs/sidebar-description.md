@@ -107,7 +107,7 @@ The sidebar is read-only and must never interfere with Context Guard's context m
 
 ## Implementation details
 
-The sidebar uses a rounded native border and adapts to its allocated width. Narrow rows keep the agent name in the heading and the percentage on the progress bar. Long labels and model names wrap. The expanded `/context-guard` panel retains detailed policy and transport diagnostics.
+The sidebar uses a rounded native border and adapts to its allocated width. Narrow rows keep the agent name in the heading and the percentage on the progress bar. Long labels and model names wrap. The `/context-guard` panel opens Overview with a compact selected-session summary and family list. Press **i** for the selected session's Details, including its context chart, full policy/accounting fields and transport reasons; press **c** for retained performance Charts. Returning to Overview keeps selection. See [panel controls](configuration.md#native-context-guard-view) and the [overview validation](validation/native-panel-overview-2026-11-06.md).
 
 Click a disclosure arrow to fold or unfold a subagent branch; click an agent name to open its session. The controls below the tree toggle completed-agent visibility, pressure/activity sorting, and all groups. These actions are also available through the command palette while the sidebar is mounted. Running branches sort first; pressure sorting orders sibling branches by their highest measured pressure. Filters and folding do not change counts or statistics.
 

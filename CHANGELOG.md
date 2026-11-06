@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Open `/context-guard` with a compact selected-session summary and nested family list. Move full diagnostics and the context-history chart into Details (`i`), keeping retained performance Charts on `c`.
+- Preserve selected-session identity across views, refreshes, and ordering changes; fall back safely when a selected session disappears. Keep one panel consumer active across all views.
+- Add responsive table/card layouts, clickable footer actions, page and boundary navigation, and scrolling in Details. Keep Guard status visible and distinguish stale occupancy, threshold distance, and compaction lifecycle states.
+- Validate the native overview with 205 offline tests and an actual OpenCode 2.1.2 synthetic-provider PTY run; see the [validation record](docs/validation/native-panel-overview-2026-11-06.md).
+
 ## 0.4.0 — 2026-10-29
 
 - Add a Models screen to the standalone terminal dashboard: aggregate charts and statistics across retained root, child and archived sessions, exact agent filtering, model sorting, time windows, bucket inspection and paginated request details.
