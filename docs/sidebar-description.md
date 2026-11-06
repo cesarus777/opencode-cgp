@@ -1,149 +1,57 @@
 # Context Guard — Terminal TUI Sidebar Description
 
-A compact, real-time context monitoring panel integrated into the native OpenCode terminal sidebar. It displays context-window usage for the current session and its discovered subagents, including nested subagents, with progress bars, execution status, and compaction information.
+The native sidebar shows the route session's context occupancy, Guard status, and discovered descendants. Identity comes first, followed by measured tokens/capacity, one occupancy bar, threshold distance, and measurement confidence/age. `Open: /context-guard` appears before the agent tree.
 
-This document describes the current implementation. The [proposed sidebar density plan](plans/sidebar-density.md) (UX-07) would make history expandable, shorten agent rows, group completed branches conservatively, and move statistics into panel Details. Implementation has not started; the defaults and controls below remain current.
+## Default layout
 
-## Visual layout
+The current offline renderer fixture at 39 columns:
 
 ```text
 ╭─ CONTEXT GUARD ─────────────────────╮
 │ Main · deepseek-flash       RUNNING │
-│                                     │
 │ Context                 112K / 500K │
-│ 100%│                             │ │
-│     │                             │ │
-│     │                             │ │
-│     │                             │ │
-│     │                             │ │
-│     │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
-│     │                            ▇│ │
-│   0%│                            █│ │
-│     └─────────────────────────────┘ │
-│ muted held · last known context     │
-│ 22% used · recent samples → now     │
-│                                     │
-│ Policy threshold        112K / 160K │
-│ 70% of threshold · ┄ trigger        │
+│ ███████░░░░░░░░░░░░░░░░░░░░░░░░ 22% │
 │ 48K tokens below threshold          │
-│                                     │
-│ Measurement: reported · 3s ago      │
+│ reported · measured 3s ago          │
 │ Live                                │
 │ Observing · Guard won't request     │
 │ compaction                          │
-│                                     │
-│ ── SUBAGENTS (4) ────────────────── │
-│ 3 running · 1 completed             │
-│                                     │
-│ ▾ ● explore                     82% │
-│  ████████████████████████░░░░░ 82%  │
-│  Context 410K / 500K                │
-│  Threshold reached                  │
-│  RUNNING                            │
-│                                     │
-│   └─ ● indexer                  34% │
-│    █████████░░░░░░░░░░░░░░░░░░ 34%  │
-│    Context 170K / 500K              │
-│    Below threshold                  │
-│    RUNNING                          │
-│                                     │
-│ ● implementor                   55% │
-│  ████████████████░░░░░░░░░░░░░ 55%  │
-│  Context 275K / 500K                │
-│  Near threshold                     │
-│  RUNNING                            │
-│                                     │
-│ ✓ reviewer                      14% │
-│  ████░░░░░░░░░░░░░░░░░░░░░░░░░ 14%  │
-│  Context 70K / 500K                 │
-│  Below threshold                    │
-│  COMPLETED                          │
-│                                     │
-│ Hide completed                      │
+│ Open: /context-guard                │
+│ History: show                       │
+│ SUBAGENTS (4) · 3 running           │
+│ ▾ ● explore                         │
+│  Context 82% · Threshold reached    │
+│   └─ ● indexer                      │
+│    Context 34% · Below threshold    │
+│ ● implementor                       │
+│  Context 55% · Near threshold       │
+│ Completed (1): show                 │
 │ Sort: pressure                      │
 │ Collapse groups                     │
-│                                     │
-│ ── STATISTICS ───────────────────── │
-│ Compactions                       4 │
-│ Active subagents                  3 │
-│ Family peaks (sum)               1M │
-│ Observed · separate windows         │
-│ Open: /context-guard                │
 ╰─────────────────────────────────────╯
 ```
 
-_Illustrative values from the current offline sidebar renderer fixture; optional performance lines appear when available._
+The same fixture occupies 22 rendered lines at both 39 and 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
 
-## Main session section
+## History and diagnostics
 
-The top section shows the current OpenCode session, its agent name, model, and execution state.
+History starts collapsed. Click `History: show` or use **Show or hide sidebar context history** in the command palette (`context-guard.history`, no default shortcut). The expanded chart uses effective input capacity, a separate threshold line, and muted held values. Disclosure resets on route changes and remounts; the bounded shared trace continues collecting while collapsed and survives sidebar/panel transitions. Model/capacity changes reset the trace. Disclosure creates no additional monitor consumer or retained-history reads.
 
-A capacity-scaled context chart and separate threshold text represent:
+The occupancy bar always represents the measured value. Held values apply only to the history graph. Approximate usage is marked `~`; stale usage says “Last measured” and current threshold pressure is unknown. Above-capacity percentages remain textual even though the bar clips visually. Crossing a threshold does not promise compaction. Non-idle compaction and interruptions remain explicit.
 
-- **Context occupancy:** Current prompt tokens relative to the model's effective input capacity.
-- **Threshold pressure:** Fresh prompt tokens relative to the configured policy threshold.
+Per-session throughput and timing remain in panel Details. **Route family statistics** there includes the route session and all discovered descendants, regardless of selection, grouping, or folding. Its route identity and partial state are labeled; independent peak sums are not a combined context window or lifetime total.
 
-Below the chart, threshold distance says tokens below/over threshold; it does not promise compaction. Measurement confidence, age, and active compaction phase remain visible. Stale values say “Last measured,” keep occupancy, and have unknown current threshold pressure and distance.
+## Agent tree and controls
 
-## Subagents section
+Ordinary descendants use two lines: execution symbol and identity, then context occupancy and threshold pressure. Narrow widths use compact wording or wrapping. Failed/unknown execution, stale/missing usage, interruptions, and unresolved compaction add explicit exception text. Repeated names still navigate using full session IDs. Colors supplement labels and symbols:
 
-A compact tree lists the current session's discovered descendants within the inventory bounds, including nested descendants.
+- `●` running; `✓` completed; `✕` failed; `◌` idle/unknown.
+- Threshold pressure remains separate: below, near, reached, or unknown. A running symbol can be green while pressure text is red.
 
-Each entry contains the agent name, running/completed/failed status, context usage percentage, a horizontal progress bar, and used/available tokens.
+Completed subtrees start grouped under `Completed (N): show`. Eligibility requires trustworthy completed discovery, fresh known normal pressure, monitored idle compaction, and no interruption throughout the subtree. Incomplete, scanning, failed, or damaged discovery disables automatic grouping. Completed parents retain active or attention-bearing descendants. Live updates reveal newly active or exceptional rows automatically. Expansion restores original tree positions; `N` counts sessions rather than branch roots. A zero-count control is omitted.
 
-Agent rows label threshold pressure separately as “Below threshold,” “Near threshold,” “Threshold reached,” or unknown. Active subagents are shown first where possible, while parent-child relationships remain visible through indentation and tree connectors.
+Click an identity to navigate. Click a branch disclosure to fold it; folded branches show hidden counts and whether descendants need attention. Manual folding is independent of completed grouping. `Sort: pressure` / `Sort: activity` preserves hierarchy and prioritizes active sibling branches. The existing palette IDs `context-guard.completed`, `context-guard.sort`, and `context-guard.groups` remain supported. Folding resets with the route; sort/completed disclosure preferences last for the mounted sidebar.
 
-Execution status indicators:
+Connection and Guard messages remain visible, including last-known measurements/status, suspension, storage repair, and reload instructions. Reconnecting or expanding history cannot resume suspended enforcement. Monitoring is read-only and retains existing bounds, privacy, and disposal behavior.
 
-- ● Green — running
-- ✓ Muted — completed
-- ✕ Red — failed
-- ◌ Gray — idle or unknown
-
-Row and progress-bar colors indicate threshold pressure separately from execution symbols. A green running symbol can appear in a red row labeled “Threshold reached.” Near pressure begins at 90% of a positive trigger; reached respects the configured inclusive or strict comparison.
-
-## Behavior
-
-The sidebar updates reactively as agents execute. Context measurements, session status, and compaction progress refresh without manually reopening the panel.
-
-The interface supports:
-
-- Collapsing and expanding nested subagent groups.
-- Navigating to an agent's session, if supported by the host TUI.
-- Optional sorting by context pressure.
-- Compact display for narrow terminal widths.
-- Hiding completed subagents.
-- Clear stale-data and connection indicators, with last-known Guard status during client disconnection.
-- Showing active compaction states such as requesting, running, awaiting measurement, and uncertain.
-
-Progress bars use terminal-native characters and OpenCode theme colors. The display should minimize redraws, avoid flickering, and remain readable without color support.
-
-## Statistics footer
-
-The bottom section shows aggregate diagnostic information: observed completed compactions, number of active subagents, and the sum of observed family prompt peaks where available.
-
-Family-wide statistics must not imply that independent subagents share a single context window.
-
-## Design principles
-
-The panel should feel like a native OpenCode sidebar component rather than an external dashboard. It should be dense, minimal, readable, keyboard-friendly, and optimized for developers running multiple concurrent coding agents.
-
-The sidebar emphasizes: **which agent is running, how much context it is using, and which agent is closest to its compaction threshold.**
-
-The sidebar is read-only and must never interfere with Context Guard's context management or compaction logic.
-
-## Implementation details
-
-The sidebar uses a rounded native border and adapts to its allocated width. Narrow rows keep the agent name in the heading and the percentage on the progress bar. Long labels and model names wrap. The `/context-guard` panel opens Overview with a compact selected-session summary and family list. Press **i** for the selected session's Details, including its context chart, full policy/accounting fields and transport reasons; press **c** for retained performance Charts. Returning to Overview keeps selection. See [panel controls](configuration.md#native-context-guard-view) and the [overview validation](validation/native-panel-overview-2026-11-06.md). Threshold and connection wording is covered by the [status consistency validation](validation/threshold-status-consistency-2026-11-06.md).
-
-Click a disclosure arrow to fold or unfold a subagent branch; click an agent name to open its session. The controls below the tree toggle completed-agent visibility, pressure/activity sorting, and all groups. These actions are also available through the command palette while the sidebar is mounted. Running branches sort first; pressure sorting orders sibling branches by their highest measured pressure. Filters and folding do not change counts or statistics.
-
-The native panel also provides scrollable **?** help, contextual footer actions, and inventory-discovery feedback. Help preserves selection, source scroll position and chart settings, pauses retained-history polling, and keeps Guard status visible. **?** or **Escape** returns to the source view. On child routes, where the host hides the sidebar, optional keyboard entry uses the client plugin's `openShortcut` option; it is unbound by default. See [configuration](configuration.md#native-context-guard-view) and the [keyboard/help validation](validation/native-keyboard-help-2026-11-06.md).
-
-Statistics show observed completed compactions, active descendants, and the sum of each family member's observed prompt peak. The peak sum is not a simultaneous family maximum or a shared capacity. Peaks cover monitor residency; counts use the monitor's retained lifecycle counters. Unknown statistics are shown as `?`, including when inventory is incomplete or a family member is unmonitored. Update both server and TUI packages together: the closed RPC schema now includes optional numeric peak and completion-count fields.
-
-The example shows four descendants: three running and one completed, with three active subagents. The implementation derives these counts from the actual descendants, including nested agents, and excludes Main from the subagent count.
-
-Color indicators use the active OpenCode theme: green for healthy pressure and running execution, yellow near the configured threshold, red for crossed thresholds or failed execution, and muted for stale/unknown pressure and completed status. Execution symbols retain their own status color when an agent is under critical pressure. The main context chart uses normal text for current readings, muted held/stale readings, and a warning-colored threshold; subagent progress bars follow threshold pressure. Text labels remain available without color.
-
-Connection and Guard behavior are separate facts. Observe mode explains that Guard will not request compaction. Disconnected clients show whether last-received measurements are retained and identify Guard health as last known; they do not claim server enforcement stopped. Event-stream suspension requires reload even after observation reconnects. Safety-storage suspension requires repair and reload. Exact reason codes remain inspectable in panel Details.
+See [configuration](configuration.md#native-context-guard-view), the [implementation plan](plans/sidebar-density.md), and [validation](validation/sidebar-density-2026-11-06.md).

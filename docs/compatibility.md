@@ -50,6 +50,8 @@ The [2026-11-06 threshold/status validation](validation/threshold-status-consist
 
 The [native keyboard/help delivery](validation/native-keyboard-help-2026-11-06.md) adds focus-scoped help, contextual controls, and read-only inventory progress. Help pauses chart polling while preserving the panel's monitor consumer and selection. Both supported hosts restrict client `keybinds` to built-in IDs; use the client plugin option `openShortcut` for the existing open command instead. It is unbound by default, displays its effective shortcut on the child action, and does not change the host's composer mode. See the delivery record for tested routes/geometries and remaining environment limits.
 
+The [2026-11-06 compact-sidebar validation](validation/sidebar-density-2026-11-06.md) records 22-line default fixtures at 39/35 columns, conservative completed grouping, collapsed-history continuity, and route-family statistics in Details. Its native PTY checks pass on OpenCode 2.0.29 and 2.1.2 with synthetic provider usage. Host-controlled sidebar placement and the remote/platform/provider limits above remain unchanged.
+
 ## npm distribution verification
 
 The prepared package is `@cesarus777/opencode-cgp@0.1.0`; the unscoped name belongs to another project. Package identity does not change the plugin ID, options, RPC contract or diagnostic storage locations.

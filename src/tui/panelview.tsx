@@ -4,6 +4,7 @@ import type { GuardRow } from "../family.ts";
 import type { ContextTrace } from "./contextchart.ts";
 import { contextChart } from "./contextchart.ts";
 import { detailLines, wrap } from "./format.ts";
+import { statistics } from "./compactformat.ts";
 import { panelRowLines } from "./panelformat.ts";
 
 export function PanelOverview(props: {
@@ -60,6 +61,9 @@ export function PanelOverview(props: {
 export function PanelDetails(props: {
   row: GuardRow | undefined;
   rows: readonly GuardRow[];
+  routeID: string;
+  familyRows: readonly GuardRow[];
+  familyComplete: boolean;
   trace: ContextTrace;
   width: number;
   age: number;
@@ -96,6 +100,13 @@ export function PanelDetails(props: {
       ...detailLines(row, props.width, true, props.age),
       `Ancestry: ${ancestry.join(" / ")}`,
       ...props.reasons,
+      `Route family statistics: ${props.routeID}${props.familyComplete ? "" : " · partial"}`,
+      ...statistics(
+        props.familyRows,
+        props.routeID,
+        props.familyComplete,
+        props.width,
+      ),
       "Guard input = prompt + caches. Native Context uses different totals.",
     ].flatMap((line) => wrap(line, props.width));
   });

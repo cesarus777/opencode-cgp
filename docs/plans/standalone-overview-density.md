@@ -6,7 +6,7 @@ Date: 2026-11-06. Status: implemented and locally validated, including actual-ho
 
 Make the standalone dashboard Overview useful for comparing agents, and keep the selected agent's identity visible at narrow sizes. Deliver row density and selection reveal together: shorter rows reduce the problem, but do not by themselves establish correct behavior for small viewports, exceptions, resizing, or long identities.
 
-At investigation, UX-01 and UX-02/UX-03/UX-06 were recorded as delivered; UX-04/UX-05 were the next P1 work. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md). Sidebar density, terminology cleanup, and chart error recovery remain later increments.
+At investigation, UX-01 and UX-02/UX-03/UX-06 were recorded as delivered; UX-04/UX-05 were the next P1 work. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md). Sidebar density (UX-07) has since been [implemented and validated](../validation/sidebar-density-2026-11-06.md). Terminology cleanup and chart error recovery remain later increments.
 
 ## Investigation evidence
 

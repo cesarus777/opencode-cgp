@@ -1,6 +1,6 @@
 # Native keyboard access and help
 
-Date: 2026-11-06. Status: implemented; see the [delivery record](../validation/native-keyboard-help-2026-11-06.md) for actual results and limitations. Covers UX-08 from the [TUI UX review](tui-ux-review.md). Delivered independently of [sidebar density](sidebar-density.md) (UX-07), which remains proposed. The investigation and design contract below are retained as implementation scope.
+Date: 2026-11-06. Status: implemented; see the [delivery record](../validation/native-keyboard-help-2026-11-06.md) for actual results and limitations. Covers UX-08 from the [TUI UX review](tui-ux-review.md). Delivered independently of [sidebar density](sidebar-density.md) (UX-07), which has since been [implemented and validated](../validation/sidebar-density-2026-11-06.md). The investigation and design contract below are retained as implementation scope.
 
 ## Delivered integration adjustment
 
@@ -85,7 +85,7 @@ Choose a default shortcut only after demonstrating no conflict with native editi
 4. Wire contextual command enablement, narrow footers, configured shortcut labels, and actionable inventory feedback. Integrate verified child entry in `src/tui.tsx` without changing route scope or acquiring monitoring merely to display the action.
 5. Extend native renderer and actual-host PTY fixtures. Update README, the native controls table in `docs/configuration.md`, `docs/testing.md`, and compatibility evidence only for behavior delivered. Add a dated validation record and update the review's status, distinguishing partial from complete UX-08.
 
-UX-07 remains pending and can build on these independent panel/state changes; its future sidebar palette controls and route-family statistics should preserve this help and inventory behavior. No policy, scheduler, accounting, lifecycle, telemetry, transport, public RPC, dependency, export, release, or publication changes are planned.
+UX-07 has since been [delivered](../validation/sidebar-density-2026-11-06.md), building on these independent panel/state changes. Its sidebar palette controls and route-family statistics preserve this help and inventory behavior. No policy, scheduler, accounting, lifecycle, telemetry, transport, public RPC, dependency, export, release, or publication changes are planned.
 
 ## Acceptance and verification
 

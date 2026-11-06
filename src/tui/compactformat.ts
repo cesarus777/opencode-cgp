@@ -4,8 +4,9 @@ import {
   type ContextChartSegment,
 } from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
-import { cells, clip, wrap, performanceLines } from "./format.ts";
+import { cells, clip, wrap } from "./format.ts";
 import { tokens } from "./quantity.ts";
+import { compactionLabel } from "./panelformat.ts";
 import { pressureLabel, thresholdDistance } from "./statusformat.ts";
 export { tokens } from "./quantity.ts";
 
@@ -41,8 +42,6 @@ export function mainSections(
   row: GuardRow | undefined,
   width: number,
   age: number,
-  samples?: readonly ContextSample[],
-  chartCapacity?: number,
 ): MainSection[] {
   if (!row)
     return [{ tone: "base", lines: wrap("Loading session family...", width) }];
@@ -50,14 +49,14 @@ export function mainSections(
     m = s?.measurement;
   const valid = row.freshness === "fresh" || row.freshness === "stale";
   const measured = valid ? m?.tokens : undefined;
-  const ratio = (total: number | undefined) =>
-    measured !== undefined && total !== undefined && total > 0
-      ? measured / total
+  const ratio =
+    measured !== undefined &&
+    s?.capacityTokens !== undefined &&
+    s.capacityTokens > 0
+      ? measured / s.capacityTokens
       : undefined;
+  const lifecycle = compactionLabel(row);
   return [
-    ...(row.snapshot?.performance
-      ? [{ tone: "base" as const, lines: performanceLines(row, width) }]
-      : []),
     {
       tone: "execution",
       lines: columns(
@@ -68,97 +67,82 @@ export function mainSections(
     },
     {
       tone: "base",
+      lines: columns(
+        row.freshness === "stale" ? "Last measured" : "Context",
+        `${m?.confidence === "approximate" && valid ? "~" : ""}${tokens(measured)} / ${tokens(s?.capacityTokens)}`,
+        width,
+      ),
+    },
+    { tone: "measurement", lines: [progress(ratio, width)] },
+    {
+      tone: "pressure",
       lines: [
-        "",
-        ...columns(
-          row.freshness === "stale" ? "Last measured" : "Context",
-          `${tokens(measured)} / ${tokens(s?.capacityTokens)}`,
-          width,
-        ),
+        ...wrap(thresholdDistance(row), width),
+        ...(["near", "crossed"].includes(row.pressure) &&
+        row.freshness === "fresh"
+          ? wrap(pressureLabel(row), width)
+          : []),
+        ...(s?.capacityTokens !== undefined &&
+        s.policy.triggerTokens !== undefined &&
+        s.policy.triggerTokens > s.capacityTokens
+          ? wrap("Threshold above capacity", width)
+          : []),
       ],
     },
-    ...contextChart(
-      samples ?? (m && valid ? [{ at: m.at, tokens: m.tokens }] : []),
-      s?.capacityTokens ?? chartCapacity,
-      s?.policy.triggerTokens,
-      width,
-      m
-        ? m.at + age
-        : s?.observedAt === undefined
-          ? undefined
-          : s.observedAt + age,
-    ).map(
-      ({ line, threshold, segments }): MainSection => ({
-        tone: threshold ? "threshold" : "pressure",
-        lines: [line],
-        ...(segments ? { segments } : {}),
-      }),
-    ),
-    ...(samples?.some((sample) => sample.held) || (m && age > 2500)
-      ? [
-          {
-            tone: "measurement" as const,
-            lines: wrap("muted held · last known context", width),
-          },
-        ]
-      : []),
     {
-      tone: "base",
+      tone: "measurement",
       lines: wrap(
-        `${m?.confidence === "approximate" ? "~" : ""}${ratio(s?.capacityTokens) === undefined ? "?" : Math.round((ratio(s?.capacityTokens) ?? 0) * 100)}% used · recent samples → now`,
+        `${m?.confidence ?? "Usage unknown"}${m ? ` · measured ${Math.floor(Math.max(0, age) / 1000)}s ago` : ""}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}`,
         width,
       ),
     },
     {
       tone: "base",
       lines: [
-        "",
-        ...columns(
-          row.freshness === "stale"
-            ? "Last measured / threshold"
-            : "Policy threshold",
-          `${tokens(measured)} / ${tokens(s?.policy.triggerTokens)}`,
-          width,
-        ),
+        ...(lifecycle ? wrap(lifecycle, width) : []),
+        ...(row.node.interrupted ? wrap("Interrupted", width) : []),
+        ...(!s ? wrap("Guard: not monitored / unavailable", width) : []),
+      ],
+    },
+  ];
+}
+
+export function historySections(
+  row: GuardRow | undefined,
+  width: number,
+  age: number,
+  samples: readonly ContextSample[],
+  chartCapacity?: number,
+): MainSection[] {
+  const s = row?.snapshot,
+    m = s?.measurement;
+  return [
+    ...contextChart(
+      samples,
+      s?.capacityTokens ?? chartCapacity,
+      s?.policy.triggerTokens,
+      width,
+      m ? m.at + age : s ? s.observedAt + age : undefined,
+    ).map(
+      ({ line, threshold, segments }): MainSection => ({
+        tone: threshold ? "threshold" : "measurement",
+        lines: [line],
+        ...(segments ? { segments } : {}),
+      }),
+    ),
+    {
+      tone: "measurement",
+      lines: [
+        ...wrap("Recent samples → now", width),
+        ...wrap("muted held · last known context", width),
       ],
     },
     {
       tone: "pressure",
-      lines: [
-        ...wrap(
-          `${row.freshness !== "fresh" || row.pressureRatio === undefined ? "?" : Math.round(row.pressureRatio * 100)}% of threshold · ┄ trigger`,
-          width,
-        ),
-        ...(s?.capacityTokens !== undefined &&
-        s.policy.triggerTokens !== undefined &&
-        s.policy.triggerTokens > s.capacityTokens
-          ? wrap("Threshold above chart capacity", width)
-          : []),
-        ...wrap(thresholdDistance(row), width),
-        ...(["near", "crossed"].includes(row.pressure) &&
-        row.freshness === "fresh"
-          ? wrap(pressureLabel(row), width)
-          : []),
-      ],
-    },
-    {
-      tone: "measurement",
-      lines: [
-        "",
-        ...wrap(
-          `Measurement: ${m?.confidence ?? "unknown"}${m ? ` · ${Math.floor(Math.max(0, age) / 1000)}s ago` : ""}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}`,
-          width,
-        ),
-      ],
-    },
-    {
-      tone: "base",
-      lines: [
-        ...(s && s.compaction.phase !== "idle"
-          ? wrap(`Compact: ${s.compaction.phase}`, width)
-          : []),
-        ...(!s ? wrap("Guard: not monitored / unavailable", width) : []),
-      ],
+      lines: wrap(
+        `Policy threshold ${tokens(s?.policy.triggerTokens)} · ${row?.freshness === "fresh" && row.pressureRatio !== undefined ? Math.round(row.pressureRatio * 100) : "?"}% of threshold · ┄ trigger`,
+        width,
+      ),
     },
   ];
 }
@@ -179,40 +163,35 @@ export const statusSymbol = {
   failed: "✕",
 } as const;
 export function agentHeading(row: GuardRow, width: number) {
-  const name = `${statusSymbol[row.node.status]} ${row.node.agent ?? row.node.sessionId}`;
-  const percent =
-    row.utilizationPercent === undefined
-      ? "?%"
-      : `${Math.round(row.utilizationPercent)}%`;
-  return cells(name) + cells(percent) + 1 <= width
-    ? (columns(name, percent, width)[0] ?? "")
-    : clip(name, width);
+  return clip(
+    `${statusSymbol[row.node.status]} ${row.node.agent ?? row.node.sessionId}`,
+    width,
+  );
 }
 
 export function agentLines(row: GuardRow, width: number) {
   const valid = row.freshness === "fresh" || row.freshness === "stale";
-  const measured = valid ? row.snapshot?.measurement?.tokens : undefined;
-  const capacity = row.snapshot?.capacityTokens;
+  const percent =
+    valid && row.utilizationPercent !== undefined
+      ? `${Math.round(row.utilizationPercent)}%`
+      : "?%";
+  const estimate =
+    valid && row.snapshot?.measurement?.confidence === "approximate" ? "~" : "";
+  const context = `${row.freshness === "stale" ? "Last measured" : "Context"} ${estimate}${percent}`;
+  const pressure = pressureLabel(row);
+  const full = `${context} · ${pressure}`;
+  const short = `${row.freshness === "stale" ? "Last measured" : "Ctx"} ${estimate}${percent} · ${pressure === "Below threshold" ? "Threshold below" : pressure}`;
+  const lifecycle = compactionLabel(row);
   return [
-    ...performanceLines(row, width),
-    progress(
-      measured !== undefined && capacity !== undefined && capacity > 0
-        ? measured / capacity
-        : undefined,
-      width,
-    ),
-    ...wrap(
-      `${row.freshness === "stale" ? "Last measured" : "Context"} ${row.snapshot?.measurement?.confidence === "approximate" && valid ? "~" : ""}${tokens(measured)} / ${tokens(capacity)}`,
-      width,
-    ),
-    ...wrap(pressureLabel(row), width),
-    ...wrap(
-      `${row.node.status.toUpperCase()}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}${row.node.interrupted ? " · interrupted" : ""}`,
-      width,
-    ),
-    ...(row.snapshot && row.snapshot.compaction.phase !== "idle"
-      ? wrap(`Compact: ${row.snapshot.compaction.phase}`, width)
+    ...wrap(cells(full) <= width ? full : short, width),
+    ...(row.node.status === "failed" || row.node.status === "unknown"
+      ? wrap(row.node.status.toUpperCase(), width)
       : []),
+    ...(row.freshness !== "fresh"
+      ? wrap(row.freshness.toUpperCase(), width)
+      : []),
+    ...(row.node.interrupted ? wrap("Interrupted", width) : []),
+    ...(lifecycle ? wrap(lifecycle, width) : []),
   ];
 }
 
@@ -223,10 +202,13 @@ export function subagentTree(
   collapsed: ReadonlySet<string>,
   hideCompleted: boolean,
   byPressure: boolean,
+  trustworthy = true,
 ) {
   const children = new Map<string, GuardRow[]>();
-  for (const row of rows) {
-    if (!row.node.parentId || row.node.sessionId === sessionID) continue;
+  const unique = new Map(rows.map((row) => [row.node.sessionId, row]));
+  let complete = unique.size <= 2048;
+  for (const row of [...unique.values()].slice(0, 2048)) {
+    if (!row.node.parentId) continue;
     const list = children.get(row.node.parentId) ?? [];
     list.push(row);
     children.set(row.node.parentId, list);
@@ -236,50 +218,110 @@ export function subagentTree(
     children: Branch[];
     active: boolean;
     pressure: number;
+    eligible: boolean;
+    size: number;
+    attention: boolean;
   };
   const seen = new Set([sessionID]);
   const all: GuardRow[] = [];
-  const build = (id: string, depth: number): Branch[] => {
-    if (depth > 64) return [];
+  const build = (
+    id: string,
+    depth: number,
+  ): { branches: Branch[]; safe: boolean } => {
+    if (depth > 64) {
+      const safe = !children.get(id)?.length;
+      if (!safe) complete = false;
+      return { branches: [], safe };
+    }
+    let safe = true;
     const branches: Branch[] = [];
     for (const row of children.get(id) ?? []) {
-      if (seen.has(row.node.sessionId)) continue;
+      if (seen.has(row.node.sessionId)) {
+        safe = false;
+        complete = false;
+        continue;
+      }
       seen.add(row.node.sessionId);
       all.push(row);
       const nested = build(row.node.sessionId, depth + 1);
-      if (hideCompleted && row.node.status === "completed" && !nested.length)
-        continue;
+      const branchSafe = nested.safe && row.hidden === 0;
+      safe &&= branchSafe;
+      complete &&= branchSafe;
+      const eligible =
+        trustworthy &&
+        unique.size <= 2048 &&
+        branchSafe &&
+        row.node.status === "completed" &&
+        row.freshness === "fresh" &&
+        row.pressure === "normal" &&
+        row.snapshot?.compaction.phase === "idle" &&
+        !row.node.interrupted &&
+        nested.branches.every((b) => b.eligible);
       branches.push({
         row,
-        children: nested,
-        active: row.node.status === "running" || nested.some((b) => b.active),
+        children: nested.branches,
+        eligible,
+        active:
+          row.node.status === "running" ||
+          nested.branches.some((b) => b.active),
         pressure: Math.max(
           row.pressureRatio ?? -1,
-          ...nested.map((b) => b.pressure),
+          ...nested.branches.map((b) => b.pressure),
         ),
+        size: 1 + nested.branches.reduce((sum, b) => sum + b.size, 0),
+        attention: !eligible || nested.branches.some((b) => b.attention),
       });
     }
-    return branches.sort(
-      (a, b) =>
-        Number(b.active) - Number(a.active) ||
-        (byPressure ? b.pressure - a.pressure : 0),
-    );
+    return {
+      safe,
+      branches: branches.sort(
+        (a, b) =>
+          Number(b.active) - Number(a.active) ||
+          (byPressure ? b.pressure - a.pressure : 0),
+      ),
+    };
   };
-  const branches = build(sessionID, 0);
-  const visible: { row: GuardRow; depth: number; hasChildren: boolean }[] = [];
+  const { branches } = build(sessionID, 0);
+  const visible: {
+    row: GuardRow;
+    depth: number;
+    hasChildren: boolean;
+    hidden: number;
+    attention: boolean;
+  }[] = [];
+  let grouped = 0;
+  const count = (items: Branch[]) => {
+    for (const item of items) {
+      if (item.eligible) grouped++;
+      count(item.children);
+    }
+  };
+  count(branches);
   const visit = (items: Branch[], depth: number) => {
     for (const item of items) {
+      if (hideCompleted && item.eligible) continue;
+      const folded = collapsed.has(item.row.node.sessionId);
       visible.push({
         row: item.row,
         depth,
         hasChildren: !!item.children.length,
+        hidden: folded ? item.size - 1 : 0,
+        attention: folded && item.children.some((b) => b.attention),
       });
-      if (!collapsed.has(item.row.node.sessionId))
-        visit(item.children, depth + 1);
+      if (!folded) visit(item.children, depth + 1);
     }
   };
   visit(branches, 0);
-  return { all, visible };
+  return { all, visible, grouped, complete };
+}
+
+export function routeFamily(rows: readonly GuardRow[], sessionID: string) {
+  const tree = subagentTree(rows, sessionID, new Set(), false, false, false);
+  const root = rows.find((row) => row.node.sessionId === sessionID);
+  return {
+    rows: [...(root ? [root] : []), ...tree.all],
+    complete: !!root && root.hidden === 0 && tree.complete,
+  };
 }
 
 export function statistics(

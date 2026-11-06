@@ -374,7 +374,30 @@ const chartHost = await testRender(
     <GuardPanel
       input={input}
       context={context}
-      state={{ ...state, rows: chartRows }}
+      state={{
+        ...state,
+        rows: (_order, allDescendants) =>
+          allDescendants
+            ? [
+                ...chartRows(),
+                {
+                  ...child,
+                  node: {
+                    ...child.node,
+                    sessionId: "hidden-completed",
+                    parentId: "child",
+                    status: "completed",
+                  },
+                  snapshot: {
+                    ...childSnapshot,
+                    sessionId: "hidden-completed",
+                    peakTokens: 50000,
+                    compaction: { ...childSnapshot.compaction, count: 2 },
+                  },
+                },
+              ]
+            : chartRows(),
+      }}
     />
   ),
   { width: 40, height: 20 },
@@ -417,6 +440,19 @@ try {
   run("context-guard.last");
   await chartHost.flush();
   assert.match(chartHost.captureCharFrame(), /Native Context uses different/);
+  assert.match(chartHost.captureCharFrame(), /Route family statistics: s0/);
+  assert.match(chartHost.captureCharFrame(), /Compactions +10/);
+  assert.match(chartHost.captureCharFrame(), /Active subagents +1/);
+  setComplete(false);
+  await chartHost.flush();
+  run("context-guard.last");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /partial/);
+  assert.match(chartHost.captureCharFrame(), /Compactions +\?/);
+  setComplete(true);
+  await chartHost.flush();
+  run("context-guard.last");
+  await chartHost.flush();
   const beforeDetailsHelp = chartHost.captureCharFrame();
   run("context-guard.help");
   await chartHost.flush();
@@ -440,6 +476,8 @@ try {
   await chartHost.flush();
   run("context-guard.last");
   await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Route family statistics: s0/);
+  assert.match(chartHost.captureCharFrame(), /Compactions +10/);
   assert.match(chartHost.captureCharFrame(), /Main \/ explore/);
   run("context-guard.charts");
   await Bun.sleep(5);

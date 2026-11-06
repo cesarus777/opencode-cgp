@@ -2,7 +2,7 @@
 
 Current status: the terminal dashboard and Models screen are shipped through 0.4.0; the [threshold/status consistency increment](threshold-status-consistency.md) and [standalone overview density/reachability increment](standalone-overview-density.md) (UX-04/UX-05) are implemented for the next release. Browser delivery and durable analytics storage remain pending. The dated progress entries below preserve their original delivery context.
 
-The next recommended UX increment is native [sidebar density](sidebar-density.md) (UX-07). Its implementation plan is proposed; implementation has not started. Standalone dashboard behavior is unchanged by that plan.
+Native [sidebar density](sidebar-density.md) (UX-07) is implemented; see its [validation record](../validation/sidebar-density-2026-11-06.md). Standalone dashboard behavior is unchanged by that increment. Terminology cleanup (UX-09) and chart-error recovery (UX-10) remain follow-ups.
 
 ## Goal and scope
 
@@ -81,4 +81,6 @@ Acceptance: either command starts from the published package; both frontends sho
 
 2026-11-06: consistent threshold, stale-measurement, and Guard/connection wording is delivered across the standalone dashboard and native surfaces (UX-02/UX-03/UX-06). See the [status implementation plan](threshold-status-consistency.md) and [validation record](../validation/threshold-status-consistency-2026-11-06.md). Standalone overview density and row reachability (UX-04/UX-05) are the next UX increment; browser delivery remains pending.
 
-2026-11-06: UX-04/UX-05 are implemented: compact Overview columns/cards, bounded exceptions, identity-first selection reveal, measured page movement, and complete diagnostics in Details. The offline suite passes 213 tests and synthetic-provider PTYs pass on OpenCode 2.0.29 and 2.1.2, including 80×24, 40×20 and 20×12 layouts. See the [implementation plan](standalone-overview-density.md) and [delivery record](../validation/standalone-overview-density-2026-11-06.md). Sidebar density (UX-07) is the next recommended UX increment; browser delivery remains pending.
+2026-11-06: UX-04/UX-05 are implemented: compact Overview columns/cards, bounded exceptions, identity-first selection reveal, measured page movement, and complete diagnostics in Details. The offline suite passes 213 tests and synthetic-provider PTYs pass on OpenCode 2.0.29 and 2.1.2, including 80×24, 40×20 and 20×12 layouts. See the [implementation plan](standalone-overview-density.md) and [delivery record](../validation/standalone-overview-density-2026-11-06.md). At that milestone, sidebar density (UX-07) was the next recommended UX increment; its subsequent delivery is recorded below. Browser delivery remains pending.
+
+2026-11-06: native sidebar density (UX-07) is implemented with collapsed history, conservative completed grouping, early panel access, and route-family statistics in Details. See the [delivery record](../validation/sidebar-density-2026-11-06.md); standalone behavior and pending browser scope remain unchanged.

@@ -13,6 +13,7 @@ import {
 import type { GuardState } from "./state.ts";
 import type { GuardRow } from "../family.ts";
 import { HistoryCharts } from "./charts.tsx";
+import { routeFamily } from "./compactformat.ts";
 import { PanelDetails, PanelOverview } from "./panelview.tsx";
 import {
   compactionLabel,
@@ -55,6 +56,9 @@ export function GuardPanel(props: {
   );
   const [order, setOrder] = createSignal<readonly string[]>([]);
   const rows = createMemo(() => props.state.rows(order()));
+  const family = createMemo(() =>
+    routeFamily(props.state.rows([], true), props.input.sessionID),
+  );
   const selectedRow = createMemo(() =>
     rows().find((row) => row.node.sessionId === selected()),
   );
@@ -537,6 +541,9 @@ export function GuardPanel(props: {
           <PanelDetails
             row={selectedRow()}
             rows={rows()}
+            routeID={props.input.sessionID}
+            familyRows={family().rows}
+            familyComplete={family().complete && props.state.complete()}
             trace={trace()}
             width={width()}
             age={props.state.age(selected() ?? "")}

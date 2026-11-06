@@ -1,63 +1,22 @@
 ╭─ CONTEXT GUARD ─────────────────────╮
 │ Main · deepseek-flash       RUNNING │
-│                                     │
 │ Context                 112K / 500K │
-│ 100%│                             │ │
-│     │                             │ │
-│     │                             │ │
-│     │                             │ │
-│     │                             │ │
-│     │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
-│     │                            ▇│ │
-│   0%│                            █│ │
-│     └─────────────────────────────┘ │
-│ muted held · last known context     │
-│ 22% used · recent samples → now     │
-│                                     │
-│ Policy threshold        112K / 160K │
-│ 70% of threshold · ┄ trigger        │
+│ ███████░░░░░░░░░░░░░░░░░░░░░░░░ 22% │
 │ 48K tokens below threshold          │
-│                                     │
-│ Measurement: reported · 3s ago      │
+│ reported · measured 3s ago          │
 │ Live                                │
 │ Observing · Guard won't request     │
 │ compaction                          │
-│                                     │
-│ ── SUBAGENTS (4) ────────────────── │
-│ 3 running · 1 completed             │
-│                                     │
-│ ▾ ● explore                     82% │
-│  ████████████████████████░░░░░ 82%  │
-│  Context 410K / 500K                │
-│  Threshold reached                  │
-│  RUNNING                            │
-│                                     │
-│   └─ ● indexer                  34% │
-│    █████████░░░░░░░░░░░░░░░░░░ 34%  │
-│    Context 170K / 500K              │
-│    Below threshold                  │
-│    RUNNING                          │
-│                                     │
-│ ● implementor                   55% │
-│  ████████████████░░░░░░░░░░░░░ 55%  │
-│  Context 275K / 500K                │
-│  Near threshold                     │
-│  RUNNING                            │
-│                                     │
-│ ✓ reviewer                      14% │
-│  ████░░░░░░░░░░░░░░░░░░░░░░░░░ 14%  │
-│  Context 70K / 500K                 │
-│  Below threshold                    │
-│  COMPLETED                          │
-│                                     │
-│ Hide completed                      │
+│ Open: /context-guard                │
+│ History: show                       │
+│ SUBAGENTS (4) · 3 running           │
+│ ▾ ● explore                         │
+│  Context 82% · Threshold reached    │
+│   └─ ● indexer                      │
+│    Context 34% · Below threshold    │
+│ ● implementor                       │
+│  Context 55% · Near threshold       │
+│ Completed (1): show                 │
 │ Sort: pressure                      │
 │ Collapse groups                     │
-│                                     │
-│ ── STATISTICS ───────────────────── │
-│ Compactions                       4 │
-│ Active subagents                  3 │
-│ Family peaks (sum)               1M │
-│ Observed · separate windows         │
-│ Open: /context-guard                │
 ╰─────────────────────────────────────╯

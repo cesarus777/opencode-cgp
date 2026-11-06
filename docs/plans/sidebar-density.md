@@ -1,10 +1,10 @@
 # Compact sidebar defaults
 
-Date: 2026-11-06. Status: proposed; implementation has not started. Covers UX-07 from the [TUI UX review](tui-ux-review.md), after the delivered [standalone overview increment](standalone-overview-density.md).
+Date: 2026-11-06. Status: implemented; see the [delivery record](../validation/sidebar-density-2026-11-06.md) for validation and limitations. The investigation and targets below record the implementation scope. Covers UX-07 from the [TUI UX review](tui-ux-review.md), after the delivered [standalone overview increment](standalone-overview-density.md).
 
-## Recommendation and investigation
+## Original recommendation and investigation
 
-Implement sidebar density next. UX-01 through UX-06 have delivery records linked from the review; UX-07 is next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) and chart-error recovery (UX-10) remain subsequent increments. Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
+The investigation selected sidebar density next. UX-01 through UX-06 already had delivery records linked from the review; UX-07 was next in its delivery order. Native keyboard/help (UX-08) has since been [delivered independently](../validation/native-keyboard-help-2026-11-06.md); broader terminology (UX-09) and chart-error recovery (UX-10) remain subsequent increments. Preserve the delivered panel help, inventory feedback, optional keyboard entry, and existing page navigation when implementing this sidebar plan.
 
 The sidebar should answer which session is running, its context occupancy, which descendant needs attention, and what Guard can do. Default to a short summary and descendant tree; make history optional and move performance and aggregate diagnostics into panel Details.
 
@@ -20,6 +20,20 @@ The sidebar should answer which session is running, its context occupancy, which
 | `scripts/fixtures/metrics-tui.py`          | Host checks expect an always-visible sidebar graph and fixed chart-row geometry.                                                                              | Expand history explicitly before capture and preserve trace-continuity assertions.                  |
 
 Investigation validation: `bun test tests/sidebar.test.ts tests/tuirender.test.tsx tests/statusformat.test.ts` passed **12 tests, 0 failures**. This establishes the current baseline, not validation of this proposal. No new actual-host session was run. Existing restrictions remain in [compatibility](../compatibility.md): sidebar placement is host-controlled and normally absent on child routes.
+
+## Implementation readiness review
+
+Before implementation, rechecked after UX-08 on 2026-11-06 at commit `ca4c31c`. The next increment was UX-07: the reviewed default frame still had **63 lines at 39 columns**, and `compact.tsx` still rendered history, descendant diagnostics, and statistics before panel access. UX-09 and UX-10 remain separate follow-ups. Reuse `compactionLabel` from `panelformat.ts` for sidebar exceptions rather than introducing another lifecycle translation.
+
+The refreshed baseline command, `bun test tests/sidebar.test.ts tests/tuirender.test.tsx tests/statusformat.test.ts tests/tuistate.test.ts`, passed **17 tests, 0 failures**. This is evidence for the current implementation only. That planning update included no implementation or new actual-host validation; subsequent results are in the delivery record.
+
+Resolve these details as part of the first implementation step:
+
+- **Discovery controls grouping.** Pass `state.inventoryStatus()` into the sidebar projection. Automatic completed grouping is enabled only when discovery is complete, not scanning, and neither failed nor damaged. Otherwise keep discovered completed rows visible and label counts as partial. This avoids treating an undiscovered active child as an absent child. A change in discovery status must reveal affected rows without requiring a click.
+- **Traversal limits are uncertainty.** Deduplicate by full session ID and keep the existing depth/node bounds. A cycle, omitted descendants (`row.hidden`), or a traversal cutoff makes the affected branch ineligible for automatic grouping; do not infer that its subtree completed normally. Return grouping counts and fold attention metadata from the same bounded projection, independent of the visible-row list.
+- **Widths mean outer rendered columns.** The current sidebar subtracts four cells for borders/padding: 39, 35, and 20 outer columns leave 35, 31, and 16 content cells before descendant indentation. Budget identity, disclosure, and pressure text against the remaining cells, using `cells` rather than string length. At 35 columns a compact second line such as `Ctx 82% · Threshold reached` fits a top-level row; `Ctx 34% · Threshold below` fits the fixture's nested child. Use full wording when it fits, and bounded wrapping when deeper nesting or exceptions require it. The two-line target applies to the ordinary fixture, not arbitrary identities, depths, or exception messages.
+- **Details receives a separate family scope.** Add a memo in `panel.tsx` using `state.rows([], true)` and route-descendant projection. Pass route ID, scoped rows, and inventory completeness explicitly into `PanelDetails`; retain selected-session rows for its existing ancestry and diagnostic rendering. Do not derive family statistics from `rows(order())`, selected-session descendants, or sidebar visibility. Label the family section with its route identity and partial state so inspecting a child cannot silently change the aggregate's meaning.
+- **Host checks follow disclosure state.** `metrics-tui.py` currently waits for `70% used`/`50% used`/`10% used` and captures an always-mounted sidebar chart. Expand sidebar history before those checks and again after any remount that resets disclosure. Preserve the existing plateau, lower-reading, and post-compaction assertions; a default occupancy bar cannot satisfy chart-continuity evidence.
 
 ## Current-session summary and history
 
@@ -47,6 +61,8 @@ Default to a collapsed `Completed (N)` control for eligible completed descendant
 - Completed parents with running, idle, failed, unknown, stale, near/reached-threshold, interrupted, or non-idle-compaction descendants retain the ancestry needed to show them.
 - Completed rows with accepted, running, awaiting-measurement, blocked, or uncertain compaction remain visible.
 - Grouped rows that become active or need attention appear automatically without expansion.
+
+Apply this eligibility only when discovery is trustworthy, as defined above. Hide the completed-group control when no rows qualify; do not show an actionable `Completed (0)`. Manual branch folding remains independent of completed-group disclosure.
 
 `N` counts grouped session identities, not branch roots. Expansion restores them at original tree positions and sibling order rather than flattening or duplicating branches. Eligible descendants under visible parents still count. Totals and statistics always use all discovered descendants, independent of grouping/folding. Partial inventories retain a partial marker and cannot imply complete counts.
 
@@ -93,24 +109,26 @@ Use `state.rows([], true)` and the existing descendant traversal to obtain the c
 4. Update default renderer assertions and golden frame. Test expanded history separately, preserving held/lower readings and confirmed-compaction continuity. Update host fixture assumptions before integration validation.
 5. Update README, `docs/sidebar-description.md`, and native-view/chart sections of `docs/configuration.md` for delivered defaults and controls. Write a separate validation report and mark UX-07 delivered only after evidence exists.
 
+The first reviewable increment is the pure projection/formatting change with tests for incomplete discovery, attention-bearing completed branches, grouping counts, and the 35/39-column fixture budgets. Keep the existing rendered defaults until route-family statistics are available in Details; then switch defaults and update the golden frame together. Treat the full sequence as one UX-07 delivery rather than marking the formatting increment complete as the user-facing improvement.
+
 This is presentation and local UI state work. No policy, scheduler, accounting, telemetry allowlist, transport, RPC schema, dependency, export, version bump, or publication changes are required. Use public APIs already present; any additional host API requires checking pinned public declarations and implementation first.
 
 ## Acceptance and validation
 
-| Area                  | Required evidence                                                                                                                                                                                               |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Density               | Same ordinary fixture: target at most 28 rendered lines at 39 columns and 34 at 35 columns, including border, status, controls, and collapsed completed count. Record measured results separately from targets. |
-| Identity and controls | Identity precedes metrics; panel access precedes descendants. Ordinary rows use two lines at 35/39 columns; inspect 20-column fallback separately. Colors supplement text/symbols.                              |
-| Grouping              | Mixed completed/active ancestry, stale/unmonitored rows, failure, interruption, and every non-idle phase stay reachable. Expansion restores hierarchy; live updates ungroup attention rows.                     |
-| Scope and bounds      | Child scoping, repeated/Unicode names, deep nesting, cycles, large families, partial inventory, deletion, and grouping transitions retain identity-based actions and bounded traversal.                         |
-| Sorting and folding   | Active-first sibling sorting is preserved; folding indicates hidden attention. Filtering/folding cannot change aggregate scope or totals. Existing palette IDs work.                                            |
-| Measurements          | Fresh/stale/missing/invalid/estimated usage, over-capacity values, separate capacity/threshold denominators, strict/inclusive equality, and unknown pressure retain their meanings.                             |
-| Critical status       | Observe, reconnect, retained/absent measurements, event-gap suspension, and storage repair/reload remain explicit. Disclosure/reconnect cannot resume enforcement.                                              |
-| Trace and resources   | Collapsed history collects samples; expansion and remounts retain continuity and reset correctly on model/capacity changes. Disclosure adds no consumer, monitor stream, or retained-history reads.             |
-| Diagnostics           | All performance and aggregate values remain inspectable. Child selection cannot change labeled route-family scope; partial values and independent-window qualifiers remain intact.                              |
+| Area                  | Required evidence                                                                                                                                                                                                                                                     |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Density               | Same ordinary fixture: target at most 28 rendered lines at 39 columns and 34 at 35 columns, including border, status, controls, and collapsed completed count. Record measured results separately from targets.                                                       |
+| Identity and controls | Identity precedes metrics; panel access precedes descendants. Ordinary rows use two lines at 35/39 columns; inspect 20-column fallback separately. Colors supplement text/symbols.                                                                                    |
+| Grouping              | Mixed completed/active ancestry, stale/unmonitored rows, failure, interruption, and every non-idle phase stay reachable. Incomplete/scanning/failed/damaged discovery disables automatic grouping. Expansion restores hierarchy; live updates ungroup attention rows. |
+| Scope and bounds      | Child scoping, repeated/Unicode names, deep nesting, cycles, large families, partial inventory, deletion, and grouping transitions retain identity-based actions and bounded traversal.                                                                               |
+| Sorting and folding   | Active-first sibling sorting is preserved; folding indicates hidden attention. Filtering/folding cannot change aggregate scope or totals. Existing palette IDs work.                                                                                                  |
+| Measurements          | Fresh/stale/missing/invalid/estimated usage, over-capacity values, separate capacity/threshold denominators, strict/inclusive equality, and unknown pressure retain their meanings.                                                                                   |
+| Critical status       | Observe, reconnect, retained/absent measurements, event-gap suspension, and storage repair/reload remain explicit. Disclosure/reconnect cannot resume enforcement.                                                                                                    |
+| Trace and resources   | Collapsed history collects samples; expansion and remounts retain continuity and reset correctly on model/capacity changes. Disclosure adds no consumer, monitor stream, or retained-history reads.                                                                   |
+| Diagnostics           | All performance and aggregate values remain inspectable. Child selection cannot change labeled route-family scope; partial values and independent-window qualifiers remain intact.                                                                                    |
 
 Start with `bun test tests/sidebar.test.ts tests/tuirender.test.tsx tests/statusformat.test.ts tests/tuistate.test.ts`. Extend `tests/fixtures/sidebar-host.tsx` for default/expanded frames, palette/mouse controls, route changes, reactive eligibility, theme colors, and consumer cleanup. Extend panel renderer coverage for aggregate scope and reachability. Use observable behavior assertions rather than tests mirroring formatter internals.
 
-After implementation run `bun run typecheck`, `bun test`, `bun run format:check`, `bun run build`, and `git diff --check`. This planning change needs documentation formatting/diff checks; implementation validation remains future work.
+After implementation run `bun run typecheck`, `bun test`, `bun run format:check`, `bun run build`, and `git diff --check`. The original planning change needed documentation formatting/diff checks; completed implementation validation is recorded in the delivery record.
 
 Run the opt-in `GUARD_SYNTHETIC_TUI=1 bun scripts/metrics-server-live.ts` harness with explicit history expansion on OpenCode 2.0.29 and 2.1.2 where available. Check root sidebar allocation, 180/80-column chart continuity, narrow panel access, navigation, polling cancellation, and continued monitoring after panel close. The host controls narrow/child-route sidebar placement; record actual behavior. Report unavailable runs as skips and distinguish synthetic-provider checks from genuine-provider evidence. Preserve scalar privacy checks. Package installation checks are needed only if distribution boundaries change.

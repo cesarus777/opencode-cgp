@@ -2,7 +2,7 @@
 
 Date: 2026-11-06. Status: implemented and locally validated; see the [delivery record](../validation/native-panel-overview-2026-11-06.md). Implements UX-01 from the [TUI UX review](tui-ux-review.md).
 
-The design targets below retain this increment's scope. Later [keyboard/help delivery](../validation/native-keyboard-help-2026-11-06.md) adds native help, inventory feedback, and optional child keyboard entry; constrained footers now prioritize help/close, with inspection controls available through help when omitted. Use [current configuration](../configuration.md#native-context-guard-view) for the supported controls.
+The design targets below retain this increment's scope. Later [keyboard/help delivery](../validation/native-keyboard-help-2026-11-06.md) adds native help, inventory feedback, and optional child keyboard entry; constrained footers now prioritize help/close, with inspection controls available through help when omitted. Later [sidebar density delivery](../validation/sidebar-density-2026-11-06.md) changes the sidebar defaults and adds route-family statistics to Details, independent of selected-session diagnostics. Sidebar-unchanged acceptance checks below apply only to this original increment. Use [current configuration](../configuration.md#native-context-guard-view) for the supported controls.
 
 ## Problem and outcome
 

@@ -93,6 +93,18 @@ def resize(cols, rows=60):
     pump(2)
 
 
+def expand_sidebar_history():
+    if "History: hide" in frame():
+        return
+    expect("History: show")
+    y = next(i for i, line in enumerate(screen.display) if "History: show" in line)
+    x = screen.display[y].index("History: show") + 3
+    # The existing public sidebar mouse action; terminal coordinates are one-based.
+    key(f"\x1b[<0;{x + 1};{y + 1}M\x1b[<0;{x + 1};{y + 1}m")
+    expect("History: hide")
+    expect("100%│")
+
+
 def capture_chart(name):
     # Retain only the scalar chart rectangle, never session messages or titles.
     from PIL import Image, ImageDraw, ImageFont
@@ -238,23 +250,24 @@ try:
     key("\r")
     expect("CONTEXT GUARD")
     print("PASS: configured keyboard entry on root/child/grandchild, help dispatch, history polling cleanup and preserved selection")
+    expand_sidebar_history()
     context_action("grow")
-    expect("70% used")
+    expect("70%")
     pump(4)
     expect("muted held")
     capture_chart("wide-pause")
     context_action("permission")
     pump(4)
-    expect("70% used")
+    expect("70%")
     capture_chart("wide-permission")
     context_action("resume")
     pump(5)
     context_action("child")
     pump(4)
-    expect("70% used")
+    expect("70%")
     capture_chart("wide-child")
     context_action("lower")
-    expect("50% used")
+    expect("50%")
     capture_chart("wide-lower-held")
     key("/context-guard")
     key("\r")
@@ -271,7 +284,8 @@ try:
     pump(2)
     capture_chart("wide-compaction")
     key("q")
-    expect("10% used")
+    expect("10%")
+    expand_sidebar_history()
     sidebar_chart = capture_chart("wide-sidebar-compaction")
     assert any(char in sidebar_chart[2] for char in "▁▂▃▄▅▆▇█┈"), "70% history survives panel/sidebar remounts"
     assert "▇" in sidebar_chart[7], "10% post-compaction measurement remains visible"

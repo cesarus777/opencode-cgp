@@ -1,6 +1,6 @@
 # Native keyboard access and help validation
 
-Date: 2026-11-06. Implements UX-08 from the [TUI UX review](../plans/tui-ux-review.md), following the [implementation plan](../plans/native-keyboard-help.md). Sidebar density (UX-07) remains proposed; these independent panel/state changes do not change sidebar defaults.
+Date: 2026-11-06. Implements UX-08 from the [TUI UX review](../plans/tui-ux-review.md), following the [implementation plan](../plans/native-keyboard-help.md). At this increment's delivery, sidebar density (UX-07) was still proposed; these independent panel/state changes did not change sidebar defaults. UX-07 has since been [implemented and validated](sidebar-density-2026-11-06.md).
 
 ## Delivered behavior
 

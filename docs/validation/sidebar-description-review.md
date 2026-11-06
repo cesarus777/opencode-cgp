@@ -1,5 +1,7 @@
 # Sidebar description review — 2026-10-16
 
+Historical record: the captures and fix verification below describe the 2026-10-16 implementation. [UX-07 delivery](sidebar-density-2026-11-06.md) supersedes that layout with collapsed history, compact agent rows, conservative completed grouping, and statistics in panel Details. The linked [sidebar description](../sidebar-description.md) and [golden frame](../../tests/fixtures/sidebar-frame.txt) track the current implementation.
+
 This pre-fix review found that the sidebar did **not** match [the description](../sidebar-description.md).
 
 Verified the actual `GuardView` using OpenTUI's public `testRender` and Solid preload at 35 and 20 columns, with synthetic reported measurements matching the example's token values and a nested indexer. Captures below omit trailing whitespace and unused terminal rows. Colors were neutralized to inspect readability without color. This is an offline component render, not a live OpenCode terminal certification.
@@ -99,9 +101,9 @@ Open: /context-guard
 
 ## Fix verification
 
-The compact sidebar now uses a rounded native frame, two independent progress bars, a descendants-only tree, execution symbols with separate pressure labels, and an observed-statistics footer. It supports folding, completed-agent filtering, activity/pressure sorting, navigation and allocated-width changes. The expanded diagnostics panel retains its existing presentation.
+The 2026-10-16 compact sidebar used a rounded native frame, two independent progress bars, a descendants-only tree, execution symbols with separate pressure labels, and an observed-statistics footer. It supports folding, completed-agent filtering, activity/pressure sorting, navigation and allocated-width changes. The expanded diagnostics panel retains its existing presentation.
 
-The checked-in [rendered frame](../../tests/fixtures/sidebar-frame.txt) is the current 39-column reference. `tests/fixtures/sidebar-host.tsx` renders the real component through OpenTUI at 39, 35 and 20 columns, checks that frame, and exercises reactive metrics/session changes, navigation, folding, filters, sorting and cleanup. It uses synthetic data. The fixture now uses distinct theme colors and checks rendered foreground spans for healthy/warning/critical bars, running/failed status, muted completed agents, and stale measurements, including reactive transitions. Live host geometry and flicker remain outside this offline check. The old captures above document the original defect.
+The checked-in [rendered frame](../../tests/fixtures/sidebar-frame.txt) now tracks the latest 39-column reference; it is not an archived capture of this fix. `tests/fixtures/sidebar-host.tsx` renders the real component through OpenTUI at 39, 35 and 20 columns, checks that frame, and exercises reactive metrics/session changes, navigation, folding, filters, sorting and cleanup. It uses synthetic data. The fixture now uses distinct theme colors and checks rendered foreground spans for healthy/warning/critical bars, running/failed status, muted completed agents, and stale measurements, including reactive transitions. Live host geometry and flicker remain outside this offline check. The old captures above document the original defect.
 
 Statistics now project the monitor's existing numeric completion counters and residency peaks through RPC. Unknown/partial aggregates remain `?`; admission never increments the completion counter. Family peak sums explicitly describe separate windows.
 

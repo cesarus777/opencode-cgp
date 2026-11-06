@@ -3,7 +3,10 @@ import { RGBA } from "@opentui/core";
 import { createSignal } from "solid-js";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { KeymapLayer } from "@opencode/plugin/tui/context";
-import { ContextTraceStore } from "../../src/tui/contextchart.ts";
+import {
+  ContextTraceStore,
+  type ContextTrace,
+} from "../../src/tui/contextchart.ts";
 import type { GuardState } from "../../src/tui/state.ts";
 import { GuardView } from "../../src/tui/sidebar.tsx";
 import { metric } from "../../src/family.ts";
@@ -12,14 +15,24 @@ import assert from "node:assert/strict";
 import { readFileSync, writeFileSync } from "node:fs";
 
 const [rows, setRows] = createSignal(sidebarFamily());
+const [discovery, setDiscovery] = createSignal({
+  complete: true,
+  scanning: false,
+  failed: false,
+  damaged: false,
+});
 const [sessionID, setSessionID] = createSignal("main");
 let consumers = 0,
-  destination = "";
+  destination = "",
+  opened = 0;
 let layer: (() => KeymapLayer) | undefined;
 const traceStore = new ContextTraceStore();
+let latestTrace: ContextTrace | undefined;
 const state = {
-  contextTrace: (row: Parameters<ContextTraceStore["update"]>[0]) =>
-    traceStore.update(row),
+  contextTrace: (row: Parameters<ContextTraceStore["update"]>[0]) => {
+    latestTrace = traceStore.update(row);
+    return latestTrace;
+  },
   acquire: () => {
     consumers++;
     return {
@@ -33,7 +46,8 @@ const state = {
   age: () => 3000,
   health: () => ({ mode: "observe", enforcement: "observing", reasons: [] }),
   connection: () => "live",
-  complete: () => true,
+  complete: () => discovery().complete,
+  inventoryStatus: discovery,
 } as unknown as GuardState;
 const palette = {
   base: RGBA.fromHex("#ffffff"),
@@ -61,7 +75,11 @@ const context = {
     },
   },
   ui: {
-    panel: { open() {} },
+    panel: {
+      open() {
+        opened++;
+      },
+    },
     router: {
       navigate(route: { sessionID: string }) {
         destination = route.sessionID;
@@ -113,10 +131,15 @@ function assertColor(text: string, expected: RGBA, within?: string) {
 }
 function assertMainChart(expected: RGBA = palette.base) {
   const lines = host.captureSpans().lines;
-  const end = lines.findIndex((line) =>
-    line.spans.some((span) => span.text.includes("Compact threshold")),
+  const lineText = (line: (typeof lines)[number]) =>
+    line.spans.map((span) => span.text).join("");
+  const start = lines.findIndex((line) => lineText(line).includes("100%│"));
+  const end = lines.findIndex(
+    (line, i) =>
+      i > start && lineText(line).includes("└") && lineText(line).includes("┘"),
   );
-  const chart = lines.slice(0, end);
+  assert.ok(start >= 0 && end > start, "Expanded chart bounds are visible");
+  const chart = lines.slice(start, end + 1);
   assert.ok(
     chart.some((line) =>
       line.spans.some(
@@ -139,7 +162,7 @@ try {
   await host.renderOnce();
   await host.renderOnce();
   assert.equal(consumers, 1);
-  assertMainChart(palette.muted);
+  assert.doesNotMatch(frame(), /100%│/);
   assertColor("RUNNING", palette.success, "Main");
   assertColor("●", palette.success, "explore");
   assertColor("explore", palette.error);
@@ -147,12 +170,78 @@ try {
   assertColor("indexer", palette.success);
   assertColor("implementor", palette.warning);
   assertColor("Near threshold", palette.warning);
-  assertColor("reviewer", palette.muted);
+  assert.doesNotMatch(frame(), /reviewer/);
+  console.log(
+    `DENSITY: 39 columns ${frame().trimEnd().split("\n").length} lines`,
+  );
   const golden = new URL("./sidebar-frame.txt", import.meta.url);
   if (process.env.UPDATE_SIDEBAR_FRAME === "1") writeFileSync(golden, frame());
   assert.equal(frame(), readFileSync(golden, "utf8"));
   assert.match(frame(), /SUBAGENTS \(4\)/);
-  assert.match(frame(), /3 running · 1 completed/);
+  assert.match(frame(), /3 running/);
+  assert.match(frame(), /Completed \(1\): show/);
+  assert.ok(frame().trimEnd().split("\n").length <= 28);
+  assert.ok(
+    frame().indexOf("Open: /context-guard") < frame().indexOf("SUBAGENTS"),
+  );
+  const openY = frame()
+    .split("\n")
+    .findIndex((line) => line.includes("Open:"));
+  await host.mockMouse.click(5, openY);
+  assert.equal(opened, 1);
+  setDiscovery({
+    complete: false,
+    scanning: true,
+    failed: false,
+    damaged: false,
+  });
+  await host.renderOnce();
+  assert.match(frame(), /reviewer/);
+  assert.match(frame(), /partial/);
+  setDiscovery({
+    complete: true,
+    scanning: false,
+    failed: false,
+    damaged: false,
+  });
+  await host.renderOnce();
+  assert.doesNotMatch(frame(), /reviewer/);
+  const completed = rows().at(-1);
+  assert.ok(completed?.snapshot);
+  setRows([
+    ...rows().slice(0, -1),
+    {
+      ...completed,
+      snapshot: {
+        ...completed.snapshot,
+        compaction: { ...completed.snapshot.compaction, phase: "accepted" },
+      },
+    },
+  ]);
+  await host.renderOnce();
+  assert.match(frame(), /reviewer/);
+  assert.match(frame(), /Accepted · waiting to start/);
+  setRows(sidebarFamily());
+  await host.renderOnce();
+  assert.doesNotMatch(frame(), /reviewer/);
+  for (const flag of ["scanning", "failed", "damaged"] as const) {
+    setDiscovery({
+      complete: true,
+      scanning: false,
+      failed: false,
+      damaged: false,
+      [flag]: true,
+    });
+    await host.renderOnce();
+    assert.match(frame(), /reviewer/);
+  }
+  setDiscovery({
+    complete: true,
+    scanning: false,
+    failed: false,
+    damaged: false,
+  });
+  await host.renderOnce();
   assert.match(frame(), /Threshold reached/);
   assert.match(frame(), /48K tokens below threshold/);
   const lines = frame().split("\n");
@@ -170,9 +259,9 @@ try {
   assert.match(frame(), /indexer/);
   run("context-guard.completed");
   await host.renderOnce();
-  assert.doesNotMatch(frame(), /reviewer/);
-  assert.match(frame(), /Show completed/);
-  assert.match(frame(), /1 completed/);
+  assert.match(frame(), /reviewer/);
+  assertColor("reviewer", palette.muted);
+  assert.match(frame(), /Completed \(1\): hide/);
   run("context-guard.completed");
   run("context-guard.sort");
   await host.renderOnce();
@@ -193,15 +282,26 @@ try {
   ]);
   await host.renderOnce();
   assert.match(frame(), /144K \/ 500K/);
-  assert.match(frame(), /90%/);
-  assert.match(frame(), /recent samples → now/);
+  assert.match(frame(), /Near threshold/);
+  assert.doesNotMatch(frame(), /100%│/);
+  assert.ok(
+    latestTrace?.samples.some((sample) => sample.tokens === 144000),
+    "hidden history collects new readings",
+  );
+  const historyY = frame()
+    .split("\n")
+    .findIndex((line) => line.includes("History: show"));
+  await host.mockMouse.click(6, historyY);
+  await host.renderOnce();
+  assert.equal(consumers, 1);
+  assert.match(frame(), /Recent samples → now/);
   assert.match(
     frame(),
     /██│/,
     "new measurements keep the earlier sample without an extra held column",
   );
   assertMainChart();
-  assert.match(frame(), /awaiting-measurement/);
+  assert.match(frame(), /Ended · checking context reduction/);
   const nearRows = rows();
   const criticalSnapshot = {
     ...snapshot,
@@ -269,7 +369,8 @@ try {
   ]);
   await host.renderOnce();
   assertColor("FAILED", palette.error, "Main");
-  setRows(nearRows);
+  setRows(sidebarFamily());
+  run("context-guard.history");
   await host.renderOnce();
   host.resize(35, 100);
   await host.renderOnce();
@@ -277,6 +378,10 @@ try {
   assert.match(frame(), /Main/);
   assert.match(frame(), /RUNNING/);
   assert.match(frame(), /explore/);
+  assert.ok(frame().trimEnd().split("\n").length <= 34);
+  console.log(
+    `DENSITY: 35 columns ${frame().trimEnd().split("\n").length} lines`,
+  );
   host.resize(20, 160);
   await host.renderOnce();
   await host.renderOnce();
@@ -284,16 +389,20 @@ try {
   assert.match(frame(), /indexer/);
   assert.match(frame(), /Threshold/);
   assert.match(frame(), /reached/);
-  assert.match(frame(), /STATISTICS/);
+  assert.doesNotMatch(frame(), /STATISTICS/);
   assert.ok(
     frame()
       .split("\n")
       .filter((line) => line.includes("│"))
       .every((line) => line.startsWith("│") && line.endsWith("│")),
   );
+  run("context-guard.history");
+  await host.renderOnce();
   setSessionID("explore");
   await host.renderOnce();
   assert.match(frame(), /SUBAGENTS \(1\)/);
+  assert.match(frame(), /History: show/);
+  assert.doesNotMatch(frame(), /100%│/);
   assert.match(frame(), /indexer/);
   assert.doesNotMatch(frame(), /implementor/);
 } finally {

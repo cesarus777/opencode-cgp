@@ -15,7 +15,8 @@ import {
   agentLines,
   agentHeading,
   mainSections,
-  statistics,
+  historySections,
+  type MainSection,
   subagentTree,
 } from "./compactformat.ts";
 
@@ -31,16 +32,24 @@ export function CompactSidebar(props: {
   const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>(
     new Set<string>(),
   );
-  const [hideCompleted, setHideCompleted] = createSignal(false);
+  const [hideCompleted, setHideCompleted] = createSignal(true);
+  const [showHistory, setShowHistory] = createSignal(false);
   const [byPressure, setByPressure] = createSignal(true);
   createEffect(() => {
     props.sessionID;
     setCollapsed(new Set<string>());
+    setShowHistory(false);
   });
   const current = createMemo(() =>
     props.rows.find((r) => r.node.sessionId === props.sessionID),
   );
   const trace = createMemo(() => props.state.contextTrace(current()));
+  const inventory = createMemo(() => props.state.inventoryStatus());
+  const trustworthy = () =>
+    inventory().complete &&
+    !inventory().scanning &&
+    !inventory().failed &&
+    !inventory().damaged;
   const tree = createMemo(() =>
     subagentTree(
       props.rows,
@@ -48,6 +57,7 @@ export function CompactSidebar(props: {
       collapsed(),
       hideCompleted(),
       byPressure(),
+      trustworthy(),
     ),
   );
   const entries = createMemo(
@@ -62,6 +72,7 @@ export function CompactSidebar(props: {
       return next;
     });
   const toggleCompleted = () => setHideCompleted((value) => !value);
+  const toggleHistory = () => setShowHistory((value) => !value);
   const toggleSort = () => setByPressure((value) => !value);
   const toggleGroups = () =>
     setCollapsed((previous) =>
@@ -73,8 +84,16 @@ export function CompactSidebar(props: {
     mode: "global",
     commands: [
       {
+        id: "context-guard.history",
+        title: "Show or hide sidebar context history",
+        group: "Context Guard",
+        palette: true,
+        bind: false,
+        run: toggleHistory,
+      },
+      {
         id: "context-guard.completed",
-        title: "Toggle completed subagents",
+        title: "Show or hide completed subagent group",
         group: "Context Guard",
         palette: true,
         bind: false,
@@ -132,10 +151,6 @@ export function CompactSidebar(props: {
       </Index>
     );
   }
-  const section = (title: string) => {
-    const head = cells(`── ${title} `) > width() ? title : `── ${title} `;
-    return clip(head, width()) + "─".repeat(Math.max(0, width() - cells(head)));
-  };
   const notices = createMemo(() => [
     ...(!["2.0.29", "2.1.2"].includes(props.context.app.version)
       ? wrap(`Runtime ${props.context.app.version}: unverified`, width())
@@ -150,31 +165,9 @@ export function CompactSidebar(props: {
       ),
     ].flatMap((line) => wrap(line, width())),
   ]);
-  return (
-    <box
-      width="100%"
-      maxWidth={props.width}
-      flexShrink={0}
-      border
-      borderStyle="rounded"
-      title=" CONTEXT GUARD "
-      borderColor={colors().muted}
-      titleColor={colors().base}
-      paddingX={1}
-      flexDirection="column"
-      onSizeChange={function () {
-        setMeasuredWidth(this.width);
-      }}
-    >
-      <Index
-        each={mainSections(
-          current(),
-          width(),
-          props.state.age(props.sessionID),
-          trace().samples,
-          trace().capacity,
-        )}
-      >
+  function Sections(input: { sections: readonly MainSection[] }) {
+    return (
+      <Index each={input.sections}>
         {(section) => (
           <Index each={section().lines}>
             {(line) => (
@@ -218,27 +211,67 @@ export function CompactSidebar(props: {
           </Index>
         )}
       </Index>
+    );
+  }
+  return (
+    <box
+      width="100%"
+      maxWidth={props.width}
+      flexShrink={0}
+      border
+      borderStyle="rounded"
+      title=" CONTEXT GUARD "
+      borderColor={colors().muted}
+      titleColor={colors().base}
+      paddingX={1}
+      flexDirection="column"
+      onSizeChange={function () {
+        setMeasuredWidth(this.width);
+      }}
+    >
+      <Sections
+        sections={mainSections(
+          current(),
+          width(),
+          props.state.age(props.sessionID),
+        )}
+      />
       <Index each={notices()}>
         {(line) => <text fg={colors().feedback.warning.base}>{line()}</text>}
       </Index>
-      <text> </text>
-      <text fg={colors().muted}>
-        {section(`SUBAGENTS (${tree().all.length})`)}
+      <text
+        fg={colors().muted}
+        onMouseDown={() => props.context.ui.panel.open("context-guard.monitor")}
+      >
+        {clip("Open: /context-guard", width())}
       </text>
+      <text fg={colors().muted} onMouseDown={toggleHistory}>
+        {clip(showHistory() ? "History: hide" : "History: show", width())}
+      </text>
+      <Show when={showHistory()}>
+        <Sections
+          sections={historySections(
+            current(),
+            width(),
+            props.state.age(props.sessionID),
+            trace().samples,
+            trace().capacity,
+          )}
+        />
+      </Show>
       <Lines
         lines={wrap(
-          `${tree().all.filter((r) => r.node.status === "running").length} running · ${tree().all.filter((r) => r.node.status === "completed").length} completed${props.state.complete() ? "" : " · partial"}`,
+          `SUBAGENTS (${tree().all.length}) · ${tree().all.filter((r) => r.node.status === "running").length} running${trustworthy() && tree().complete ? "" : " · partial"}`,
           width(),
         )}
       />
-      <text> </text>
       <For each={tree().visible.map((entry) => entry.row.node.sessionId)}>
         {(id) => {
           const entry = () => entries().get(id);
           const row = () => entry()?.row;
           const indent = () =>
             " ".repeat(
-              Math.min(entry()?.depth ?? 0, Math.floor(width() / 6)) * 2,
+              Math.min((entry()?.depth ?? 0) * 2, Math.max(0, width() - 16)),
             );
           const prefix = () =>
             `${indent()}${entry()?.depth ? "└─ " : ""}${entry()?.hasChildren ? (collapsed().has(id) ? "▸ " : "▾ ") : ""}`;
@@ -280,39 +313,33 @@ export function CompactSidebar(props: {
                       </text>
                     )}
                   </Index>
-                  <text> </text>
+                  <Show when={entry()?.hidden}>
+                    <Lines
+                      lines={wrap(
+                        `${entry()?.hidden} hidden${entry()?.attention ? " · needs attention" : ""}`,
+                        width(),
+                      )}
+                    />
+                  </Show>
                 </box>
               )}
             </Show>
           );
         }}
       </For>
-      <text fg={colors().muted} onMouseDown={toggleCompleted}>
-        {clip(hideCompleted() ? "Show completed" : "Hide completed", width())}
-      </text>
+      <Show when={tree().grouped > 0}>
+        <text fg={colors().muted} onMouseDown={toggleCompleted}>
+          {clip(
+            `Completed (${tree().grouped}): ${hideCompleted() ? "show" : "hide"}`,
+            width(),
+          )}
+        </text>
+      </Show>
       <text fg={colors().muted} onMouseDown={toggleSort}>
         {clip(byPressure() ? "Sort: pressure" : "Sort: activity", width())}
       </text>
       <text fg={colors().muted} onMouseDown={toggleGroups}>
         {clip(collapsed().size ? "Expand groups" : "Collapse groups", width())}
-      </text>
-      <text> </text>
-      <text fg={colors().muted}>{section("STATISTICS")}</text>
-      <Lines
-        lines={statistics(
-          props.rows
-            .filter((r) => r.node.sessionId === props.sessionID)
-            .concat(tree().all),
-          props.sessionID,
-          props.state.complete(),
-          width(),
-        )}
-      />
-      <text
-        fg={colors().muted}
-        onMouseDown={() => props.context.ui.panel.open("context-guard.monitor")}
-      >
-        {clip("Open: /context-guard", width())}
       </text>
     </box>
   );

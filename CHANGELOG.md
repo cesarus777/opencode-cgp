@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Compact the native sidebar to identity-first occupancy, early panel access, expandable history and two-line ordinary descendant rows. Group completed subtrees only when discovery and their measurement/lifecycle states are trustworthy; preserve attention-bearing ancestry and hidden-fold feedback.
+- Move sidebar throughput and aggregate diagnostics into panel Details, with route-family statistics independent of selection/folding. The ordinary fixture shrinks from 63 to 22 lines at 39 columns; validate with 220 offline tests and synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2. See the [sidebar validation record](docs/validation/sidebar-density-2026-11-06.md).
+
 - Add native-panel keyboard help with preserved selection, scroll position and chart settings. Pause chart polling during help, keep Guard status visible, and reserve contextual help/close controls at narrow widths.
 - Report native inventory discovery progress, actionable continuation, failures and node bounds. Add the client plugin option `openShortcut` for keyboard entry from child composers through the existing `context-guard.show` command and display its effective shortcut; it remains unbound by default. See the [native keyboard/help validation](docs/validation/native-keyboard-help-2026-11-06.md).
 
