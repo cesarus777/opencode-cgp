@@ -1,5 +1,7 @@
 # Standalone Context Guard dashboard
 
+Current status: the terminal dashboard and Models screen are shipped through 0.4.0; the [threshold/status consistency increment](threshold-status-consistency.md) is implemented for the next release. Browser delivery, durable analytics storage, and UX-04/UX-05 row improvements remain pending. The dated progress entries below preserve their original delivery context.
+
 ## Goal and scope
 
 Build one read-only dashboard application with two frontends: a local browser page and a full-screen terminal app. Working name: **Context Guard Dashboard** (Grafana-inspired layout, without a Grafana dependency). It connects to an OpenCode V2 server with this plugin installed and shows current context, compaction, performance, and retained-history metrics for root and child sessions. Launch it independently of OpenCode's native TUI, desktop, or web client.
@@ -59,10 +61,10 @@ The terminal frontend runs as a standalone Bun application using a dedicated ter
 
 Acceptance: either command starts from the published package; both frontends show the same current metrics and statuses for a root and concurrent children; a server restart/event gap recovers without false zeros or duplicate requests; unknown/partial/estimated data stays labeled; history respects its server bounds; no prompt, response, tool output, or credential reaches logs or the browser payload.
 
-## Open decisions
+## Decisions and remaining scope
 
-- Confirm the standalone terminal renderer and exact package size impact during the connection/runtime spike.
-- Decide whether a remote-server credential is supplied through an environment variable, protected file, or OS credential store before implementing remote access. Keep it out of command arguments and URLs.
+- The renderer is `@opentui/core@0.5.17`, loaded lazily; the package installs it automatically. The terminal requires Bun >=1.3.0. See [renderer validation and package impact](../validation/dashboard-terminal-2026-10-28.md) and [current installation instructions](../../README.md#standalone-terminal-dashboard).
+- Remote credentials use `CONTEXT_GUARD_PASSWORD` and optional `CONTEXT_GUARD_USERNAME`, with `opencode` as the default username. Credentials stay out of arguments and URLs.
 - A cross-location overview would require bounded location discovery and per-location transport. Ship an explicit location selector first; aggregate later if there is a demonstrated need.
 
 ## Implementation progress
@@ -74,3 +76,5 @@ Acceptance: either command starts from the published package; both frontends sho
 2026-10-27: [the terminal implementation handoff](standalone-dashboard-terminal.md) records stage 3's starting state, runtime/dependency decision, implementation sequence and validation gates for a new session.
 
 2026-10-28: stage 3 is implemented: `context-guard dashboard tui`, lazy optional OpenTUI core loading with a terminal-specific Bun >=1.3.0 check, overview/detail/history, editor focus, explicit locations and idempotent cleanup. The offline suite passes 161 tests. Authenticated standalone synthetic-provider PTYs pass on OpenCode 2.0.29 and 2.1.2; the clean-installed CLI passes on 2.1.2 with renderer-free existing consumers preserved. See [terminal validation](../validation/dashboard-terminal-2026-10-28.md) for exact runtime/binary paths, package measurements and limits. Stage 4 browser delivery and stage 5's remaining combined release checks are still pending.
+
+2026-11-06: consistent threshold, stale-measurement, and Guard/connection wording is delivered across the standalone dashboard and native surfaces (UX-02/UX-03/UX-06). See the [status implementation plan](threshold-status-consistency.md) and [validation record](../validation/threshold-status-consistency-2026-11-06.md). Standalone overview density and row reachability (UX-04/UX-05) are the next UX increment; browser delivery remains pending.

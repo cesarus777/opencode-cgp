@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use consistent threshold and Guard status wording across the native sidebar, panel, and standalone dashboard. Replace “tokens until compaction” with distance below/over threshold, and separate capacity occupancy from “Near threshold” / “Threshold reached.”
+- Keep stale occupancy labeled “Last measured” while current pressure stays unknown. Explain last-known Guard health during disconnect and reason-specific reload/storage-repair requirements without treating reconnect as enforcement recovery.
+- Preserve critical status and selected identity at narrow sizes; retain monitoring-limit/model-limit warnings and exact diagnostic reason codes in Details. Validate with 209 offline tests and native/standalone OpenCode 2.1.2 PTY smoke tests; see the [status validation record](docs/validation/threshold-status-consistency-2026-11-06.md).
+
 - Open `/context-guard` with a compact selected-session summary and nested family list. Move full diagnostics and the context-history chart into Details (`i`), keeping retained performance Charts on `c`.
 - Preserve selected-session identity across views, refreshes, and ordering changes; fall back safely when a selected session disappears. Keep one panel consumer active across all views.
 - Add responsive table/card layouts, clickable footer actions, page and boundary navigation, and scrolling in Details. Keep Guard status visible and distinguish stale occupancy, threshold distance, and compaction lifecycle states.

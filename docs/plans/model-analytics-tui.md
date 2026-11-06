@@ -1,6 +1,6 @@
 # Aggregate model charts in the terminal dashboard
 
-Status: phases 1–4 implemented and locally validated in the working tree; see the [delivery record](../validation/model-analytics-tui-2026-10-29.md). Extends stages 2–3 of [model analytics](model-analytics.md); the offline aggregator and CLI already ship in 0.3.0 and later.
+Status: phases 1–4 implemented, locally validated, and shipped in 0.4.0; see the [delivery record](../validation/model-analytics-tui-2026-10-29.md). Extends stages 2–3 of [model analytics](model-analytics.md); the offline aggregator and CLI already ship in 0.3.0 and later.
 
 ## User workflow
 

@@ -6,6 +6,7 @@ import type { KeymapLayer } from "@opencode/plugin/tui/context";
 import { ContextTraceStore } from "../../src/tui/contextchart.ts";
 import type { GuardState } from "../../src/tui/state.ts";
 import type { MonitorHealth } from "../../src/snapshot.ts";
+import type { Connection } from "../../src/tui/transport.ts";
 import { metric } from "../../src/family.ts";
 import type { GuardRow } from "../../src/family.ts";
 import { GuardPanel } from "../../src/tui/panel.tsx";
@@ -43,6 +44,7 @@ const [health, setHealth] = createSignal<MonitorHealth>({
 let refreshes = 0,
   loads = 0;
 const [complete, setComplete] = createSignal(true);
+const [connection, setConnection] = createSignal<Connection>("live");
 const historyReads: { sessionId: string; windowMs: number }[] = [];
 const traceStore = new ContextTraceStore();
 const state: GuardState = {
@@ -103,7 +105,7 @@ const state: GuardState = {
   dispose() {},
   age: () => 0,
   health,
-  connection: () => "live",
+  connection,
   complete,
   refresh() {
     refreshes++;
@@ -177,7 +179,7 @@ try {
     host
       .captureCharFrame()
       .split("\n")
-      .some((line) => line.startsWith("  Context Guard")),
+      .some((line) => line.startsWith("  Live · Context Guard")),
     "panel has horizontal padding",
   );
   assert.match(host.captureCharFrame(), /q close/);
@@ -309,7 +311,7 @@ try {
   let frame = chartHost.captureCharFrame();
   assert.match(frame, /Selected: Main/);
   assert.match(frame, /112K\/500K/);
-  assert.match(frame, /48K below/);
+  assert.match(frame, /48K tokens below/);
   assert.match(frame, /explore/);
   assert.doesNotMatch(frame, /100%│|Provenance|Cumulative/);
   assert.equal(consumers, 1);
@@ -417,6 +419,40 @@ try {
     assert.match(frame, /Main/);
     assert.match(frame, /explore/, `family remains visible at ${w}×${h}`);
   }
+  // A UI reconnect keeps server suspension explicit at each supported geometry.
+  for (const reasons of [["event-stream-gap"], ["persistence-unavailable"]]) {
+    setHealth({ ...health(), enforcement: "suspended", reasons });
+    for (const nextConnection of ["reconnecting", "live"] as const) {
+      setConnection(nextConnection);
+      for (const [w, h] of [
+        [80, 24],
+        [40, 20],
+        [20, 12],
+      ]) {
+        setWidth(w ?? 40);
+        chartHost.resize(w ?? 40, h ?? 20);
+        await chartHost.flush();
+        await chartHost.flush();
+        const text = chartHost
+          .captureCharFrame()
+          .split("\n")
+          .map((line) => line.trim())
+          .join(" ");
+        assert.match(text, /Guard suspended/);
+        assert.match(text.toLowerCase(), /reload/);
+        assert.match(text, /Main/);
+        assert.match(text, /q close/);
+        if (nextConnection === "reconnecting") {
+          assert.match(text, /Reconnecting/);
+          assert.match(text, /Last known/);
+        }
+        if (reasons.includes("persistence-unavailable"))
+          assert.match(text.toLowerCase(), /repair/);
+      }
+    }
+  }
+  setConnection("live");
+  setHealth({ ...health(), enforcement: "observing", reasons: [] });
   setWidth(40);
   chartHost.resize(40, 50);
   run("context-guard.inspect");

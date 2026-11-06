@@ -145,9 +145,71 @@ test("detail exposes all fields and unknown, stale, partial, blocked and uncerta
       expect(text).toContain("performance stale");
       const { snapshot: _, ...withoutSnapshot } = stale;
       const missing = overviewRow(withoutSnapshot);
-      expect(missing).toContain("prompt ?/?");
+      expect(missing).toContain("Last measured ?/?");
     }
   } finally {
+    controller.stop();
+  }
+});
+
+test("status consequences and selected identity survive narrow screens and reconnect without enabling suspended Guard", async () => {
+  const { controller, counts } = terminalFixture();
+  const shell = new TerminalShell(controller, () => {});
+  let projection: ReturnType<typeof spyOn> | undefined;
+  try {
+    await controller.start();
+    await settle(() => controller.getView().connection === "live");
+    const base = controller.getView();
+    if (!base.health) throw new Error("Missing fixture health");
+    const view = spyOn(controller, "getView");
+    projection = view;
+    for (const connection of ["reconnecting", "live"] as const) {
+      for (const screen of [
+        "overview",
+        "detail",
+        "history",
+        "models",
+      ] as const) {
+        view.mockReturnValue({
+          ...base,
+          connection,
+          screen,
+          health: {
+            ...base.health,
+            enforcement: "suspended",
+            reasons: ["event-stream-gap"],
+          },
+        });
+        for (const [width, height] of [
+          [80, 24],
+          [40, 20],
+          [20, 12],
+        ] as const) {
+          const frame = shell.frame(width, height);
+          expect(frame).toContain("Guard suspended");
+          expect(frame.toLowerCase()).toContain("reload required");
+          expect(frame).toContain("q quit");
+          expect(frame).not.toContain("requests enabled");
+          if (height < 18) expect(frame).toContain("Selected: build");
+          if (connection === "reconnecting") {
+            expect(frame).toContain("Reconnecting");
+            expect(frame).toContain("Last known");
+            expect(frame).toContain(
+              width < 28
+                ? "Last data shown"
+                : "Showing last received measurements",
+            );
+          }
+          expect(frame.split("\n").length).toBeLessThanOrEqual(height);
+          expect(frame.split("\n").every((line) => cells(line) <= width)).toBe(
+            true,
+          );
+        }
+      }
+    }
+    expect(counts.streams).toBe(1);
+  } finally {
+    projection?.mockRestore();
     controller.stop();
   }
 });

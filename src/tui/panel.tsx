@@ -17,11 +17,11 @@ import { PanelDetails, PanelOverview } from "./panelview.tsx";
 import {
   compactionLabel,
   panelRowHeading,
-  panelStatus,
   panelSummary,
 } from "./panelformat.ts";
 import { chartMetrics } from "./chartformat.ts";
 import { clip, wrap } from "./format.ts";
+import { connectionLabel, monitorStatusLines } from "./statusformat.ts";
 
 type PanelView = "overview" | "details" | "charts";
 export function GuardPanel(props: {
@@ -284,25 +284,14 @@ export function GuardPanel(props: {
       },
     ],
   }));
-  const statusLines = () => {
-    const status = panelStatus(props.state.health());
-    if (width() >= 28) return wrap(status, width());
-    switch (props.state.health()?.enforcement) {
-      case "observing":
-        return ["Observing", "No Guard compact"];
-      case "available":
-        return ["Auto compaction", "enabled"];
-      case "suspended":
-        return ["Guard suspended", "Reload required"];
-      default:
-        return wrap(status, width());
-    }
-  };
-  const notice = () =>
-    compactionLabel(selectedRow()) ??
-    (props.state.health()?.reasons.length
-      ? "Guard needs attention · i details"
-      : undefined);
+  const statusLines = () =>
+    monitorStatusLines(
+      props.state.connection(),
+      props.state.health(),
+      rows().some((row) => row.snapshot?.measurement !== undefined),
+      width() < 28,
+    ).flatMap((line) => wrap(line, width()));
+  const notice = () => compactionLabel(selectedRow());
   const actions = () => {
     const info = {
       label:
@@ -350,7 +339,9 @@ export function GuardPanel(props: {
       <box flexDirection="column" flexShrink={0}>
         <text fg={props.context.theme.text.base}>
           {clip(
-            `${compact() ? "Guard" : "Context Guard"} · ${view()} · ${props.state.connection()}`,
+            width() < 28
+              ? `${connectionLabel(props.state.connection(), true)} · Guard`
+              : `${connectionLabel(props.state.connection())} · Context Guard · ${view()}`,
             width(),
           )}
         </text>

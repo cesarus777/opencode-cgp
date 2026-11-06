@@ -2,6 +2,8 @@
 
 Prepared 2026-10-27 for a new implementation session. This continues **stage 3** of [the standalone dashboard plan](standalone-dashboard.md).
 
+Status: stage 3 is implemented; see [terminal delivery evidence](../validation/dashboard-terminal-2026-10-28.md) and the [current status/copy validation](../validation/threshold-status-consistency-2026-11-06.md). The starting state and handoff below are historical. Use [current configuration](../configuration.md) for supported behavior; standalone row density/reachability (UX-04/UX-05) remains follow-up work.
+
 ## Starting state
 
 - `046af72` implements the connection spike.

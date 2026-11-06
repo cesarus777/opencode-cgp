@@ -1,11 +1,18 @@
 import { chartMetrics, metricPlot } from "../tui/chartformat.ts";
 import { cells, clip, wrap, quantity } from "../tui/format.ts";
+import {
+  connectionLabel,
+  monitorStatusLines,
+  panelStatus,
+  pressureLabel,
+  thresholdDistance,
+} from "../tui/statusformat.ts";
 import type { DashboardRow, DashboardView } from "./view.ts";
 
 export function overviewRow(row: DashboardRow): string {
   const s = row.snapshot;
   const valid = row.freshness === "fresh" || row.freshness === "stale";
-  return `${" ".repeat(Math.min(row.depth, 12))}${row.depth ? "└ " : ""}${row.node.agent ?? "unknown agent"} / ${row.node.model ?? "unknown model"} [${row.node.sessionId}] ${row.node.status} | prompt ${quantity(valid ? s?.measurement?.tokens : undefined)}/${quantity(s?.capacityTokens)} | occupancy ${row.utilizationPercent?.toFixed(1) ?? "?"}% | trigger ${quantity(s?.policy.triggerTokens)} headroom ${quantity(row.triggerDeltaTokens)} | pressure ${row.pressure} | compact ${s?.compaction.phase ?? "unavailable"} | performance ${s?.performance?.status ?? "unavailable"} | live TPS ${quantity(row.performanceAvailable && row.performanceFreshness !== "invalid" ? s?.performance?.liveTps : undefined)} | age ${row.measurementAgeMs === undefined ? "unknown" : `${Math.floor(row.measurementAgeMs / 1000)}s`} | inventory ${row.inventoryStale ? "stale" : "fresh"}, live ${row.liveStale ? "stale" : "fresh"}, usage ${row.freshness}, performance ${row.performanceFreshness}${s?.measurement?.confidence === "approximate" ? " estimated" : ""}${s?.performance?.tokenSource === "estimated" ? " estimated TPS" : ""}${s?.performance?.partial ? " partial" : ""}${row.hidden ? ` | ${row.hidden} hidden descendants` : ""}`;
+  return `${" ".repeat(Math.min(row.depth, 12))}${row.depth ? "└ " : ""}${row.node.agent ?? "unknown agent"} / ${row.node.model ?? "unknown model"} [${row.node.sessionId}] ${row.node.status} | ${row.freshness === "stale" ? "Last measured" : "Context"} ${quantity(valid ? s?.measurement?.tokens : undefined)}/${quantity(s?.capacityTokens)} | occupancy ${row.utilizationPercent?.toFixed(1) ?? "?"}% | threshold ${quantity(s?.policy.triggerTokens)} · ${thresholdDistance(row)} | ${pressureLabel(row)} | compact ${s?.compaction.phase ?? "unavailable"} | performance ${s?.performance?.status ?? "unavailable"} | live TPS ${quantity(row.performanceAvailable && row.performanceFreshness !== "invalid" ? s?.performance?.liveTps : undefined)} | age ${row.measurementAgeMs === undefined ? "unknown" : `${Math.floor(row.measurementAgeMs / 1000)}s`} | inventory ${row.inventoryStale ? "stale" : "fresh"}, live ${row.liveStale ? "stale" : "fresh"}, usage ${row.freshness}, performance ${row.performanceFreshness}${s?.measurement?.confidence === "approximate" ? " estimated" : ""}${s?.performance?.tokenSource === "estimated" ? " estimated TPS" : ""}${s?.performance?.partial ? " partial" : ""}${row.hidden ? ` | ${row.hidden} hidden descendants` : ""}`;
 }
 
 // Explicit paths include absent optional fields. Unknown is never rendered as zero.
@@ -232,16 +239,45 @@ export function wrapped(lines: readonly string[], width: number) {
     return cells(clean) <= available ? [clean] : wrap(clean, available);
   });
 }
-export function headerLines(view: DashboardView, width: number): string[] {
+export function headerLines(
+  view: DashboardView,
+  width: number,
+  height = 24,
+): string[] {
+  const compact = width < 28;
+  const small = height < 18;
+  // Below the usable status geometry, retain a bounded header so even a
+  // one-cell Models viewport can still scroll through every row.
+  if (width < 16 || height < 8)
+    return [
+      clip(connectionLabel(view.connection, true), width),
+      clip(panelStatus(view.health), width),
+      clip(`Location: ${view.location}`, width),
+    ];
   return [
     clip(
-      `Context Guard · ${view.screen} · ${view.connection} · enforcement ${view.health?.enforcement ?? "unknown"}`,
+      `${connectionLabel(view.connection, compact)} · ${compact ? (width >= 20 ? "Context Guard" : "Guard") : `Context Guard · ${view.screen}`}`,
       width,
     ),
-    clip(
-      `Known ${view.inventory.total} · monitored ${view.inventory.monitored} · active ${view.inventory.active} · inventory ${view.inventory.stale ? "stale" : "fresh"}${view.inventory.complete ? "" : " / partial"}`,
-      width,
-    ),
-    clip(`Location: ${view.location}`, width),
+    ...monitorStatusLines(
+      view.connection,
+      view.health,
+      view.rows.some((row) => row.snapshot?.measurement !== undefined),
+      compact,
+    ).flatMap((line) => wrap(line, width)),
+    ...(small
+      ? [
+          clip(
+            `Selected: ${view.selected?.node.agent ?? view.selectedSessionId ?? "none"}`,
+            width,
+          ),
+        ]
+      : [
+          clip(
+            `Known ${view.inventory.total} · monitored ${view.inventory.monitored} · active ${view.inventory.active} · inventory ${view.inventory.stale ? "stale" : "fresh"}${view.inventory.complete ? "" : " / partial"}`,
+            width,
+          ),
+          clip(`Location: ${view.location}`, width),
+        ]),
   ];
 }

@@ -12,7 +12,7 @@ The new default should show a compact selected-session summary and the family li
 
 Change only the native `/context-guard` panel and its supporting presentation helpers, renderer fixtures, and documentation. Keep the sidebar's current appearance, standalone dashboard, monitoring policy, accounting, compaction lifecycle, RPC contracts, and inventory bounds intact.
 
-Include accurate threshold and mode wording in the new summary. Broader copy changes, a sidebar redesign, new global shortcuts, model analytics, and standalone row fixes remain separate review items.
+Include accurate threshold and mode wording in the new summary. Broader copy changes were delivered separately through [threshold/status consistency](threshold-status-consistency.md). A sidebar redesign, new global shortcuts, native-panel model analytics, and standalone row fixes remain separate review items.
 
 ## Proposed interaction contract
 

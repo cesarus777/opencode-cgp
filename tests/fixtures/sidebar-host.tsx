@@ -143,18 +143,18 @@ try {
   assertColor("RUNNING", palette.success, "Main");
   assertColor("●", palette.success, "explore");
   assertColor("explore", palette.error);
-  assertColor("CRITICAL", palette.error);
+  assertColor("Threshold reached", palette.error);
   assertColor("indexer", palette.success);
   assertColor("implementor", palette.warning);
-  assertColor("WARNING", palette.warning);
+  assertColor("Near threshold", palette.warning);
   assertColor("reviewer", palette.muted);
   const golden = new URL("./sidebar-frame.txt", import.meta.url);
   if (process.env.UPDATE_SIDEBAR_FRAME === "1") writeFileSync(golden, frame());
   assert.equal(frame(), readFileSync(golden, "utf8"));
   assert.match(frame(), /SUBAGENTS \(4\)/);
   assert.match(frame(), /3 running · 1 completed/);
-  assert.match(frame(), /CRITICAL/);
-  assert.match(frame(), /48K tokens until compaction/);
+  assert.match(frame(), /Threshold reached/);
+  assert.match(frame(), /48K tokens below threshold/);
   const lines = frame().split("\n");
   const exploreY = lines.findIndex((line) => line.includes("● explore"));
   assert.ok(exploreY > 0);
@@ -277,12 +277,13 @@ try {
   assert.match(frame(), /Main/);
   assert.match(frame(), /RUNNING/);
   assert.match(frame(), /explore/);
-  host.resize(20, 100);
+  host.resize(20, 160);
   await host.renderOnce();
   await host.renderOnce();
   assert.match(frame(), /explore/);
   assert.match(frame(), /indexer/);
-  assert.match(frame(), /CRITICAL/);
+  assert.match(frame(), /Threshold/);
+  assert.match(frame(), /reached/);
   assert.match(frame(), /STATISTICS/);
   assert.ok(
     frame()

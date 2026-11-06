@@ -5,14 +5,9 @@ import {
 } from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
 import { cells, clip, wrap, performanceLines } from "./format.ts";
-
-export function tokens(value: number | undefined): string {
-  if (value === undefined || !Number.isFinite(value)) return "?";
-  const magnitude = Math.abs(value);
-  if (magnitude >= 1_000_000) return `${+(value / 1_000_000).toFixed(1)}M`;
-  if (magnitude >= 1_000) return `${+(value / 1_000).toFixed(1)}K`;
-  return String(value);
-}
+import { tokens } from "./quantity.ts";
+import { pressureLabel, thresholdDistance } from "./statusformat.ts";
+export { tokens } from "./quantity.ts";
 
 export function columns(left: string, right: string, width: number): string[] {
   if (cells(left) + cells(right) + 1 > width)
@@ -59,10 +54,6 @@ export function mainSections(
     measured !== undefined && total !== undefined && total > 0
       ? measured / total
       : undefined;
-  const remaining =
-    measured !== undefined && s?.policy.triggerTokens !== undefined
-      ? s.policy.triggerTokens - measured
-      : undefined;
   return [
     ...(row.snapshot?.performance
       ? [{ tone: "base" as const, lines: performanceLines(row, width) }]
@@ -80,7 +71,7 @@ export function mainSections(
       lines: [
         "",
         ...columns(
-          "Context",
+          row.freshness === "stale" ? "Last measured" : "Context",
           `${tokens(measured)} / ${tokens(s?.capacityTokens)}`,
           width,
         ),
@@ -114,7 +105,7 @@ export function mainSections(
     {
       tone: "base",
       lines: wrap(
-        `${ratio(s?.capacityTokens) === undefined ? "?" : Math.round((ratio(s?.capacityTokens) ?? 0) * 100)}% used · recent samples → now`,
+        `${m?.confidence === "approximate" ? "~" : ""}${ratio(s?.capacityTokens) === undefined ? "?" : Math.round((ratio(s?.capacityTokens) ?? 0) * 100)}% used · recent samples → now`,
         width,
       ),
     },
@@ -123,7 +114,9 @@ export function mainSections(
       lines: [
         "",
         ...columns(
-          "Compact threshold",
+          row.freshness === "stale"
+            ? "Last measured / threshold"
+            : "Policy threshold",
           `${tokens(measured)} / ${tokens(s?.policy.triggerTokens)}`,
           width,
         ),
@@ -133,7 +126,7 @@ export function mainSections(
       tone: "pressure",
       lines: [
         ...wrap(
-          `${ratio(s?.policy.triggerTokens) === undefined ? "?" : Math.round((ratio(s?.policy.triggerTokens) ?? 0) * 100)}% of threshold · ┄ trigger`,
+          `${row.freshness !== "fresh" || row.pressureRatio === undefined ? "?" : Math.round(row.pressureRatio * 100)}% of threshold · ┄ trigger`,
           width,
         ),
         ...(s?.capacityTokens !== undefined &&
@@ -141,14 +134,11 @@ export function mainSections(
         s.policy.triggerTokens > s.capacityTokens
           ? wrap("Threshold above chart capacity", width)
           : []),
-        ...wrap(
-          remaining === undefined
-            ? "Compaction distance unknown"
-            : remaining < 0
-              ? `${tokens(-remaining)} tokens over threshold`
-              : `${tokens(remaining)} tokens until compaction`,
-          width,
-        ),
+        ...wrap(thresholdDistance(row), width),
+        ...(["near", "crossed"].includes(row.pressure) &&
+        row.freshness === "fresh"
+          ? wrap(pressureLabel(row), width)
+          : []),
       ],
     },
     {
@@ -203,12 +193,6 @@ export function agentLines(row: GuardRow, width: number) {
   const valid = row.freshness === "fresh" || row.freshness === "stale";
   const measured = valid ? row.snapshot?.measurement?.tokens : undefined;
   const capacity = row.snapshot?.capacityTokens;
-  const pressure =
-    row.pressure === "crossed"
-      ? "CRITICAL"
-      : row.pressure === "near"
-        ? "WARNING"
-        : "";
   return [
     ...performanceLines(row, width),
     progress(
@@ -218,9 +202,10 @@ export function agentLines(row: GuardRow, width: number) {
       width,
     ),
     ...wrap(
-      `${tokens(measured)} / ${tokens(capacity)}${pressure ? ` · ${pressure}` : ""}`,
+      `${row.freshness === "stale" ? "Last measured" : "Context"} ${row.snapshot?.measurement?.confidence === "approximate" && valid ? "~" : ""}${tokens(measured)} / ${tokens(capacity)}`,
       width,
     ),
+    ...wrap(pressureLabel(row), width),
     ...wrap(
       `${row.node.status.toUpperCase()}${row.freshness !== "fresh" ? ` · ${row.freshness.toUpperCase()}` : ""}${row.node.interrupted ? " · interrupted" : ""}`,
       width,

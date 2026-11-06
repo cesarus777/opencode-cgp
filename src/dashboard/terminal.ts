@@ -364,7 +364,9 @@ export class TerminalShell {
     }
     const footer = this.editor
       ? `${this.editor}> ${this.input} [Enter apply; Esc cancel${this.editor === "location" ? "; Tab remembered" : ""}]`
-      : "? help q quit · 1 overview 2 detail 3 history 4 models · / search f filters l location r refresh";
+      : width < 40
+        ? "? help q quit"
+        : "? help q quit · 1 overview 2 detail 3 history 4 models · / search f filters l location r refresh";
     if (height < 5)
       return [
         clip("Context Guard · ? help · q quit", width),
@@ -372,12 +374,12 @@ export class TerminalShell {
       ]
         .slice(0, height)
         .join("\n");
-    const header = headerLines(view, width);
-    const available = height - header.length - 1;
+    const header = headerLines(view, width, height);
+    const available = Math.max(0, height - header.length - 1);
     const notices = [
       ...view.notices,
       ...view.inventory.notices,
-      ...(view.health?.reasons ?? []),
+      ...(view.screen === "detail" ? (view.health?.reasons ?? []) : []),
       ...(this.notice ? [this.notice] : []),
       ...(view.screen !== "models" && Object.values(view.filters).some(Boolean)
         ? [

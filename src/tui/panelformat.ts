@@ -1,7 +1,8 @@
 import type { GuardRow } from "../family.ts";
-import type { MonitorHealth } from "../snapshot.ts";
 import { cells, clip } from "./format.ts";
-import { tokens } from "./compactformat.ts";
+import { tokens } from "./quantity.ts";
+import { thresholdDistance } from "./statusformat.ts";
+export { thresholdDistance, panelStatus } from "./statusformat.ts";
 
 export const panelStatuses = {
   running: "RUNNING",
@@ -10,22 +11,6 @@ export const panelStatuses = {
   failed: "FAILED",
   unknown: "UNKNOWN",
 } as const;
-
-export function thresholdDistance(row: GuardRow | undefined): string {
-  const delta = row?.triggerDeltaTokens;
-  if (
-    row?.freshness !== "fresh" ||
-    row.pressure === "unknown" ||
-    delta === undefined
-  )
-    return "pressure unknown";
-  if (delta === 0)
-    return row.pressure === "crossed"
-      ? "threshold reached"
-      : "at threshold (>)";
-  if (delta < 0) return `${tokens(-delta)} over threshold`;
-  return `${tokens(delta)} below${row.pressure === "near" ? " · near" : ""}`;
-}
 
 export function compactionLabel(row: GuardRow | undefined): string | undefined {
   const phase = row?.snapshot?.compaction.phase;
@@ -38,21 +23,6 @@ export function compactionLabel(row: GuardRow | undefined): string | undefined {
     blocked: "Compaction blocked · automatic retry suppressed",
     uncertain: "Completion unconfirmed · automatic retry suppressed",
   }[phase];
-}
-
-export function panelStatus(health: MonitorHealth | undefined): string {
-  switch (health?.enforcement) {
-    case "observing":
-      return "Observing · no Guard compaction";
-    case "available":
-      return "Automatic compaction enabled";
-    case "disabled":
-      return "Guard disabled";
-    case "suspended":
-      return "Guard suspended · reload required";
-    default:
-      return "Guard status unknown";
-  }
 }
 
 export function panelSummary(
@@ -69,6 +39,7 @@ export function panelSummary(
   const estimate =
     snapshot?.measurement?.confidence === "approximate" ? "~" : "";
   const identity = `${width < 28 ? ">" : "Selected:"} ${row.node.agent ?? row.node.sessionId}${row.current ? (width < 28 ? " *" : " (current)") : ""}`;
+  const threshold = `Threshold ${tokens(snapshot?.policy.triggerTokens)} · ${thresholdDistance(row)}`;
   const occupancy = compact
     ? `${prefix} ${estimate}${percent}`
     : `${prefix} ${estimate}${tokens(valid ? snapshot?.measurement?.tokens : undefined)}/${tokens(snapshot?.capacityTokens)} · ${percent}`;
@@ -78,7 +49,7 @@ export function panelSummary(
     ...(!compact
       ? [
           clip(
-            `Threshold ${tokens(snapshot?.policy.triggerTokens)} · ${thresholdDistance(row)}`,
+            cells(threshold) <= width ? threshold : thresholdDistance(row),
             width,
           ),
           clip(
@@ -105,7 +76,7 @@ function tableLine(
     const text = clip(value, size);
     return text + " ".repeat(Math.max(0, size - cells(text)));
   };
-  return `${pad(identity, width - 43)} ${pad(status, 8)} ${pad(context, 7)} ${pad(threshold, 25)}`;
+  return `${pad(identity, width - 47)} ${pad(status, 8)} ${pad(context, 7)} ${pad(threshold, 29)}`;
 }
 
 export function panelRowHeading(label: string, width: number): string {
@@ -135,7 +106,7 @@ export function panelRowLines(
           unknown: "?",
         }[row.node.status]
       : panelStatuses[row.node.status];
-  const distance = thresholdDistance(row);
+  const distance = thresholdDistance(row, true);
   const pad = (value: string, size: number) => {
     const text = clip(value, size);
     return text + " ".repeat(Math.max(0, size - cells(text)));

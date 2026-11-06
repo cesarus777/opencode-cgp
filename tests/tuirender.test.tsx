@@ -47,7 +47,7 @@ test("layout retains required quantities and status without color at 20/35/80 ce
       "128.0k",
       "75.0%",
       "100000",
-      "4.0k",
+      "4K tokens below",
       "accepted",
       "reported",
       "completed-request",

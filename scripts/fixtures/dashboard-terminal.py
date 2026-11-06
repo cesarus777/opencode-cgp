@@ -182,7 +182,7 @@ try:
     action("stop")
     expect("stale")
     expect("pressure unknown")
-    expect("prompt 1.2k/128.0k")
+    expect("Last measured 1.2k/128.0k")
     action("start")
     key("r")
     expect("monitored 3")

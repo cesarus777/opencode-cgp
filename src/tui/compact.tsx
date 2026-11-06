@@ -10,6 +10,7 @@ import type { Plugin } from "@opencode/plugin/tui";
 import type { GuardRow } from "../family.ts";
 import type { GuardState } from "./state.ts";
 import { cells, clip, wrap } from "./format.ts";
+import { connectionLabel, monitorStatusLines } from "./statusformat.ts";
 import {
   agentLines,
   agentHeading,
@@ -139,17 +140,15 @@ export function CompactSidebar(props: {
     ...(!["2.0.29", "2.1.2"].includes(props.context.app.version)
       ? wrap(`Runtime ${props.context.app.version}: unverified`, width())
       : []),
-    ...(props.state.connection() !== "live"
-      ? wrap(`Connection: ${props.state.connection()}`, width())
-      : []),
-    ...(props.state.health()?.mode === "observe" ? ["Observe mode"] : []),
-    ...(props.state.health()?.enforcement === "disabled" ||
-    props.state.health()?.enforcement === "suspended"
-      ? wrap(`Guard: ${props.state.health()?.enforcement}`, width())
-      : []),
-    ...(props.state.health()?.reasons ?? []).flatMap((reason) =>
-      wrap(reason, width()),
-    ),
+    ...[
+      connectionLabel(props.state.connection(), width() < 28),
+      ...monitorStatusLines(
+        props.state.connection(),
+        props.state.health(),
+        props.rows.some((row) => row.snapshot?.measurement !== undefined),
+        width() < 28,
+      ),
+    ].flatMap((line) => wrap(line, width())),
   ]);
   return (
     <box

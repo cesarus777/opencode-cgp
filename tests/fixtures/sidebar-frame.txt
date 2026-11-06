@@ -14,34 +14,40 @@
 │ muted held · last known context     │
 │ 22% used · recent samples → now     │
 │                                     │
-│ Compact threshold       112K / 160K │
+│ Policy threshold        112K / 160K │
 │ 70% of threshold · ┄ trigger        │
-│ 48K tokens until compaction         │
+│ 48K tokens below threshold          │
 │                                     │
 │ Measurement: reported · 3s ago      │
-│ Observe mode                        │
+│ Live                                │
+│ Observing · Guard won't request     │
+│ compaction                          │
 │                                     │
 │ ── SUBAGENTS (4) ────────────────── │
 │ 3 running · 1 completed             │
 │                                     │
 │ ▾ ● explore                     82% │
 │  ████████████████████████░░░░░ 82%  │
-│  410K / 500K · CRITICAL             │
+│  Context 410K / 500K                │
+│  Threshold reached                  │
 │  RUNNING                            │
 │                                     │
 │   └─ ● indexer                  34% │
 │    █████████░░░░░░░░░░░░░░░░░░ 34%  │
-│    170K / 500K                      │
+│    Context 170K / 500K              │
+│    Below threshold                  │
 │    RUNNING                          │
 │                                     │
 │ ● implementor                   55% │
 │  ████████████████░░░░░░░░░░░░░ 55%  │
-│  275K / 500K · WARNING              │
+│  Context 275K / 500K                │
+│  Near threshold                     │
 │  RUNNING                            │
 │                                     │
 │ ✓ reviewer                      14% │
 │  ████░░░░░░░░░░░░░░░░░░░░░░░░░ 14%  │
-│  70K / 500K                         │
+│  Context 70K / 500K                 │
+│  Below threshold                    │
 │  COMPLETED                          │
 │                                     │
 │ Hide completed                      │

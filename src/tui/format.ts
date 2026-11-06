@@ -1,4 +1,5 @@
 import type { GuardRow } from "../family.ts";
+import { pressureLabel, thresholdDistance } from "./statusformat.ts";
 export function quantity(n: number | undefined): string {
   return n === undefined || !Number.isFinite(n)
     ? "?"
@@ -110,15 +111,15 @@ export function detailLines(
       ...wrap("Guard: not monitored / unavailable", width),
     ];
   const threshold = s.policy.configured;
-  const headroom = row.triggerDeltaTokens;
+  const valid = row.freshness === "fresh" || row.freshness === "stale";
   const lines = [
     `${s.agent ?? "?"} / ${s.model ?? "?"}`,
     ...performanceLines(row, width),
-    `${m?.confidence === "approximate" ? "~" : ""}${quantity(m?.tokens)} / ${quantity(s.capacityTokens)} input`,
-    `${row.utilizationPercent?.toFixed(1) ?? "?"}% ${row.pressure === "crossed" ? "!! crossed" : row.pressure === "near" ? "! near" : row.freshness.toUpperCase()}`,
+    `${row.freshness === "stale" ? "Last measured" : "Context"} ${valid && m?.confidence === "approximate" ? "~" : ""}${quantity(valid ? m?.tokens : undefined)} / ${quantity(s.capacityTokens)} input`,
+    `${valid ? (row.utilizationPercent?.toFixed(1) ?? "?") : "?"}% capacity · ${pressureLabel(row)}`,
     `Trigger ${threshold.type === "ratio" ? `${threshold.value * 100}%` : `${threshold.value} ${threshold.type}`} (${s.policy.comparison})`,
     `Resolved trigger ${s.policy.triggerTokens ?? "?"}`,
-    `Until trigger ${quantity(headroom)}`,
+    thresholdDistance(row),
     `Compact: ${s.compaction.phase}`,
     `${s.compaction.armed ? "armed" : "disarmed"}${s.compaction.blockedReason ? ` / ${s.compaction.blockedReason}` : ""}`,
     m ? `${m.confidence} ${m.scope}` : "measurement unknown",
@@ -127,6 +128,8 @@ export function detailLines(
   if (expanded)
     lines.push(
       `Policy ${s.policy.id}: ${s.policy.reason}`,
+      `Pressure code: ${row.pressure}`,
+      `Recorded tokens: ${quantity(m?.tokens)}`,
       `Limits in/context/out ${quantity(s.limits?.input)}/${quantity(s.limits?.context)}/${quantity(s.limits?.output)}`,
       `Output reserve ${quantity(s.outputReserveTokens)}`,
       `Provenance ${m?.provenance ?? "?"}`,

@@ -27,7 +27,12 @@ test("sidebar preserves occupancy and threshold text with a capacity-scaled char
   }
   const stale: GuardRow = { ...row, ...metric(row.snapshot, 400000, 300000) };
   expect(mainLines(stale, 35, 399000).join(" ")).toContain("STALE");
-  expect(mainLines(stale, 35, 399000).join(" ")).toContain("112K");
+  const staleText = mainLines(stale, 35, 399000).join(" ");
+  expect(staleText).toContain("112K");
+  expect(staleText).toContain("Last measured");
+  expect(staleText).toContain("pressure unknown");
+  expect(staleText).not.toContain("48K tokens below");
+  expect(staleText).not.toContain("70% of threshold");
   const invalid: GuardRow = {
     ...row,
     ...metric({ ...row.snapshot, model: "other" }, 4000, 300000),
@@ -52,7 +57,7 @@ test("narrow agent rows preserve names and separate execution from pressure", ()
   if (!row) throw new Error("Missing fixture");
   expect(agentHeading(row, 14)).toContain("explore");
   expect(agentLines(row, 14).join(" ")).toContain("RUNNING");
-  expect(agentLines(row, 14).join(" ")).toContain("CRITICAL");
+  expect(agentLines(row, 14).join(" ")).toContain("Threshold reached");
   const failed = { ...row, node: { ...row.node, status: "failed" as const } };
   expect(agentHeading(failed, 14)).toStartWith("✕");
   expect(agentLines(failed, 14).join(" ")).toContain("FAILED");

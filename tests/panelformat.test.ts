@@ -28,7 +28,7 @@ test("overview distinguishes occupancy, threshold distance and exact comparison 
   const row = measured();
   const summary = panelSummary(row, 76, 3000).join("\n");
   expect(summary).toContain("112K/500K · 22%");
-  expect(summary).toContain("Threshold 160K · 48K below");
+  expect(summary).toContain("Threshold 160K · 48K tokens below threshold");
   expect(summary).toContain("reported · 3s ago");
   expect(summary).not.toContain("until compaction");
   for (const comparison of [">", ">="] as const) {
@@ -42,7 +42,7 @@ test("overview distinguishes occupancy, threshold distance and exact comparison 
     };
     const exact = { ...row, snapshot, ...metric(snapshot, 4000, 300000) };
     expect(thresholdDistance(exact)).toBe(
-      comparison === ">" ? "at threshold (>)" : "threshold reached",
+      comparison === ">" ? "At threshold · requires more" : "Threshold reached",
     );
   }
   const crossed = {
@@ -56,7 +56,7 @@ test("overview distinguishes occupancy, threshold distance and exact comparison 
       300000,
     ),
   };
-  expect(thresholdDistance(crossed)).toBe("12K over threshold");
+  expect(thresholdDistance(crossed)).toBe("12K tokens over threshold");
 });
 
 test("stale occupancy is last measured while stale, missing and invalid pressure stays unknown", () => {
@@ -138,8 +138,12 @@ test("compaction and enforcement copy preserves admission and uncertainty distin
     staleMs: 300000,
     maxSessions: 1024,
   };
-  expect(panelStatus(health)).toContain("no Guard compaction");
-  expect(panelStatus({ ...health, enforcement: "suspended" })).toContain(
-    "reload required",
-  );
+  expect(panelStatus(health)).toContain("Guard won't request compaction");
+  expect(
+    panelStatus({
+      ...health,
+      enforcement: "suspended",
+      reasons: ["event-stream-gap"],
+    }),
+  ).toContain("reload required");
 });
