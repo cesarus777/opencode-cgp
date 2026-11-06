@@ -2,6 +2,8 @@
 
 A compact, real-time context monitoring panel integrated into the native OpenCode terminal sidebar. It displays context-window usage for the current session and its discovered subagents, including nested subagents, with progress bars, execution status, and compaction information.
 
+This document describes the current implementation. The [proposed sidebar density plan](plans/sidebar-density.md) (UX-07) would make history expandable, shorten agent rows, group completed branches conservatively, and move statistics into panel Details. Implementation has not started; the defaults and controls below remain current.
+
 ## Visual layout
 
 ```text

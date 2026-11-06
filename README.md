@@ -192,4 +192,4 @@ bun run test:live   # explicitly SKIPs without the required server environment
 
 Tests cover the core, mocked V2 events for concurrent nested subagents, restart safety, telemetry rotation, and CLI reading. [Live test instructions](docs/testing.md) describe the optional disposable-session check against an existing V2 host and a local OpenAI-compatible endpoint; no model download is required.
 
-Further reading: [API investigation](docs/reconnaissance.md), [architecture](docs/architecture.md), [Budget Controller extension](docs/budget-controller.md), [compatibility and limitations](docs/compatibility.md).
+Further reading: [API investigation](docs/reconnaissance.md), [architecture](docs/architecture.md), [Budget Controller extension](docs/budget-controller.md), [compatibility and limitations](docs/compatibility.md), and [TUI UX review](docs/plans/tui-ux-review.md). The next proposed UX improvement is [compact sidebar defaults](docs/plans/sidebar-density.md) (UX-07); implementation has not started.

@@ -2,6 +2,8 @@
 
 Current status: the terminal dashboard and Models screen are shipped through 0.4.0; the [threshold/status consistency increment](threshold-status-consistency.md) and [standalone overview density/reachability increment](standalone-overview-density.md) (UX-04/UX-05) are implemented for the next release. Browser delivery and durable analytics storage remain pending. The dated progress entries below preserve their original delivery context.
 
+The next recommended UX increment is native [sidebar density](sidebar-density.md) (UX-07). Its implementation plan is proposed; implementation has not started. Standalone dashboard behavior is unchanged by that plan.
+
 ## Goal and scope
 
 Build one read-only dashboard application with two frontends: a local browser page and a full-screen terminal app. Working name: **Context Guard Dashboard** (Grafana-inspired layout, without a Grafana dependency). It connects to an OpenCode V2 server with this plugin installed and shows current context, compaction, performance, and retained-history metrics for root and child sessions. Launch it independently of OpenCode's native TUI, desktop, or web client.
