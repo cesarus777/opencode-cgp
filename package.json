@@ -38,6 +38,7 @@
     "format:check": "prettier --check src tests scripts docs README.md examples package.json tsconfig.json server.ts tui.tsx rpc.ts tsconfig.build.json .github AGENTS.md",
     "test:tui-live": "bun scripts/tui-live.ts",
     "bench:tui": "bun scripts/tui-bench.ts",
+    "bench:dashboard": "bun scripts/dashboard-bench.ts",
     "build": "bun scripts/build.ts",
     "prepack": "bun run build",
     "prepare": "bun run build",
