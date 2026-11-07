@@ -346,6 +346,8 @@ try {
   await host.flush();
   assert.match(host.captureCharFrame(), /Performance charts/);
   assert.match(host.captureCharFrame(), /Live TPS/);
+  assert.match(host.captureCharFrame(), /Showing previous results/);
+  assert.equal(historyReads.length, beforeHelpReads);
   assert.equal(historyReads.at(-1)?.sessionId, "s120");
   assert.equal(historyReads.at(-1)?.windowMs, 3600000);
   assert.equal(consumers, 1);

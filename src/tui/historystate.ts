@@ -43,6 +43,7 @@ export class HistoryState {
   private active: AbortController | undefined;
   private pending = false;
   private stopped = false;
+  private paused = false;
   private timer: ReturnType<typeof setTimeout> | undefined;
   private view: HistoryView = { status: "idle", stale: false };
   private readonly now;
@@ -66,10 +67,41 @@ export class HistoryState {
     this.active?.abort();
     this.query = { ...query };
     this.view = { status: "loading", stale: false };
-    this.refresh();
+    if (this.paused) this.publish(this.view);
+    else this.refresh();
+  }
+  pause() {
+    if (this.stopped || this.paused) return;
+    this.paused = true;
+    this.generation++;
+    this.pending = false;
+    this.clearTimer();
+    this.active?.abort();
+    if (this.view.status === "loading" && this.view.result)
+      this.publish({
+        ...this.view,
+        status: "ready",
+        reason: undefined,
+        stale: true,
+      });
+  }
+  resume() {
+    if (this.stopped || !this.paused) return;
+    this.paused = false;
+    if (this.query && this.view.status === "loading") this.refresh();
+    else if (
+      this.query &&
+      (this.view.status === "ready" ||
+        this.view.reason === "timeout" ||
+        this.view.reason === "unavailable")
+    )
+      this.timer = this.schedule(() => {
+        this.timer = undefined;
+        this.refresh();
+      }, 5000);
   }
   refresh() {
-    if (this.stopped || !this.query) return;
+    if (this.stopped || this.paused || !this.query) return;
     this.clearTimer();
     this.pending = true;
     this.publish({
@@ -101,7 +133,14 @@ export class HistoryState {
     this.options.changed(this.view);
   }
   private async pump() {
-    if (this.stopped || this.active || !this.pending || !this.query) return;
+    if (
+      this.stopped ||
+      this.paused ||
+      this.active ||
+      !this.pending ||
+      !this.query
+    )
+      return;
     this.pending = false;
     const query = this.query,
       generation = this.generation;
@@ -139,7 +178,7 @@ export class HistoryState {
         });
     } finally {
       this.active = undefined;
-      if (this.pending) {
+      if (this.pending && !this.paused) {
         this.publish({
           ...this.view,
           status: "loading",
@@ -149,6 +188,7 @@ export class HistoryState {
         void this.pump();
       } else if (
         current() &&
+        !this.paused &&
         (this.view.status === "ready" ||
           this.view.reason === "timeout" ||
           this.view.reason === "unavailable")

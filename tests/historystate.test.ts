@@ -238,3 +238,33 @@ test("native timeout is visible and retryable while navigation cancellation is s
     f.state.dispose();
   }
 });
+
+test("native help pauses reads and preserves matching chart until the next poll", async () => {
+  const f = fixture();
+  try {
+    f.state.setQuery(f.query);
+    f.calls[0]?.task.resolve(retainedHistory());
+    await flush();
+    const original = f.view();
+    f.state.pause();
+    expect(f.timers.size).toBe(0);
+    expect(f.view().result).toBe(original.result);
+    f.state.resume();
+    expect(f.calls.length).toBe(1);
+    expect(f.view().result).toBe(original.result);
+    f.tick();
+    expect(f.calls.length).toBe(2);
+    f.state.pause();
+    expect(f.calls[1]?.signal.aborted).toBe(true);
+    f.calls[1]?.task.resolve(retainedHistory());
+    await flush();
+    expect(f.view().result).toBe(original.result);
+    expect(f.timers.size).toBe(0);
+    f.state.setQuery({ ...f.query, location: "/b" });
+    expect(f.view()).toEqual({ status: "loading", stale: false });
+    f.state.resume();
+    expect(f.calls.length).toBe(3);
+  } finally {
+    f.state.dispose();
+  }
+});

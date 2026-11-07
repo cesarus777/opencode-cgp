@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Keep native performance Charts visible immediately after returning from help. Pause reads and polling during help, retain only the matching plot, and discard it when session, location, or window changes. Offline state and renderer checks pass; see the [chart-help continuity plan](docs/plans/native-chart-help-continuity.md).
+
 - Distinguish missing history service, timeout, incompatible response, rejected request and temporary failure in native Charts and standalone History. Preserve matching previous results with their successful-load timestamp and original range during refresh/failure; provide accurate keyboard retry without exposing server errors.
 - Coalesce native chart retries, discard obsolete responses, pause polling when recording/service compatibility needs attention, and keep refresh visible at narrow widths. Validate UX-10 with 233 offline tests and native/standalone synthetic-provider PTY checks on OpenCode 2.0.29 and 2.1.2; see the [chart recovery delivery record](docs/validation/chart-failure-recovery-2026-11-07.md).
 

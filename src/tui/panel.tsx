@@ -13,6 +13,7 @@ import {
 import type { GuardState } from "./state.ts";
 import type { GuardRow } from "../family.ts";
 import { HistoryCharts } from "./charts.tsx";
+import { HistoryState, type HistoryView } from "./historystate.ts";
 import { routeFamily } from "./compactformat.ts";
 import { PanelDetails, PanelOverview } from "./panelview.tsx";
 import {
@@ -51,6 +52,16 @@ export function GuardPanel(props: {
   const windows = [300000, 3600000, 86400000, 7 * 86400000];
   const [windowIndex, setWindowIndex] = createSignal(1);
   const [chartRefresh, setChartRefresh] = createSignal(0);
+  const [chartView, setChartView] = createSignal<HistoryView>({
+    status: "idle",
+    stale: false,
+  });
+  const history = new HistoryState({
+    read: (id, from, to, signal) => props.state.history(id, from, to, signal),
+    changed: setChartView,
+  });
+  history.pause();
+  onCleanup(() => history.dispose());
   const [selected, setSelected] = createSignal<string | undefined>(
     props.input.sessionID,
   );
@@ -62,6 +73,29 @@ export function GuardPanel(props: {
   const selectedRow = createMemo(() =>
     rows().find((row) => row.node.sessionId === selected()),
   );
+  createEffect(
+    on(
+      () => {
+        const id = selected();
+        return id
+          ? ([
+              id,
+              windows[windowIndex()] ?? 3600000,
+              props.state.historyLocation(id),
+            ] as const)
+          : undefined;
+      },
+      (query) => {
+        if (query)
+          history.setQuery({
+            sessionId: query[0],
+            windowMs: query[1],
+            location: query[2],
+          });
+      },
+    ),
+  );
+  createEffect(on(chartRefresh, () => history.refresh(), { defer: true }));
   const offset = () =>
     Math.max(
       0,
@@ -83,6 +117,7 @@ export function GuardPanel(props: {
     on(
       () => props.input.sessionID,
       (id) => {
+        history.pause();
         setSelected(id);
         setOrder([]);
         setHelp(false);
@@ -125,11 +160,13 @@ export function GuardPanel(props: {
   function toggleHelp() {
     cancelFollow();
     if (!help()) {
+      if (view() === "charts") history.pause();
       sourceScroll = scroll?.scrollTop ?? 0;
       setHelp(true);
       afterLayout(() => scroll?.scrollTo(0));
     } else {
       setHelp(false);
+      if (view() === "charts") history.resume();
       afterLayout(() => scroll?.scrollTo(sourceScroll));
     }
   }
@@ -145,7 +182,9 @@ export function GuardPanel(props: {
   function changeView(next: PanelView) {
     if (next !== "overview" && !selectedRow()) return;
     cancelFollow();
+    if (view() === "charts" && next !== "charts") history.pause();
     setView(next);
+    if (next === "charts") history.resume();
     scroll?.scrollTo(0);
     if (next === "overview") revealSelection();
   }
@@ -557,9 +596,8 @@ export function GuardPanel(props: {
               sessionId={id()}
               windowMs={windows[windowIndex()] ?? 3600000}
               metricIndex={metricIndex()}
-              refresh={chartRefresh()}
               width={width()}
-              state={props.state}
+              view={chartView()}
               context={props.context}
             />
           )}
