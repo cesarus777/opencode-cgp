@@ -1,6 +1,6 @@
 # 0.4.2 release validation
 
-Date: 2026-11-08. Status: release prepared for commit, tag and staged npm publication. Public publication is verified separately after the registry approval step.
+Date: 2026-11-08. Status: published on npm as `0.4.2`, with `latest` pointing to `0.4.2`. Maintainer approval completed and the public registry was verified.
 
 ## Scope and documentation
 
@@ -25,4 +25,12 @@ The final versioned candidate additionally passed the CI minimum Bun 1.1.34 form
 
 ## Publication
 
-The repository's `v*` tag workflow validates the exact tag/version pair and stages the package through npm OIDC with provenance. Successful staging is not public publication. Maintainer 2FA approval is still required by npm. Release progress, workflow URL and final registry state are reported with the release operation; no credentials or OTPs belong in this record.
+Release commit: `94c59994c92ddfee4e5ab2ca90c32b655a6c0beb`; annotated tag: `v0.4.2`. The implementation, sidebar restoration, documentation and version metadata were pushed to `master` before publication.
+
+- [CI](https://github.com/cesarus777/opencode-cgp/actions/runs/42487314109): passed.
+- [Stage npm package](https://github.com/cesarus777/opencode-cgp/actions/runs/42487314237): passed all validation and staged `0.4.2` through npm OIDC with provenance.
+- Maintainer 2FA approval: completed; npm confirmed successful publication.
+- Public registry: version `0.4.2`, `latest: 0.4.2`, and `gitHead` matching the release commit.
+- Artifact SHA-1: `80344402e18004479cbf1a8500e9382da9e99cd8`, identical in staging and public metadata. npm exposes an SLSA provenance v1 attestation for the published artifact.
+
+The workflow stages first; a green staging workflow alone does not establish public availability. This record was updated only after explicit approval and public registry verification. No credentials or OTPs are retained.
