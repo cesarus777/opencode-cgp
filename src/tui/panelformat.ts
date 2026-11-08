@@ -1,5 +1,5 @@
 import type { GuardRow } from "../family.ts";
-import { cells, clip, wrap } from "./format.ts";
+import { cells, clip, wrap, performanceLines } from "./format.ts";
 import { tokens } from "./quantity.ts";
 import {
   compactionLabel,
@@ -111,6 +111,7 @@ export function panelRowLines(
           `${pad(identity, Math.max(1, width - status.length - 1))} ${status}`,
           clip(`${percent} context · ${distance}`, width),
         ];
+  lines.push(...performanceLines(row, width));
   const exception = [
     freshnessLabel(row),
     compactionLabel(row),

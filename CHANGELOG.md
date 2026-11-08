@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3 — 2026-11-08
+
+- Restore Live TPS, average model/session TPS, and observed TTFT for the main agent and each visible subagent in the sidebar and native panel agent rows. Preserve estimated, waiting, and partial labels, with wrapping at narrow widths.
+- Update current metric documentation and verify all five native formatting surfaces at 16, 20, 35, and 80 cells.
+
 ## 0.4.2 — 2026-11-08
 
 - Share bounded revisioned archive reads between History and Models, stream/cancel scans, reuse model facts and bucket variants, and preserve authorization and request accounting. Cache limits and cold-start tradeoffs are recorded in the [performance delivery report](docs/validation/dashboard-performance-2026-11-08.md).

@@ -1,5 +1,7 @@
 # Compact sidebar defaults
 
+Historical plan: the 0.4.3 restoration adds per-agent Live TPS, model/session averages, and TTFT back to the sidebar and native panel rows. See [current sidebar behavior](../sidebar-description.md).
+
 Date: 2026-11-06. Status: implemented; see the [delivery record](../validation/sidebar-density-2026-11-06.md) for validation and limitations. The investigation and targets below record the implementation scope. Covers UX-07 from the [TUI UX review](tui-ux-review.md), after the delivered [standalone overview increment](standalone-overview-density.md).
 
 ## Original recommendation and investigation

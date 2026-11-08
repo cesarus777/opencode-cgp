@@ -47,7 +47,7 @@ The current offline renderer fixture at 39 columns:
 ╰─────────────────────────────────────╯
 ```
 
-The same fixture occupies 38 rendered lines at 39 columns and 40 at 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
+Without performance data, the same fixture occupies 38 rendered lines at 39 columns and 40 at 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
 
 ## History and diagnostics
 
@@ -55,11 +55,11 @@ The primary session’s live context chart starts visible. Click `History: hide`
 
 The occupancy bar always represents the measured value. Held values apply only to the history graph. Summaries say “Provider reported” or “Estimated,” with age; estimates also retain `~`. Stale usage says “Last measured” and “out of date,” with unknown current threshold pressure. Missing measurements say “Usage unknown”; unusable measurements say “Usage unavailable.” Above-capacity percentages remain textual even though the bar clips visually. Crossing a threshold does not promise compaction. Non-idle compaction and interruptions remain explicit. Accepted requests say “waiting to start”; ended compaction says “checking context reduction.” Unconfirmed completion retains automatic retry suppression.
 
-Per-session throughput and timing remain in panel Details, which explains measurement scope, lifecycle states and TPS/TTFT before labeled diagnostic codes and accounting. Exact confidence, scope, provenance, phase and reason codes remain inspectable. **Route family statistics** there includes the route session and all discovered descendants, regardless of selection, grouping, or folding. Its route identity and partial state are labeled; independent peak sums are not a combined context window or lifetime total.
+The main agent and each subagent display Live TPS, Avg model, Avg session, and TTFT when performance data is available. The native panel agent rows show the same metrics. Waiting requests, estimated streaming rates, and partial timing coverage are labeled; narrow layouts wrap the metrics. Panel Details explains measurement scope, lifecycle states and TPS/TTFT before labeled diagnostic codes and accounting. Exact confidence, scope, provenance, phase and reason codes remain inspectable. **Route family statistics** there includes the route session and all discovered descendants, regardless of selection, grouping, or folding. Its route identity and partial state are labeled; independent peak sums are not a combined context window or lifetime total.
 
 ## Agent tree and controls
 
-Ordinary descendants show three lines: execution symbol and identity, a horizontal capacity occupancy bar, then context occupancy and threshold pressure. Narrow widths use compact wording or wrapping. Failed/unknown execution, stale/missing usage, interruptions, and unresolved compaction add explicit exception text. Repeated names still navigate using full session IDs. Colors supplement labels and symbols:
+Ordinary descendants show execution and context information followed by available performance metrics: execution symbol and identity, a horizontal capacity occupancy bar, then context occupancy and threshold pressure. Narrow widths use compact wording or wrapping. Failed/unknown execution, stale/missing usage, interruptions, and unresolved compaction add explicit exception text. Repeated names still navigate using full session IDs. Colors supplement labels and symbols:
 
 - `●` running; `✓` completed; `✕` failed; `◌` idle/unknown.
 - Threshold pressure remains separate: below, near, reached, or unknown. A running symbol can be green while pressure text is red.

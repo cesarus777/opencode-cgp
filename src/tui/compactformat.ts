@@ -4,7 +4,7 @@ import {
   type ContextChartSegment,
 } from "./contextchart.ts";
 import type { GuardRow } from "../family.ts";
-import { cells, clip, wrap } from "./format.ts";
+import { cells, clip, wrap, performanceLines } from "./format.ts";
 import { tokens } from "./quantity.ts";
 import { compactionLabel } from "./panelformat.ts";
 import {
@@ -80,6 +80,7 @@ export function mainSections(
       ),
     },
     { tone: "measurement", lines: [progress(ratio, width)] },
+    { tone: "base", lines: performanceLines(row, width) },
     {
       tone: "pressure",
       lines: [
@@ -190,6 +191,7 @@ export function agentLines(row: GuardRow, width: number) {
       width,
     ),
     ...wrap(cells(full) <= width ? full : short, width),
+    ...performanceLines(row, width),
     ...(row.node.status === "failed" || row.node.status === "unknown"
       ? wrap(row.node.status.toUpperCase(), width)
       : []),

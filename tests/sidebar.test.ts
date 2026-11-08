@@ -9,6 +9,7 @@ import {
   statistics,
   subagentTree,
 } from "../src/tui/compactformat.ts";
+import { panelRowLines } from "../src/tui/panelformat.ts";
 import { cells, rowLines, detailLines } from "../src/tui/format.ts";
 import { metric, type GuardRow } from "../src/family.ts";
 import { sidebarFamily } from "./fixtures/sidebar.ts";
@@ -201,13 +202,22 @@ test("performance labels preserve estimates, independent averages and partial ti
     },
   };
   for (const width of [16, 20, 35, 80]) {
-    const lines = [...rowLines(row, width), ...detailLines(row, width, true)];
-    expect(lines.every((line) => cells(line) <= width)).toBe(true);
-    const text = lines.join(" ");
-    expect(text).toContain("~12.3");
-    expect(text).toContain("partial");
-    expect(text).toContain("Avg model 45.0");
-    expect(text).toContain("TTFT ~0.20s");
+    for (const lines of [
+      rowLines(row, width),
+      detailLines(row, width, true),
+      mainLines(row, width, 0),
+      agentLines(row, width),
+      panelRowLines(row, width, false),
+    ]) {
+      expect(lines.every((line) => cells(line) <= width)).toBe(true);
+      const text = lines.join(" ");
+      expect(text).toContain("~12.3");
+      expect(text).toContain("partial");
+      expect(text).toContain("Avg model 45.0");
+      expect(text).toContain("TTFT ~0.20s");
+      expect(text).toContain("Avg session 2.0");
+      expect(text).toContain("Live TPS");
+    }
   }
 });
 

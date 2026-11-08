@@ -203,7 +203,7 @@ export function performanceLines(row: GuardRow, width: number): string[] {
     n === undefined ? "?" : n.toFixed(1);
   return [
     ...wrap(
-      `TPS ${p.status === "waiting" ? "waiting" : `${p.status === "streaming" ? "~" : ""}${value(p.liveTps)}`} · ${p.status}${p.partial ? " · partial" : ""}`,
+      `Live TPS ${p.status === "waiting" ? "waiting" : `${p.status === "streaming" ? "~" : ""}${value(p.liveTps)}`} · ${p.status}${p.partial ? " · partial" : ""}`,
       width,
     ),
     ...wrap(
