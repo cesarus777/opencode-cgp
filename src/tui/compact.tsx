@@ -33,12 +33,12 @@ export function CompactSidebar(props: {
     new Set<string>(),
   );
   const [hideCompleted, setHideCompleted] = createSignal(true);
-  const [showHistory, setShowHistory] = createSignal(false);
+  const [showHistory, setShowHistory] = createSignal(true);
   const [byPressure, setByPressure] = createSignal(true);
   createEffect(() => {
     props.sessionID;
     setCollapsed(new Set<string>());
-    setShowHistory(false);
+    setShowHistory(true);
   });
   const current = createMemo(() =>
     props.rows.find((r) => r.node.sessionId === props.sessionID),

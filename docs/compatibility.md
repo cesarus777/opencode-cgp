@@ -86,3 +86,9 @@ The [2026-11-06 standalone overview validation](validation/standalone-overview-d
 ## Model analytics
 
 The standalone Models screen requires `context-guard.analytics.v1` on the owning server. It has a separate versioned contract; monitor v1/v2 and session history v1 are unchanged. Missing analytics capability preserves other dashboard screens. Models uses retained scalar archives, not live inventory enumeration or transcript access. Its seven-day range, 64 MiB scan, 100,000 request identity limit and bounded snapshots are explicit; totals precede pagination and chart resolution. It does not provide all-time history or combined live fleet TPS. See [terminal model analytics](configuration.md#terminal-model-analytics).
+
+## Dashboard archive reuse in 0.4.2
+
+The [2026-11-08 performance validation](validation/dashboard-performance-2026-11-08.md) covers 250 offline tests, unchanged-cache read/parse counts, append/rotation/pruning and cancellation correctness, and built standalone PTYs on OpenCode 2.0.29 and 2.1.2. Packed monitor/History and location-isolated analytics over 600 archived sessions passed in observe and enforce modes. RPC and archive schemas, package exports, SDK/runtime baselines and compaction/accounting semantics remain unchanged.
+
+History and Models share a bounded location-owned revision cache. Warm synthetic queries improve substantially; first-ever reads still take seconds and some Models projections exceed the 20 ms timer-delay target. No production worker or persistent index is installed. The benchmark-only prototypes are excluded from runtime entrypoints. Native inventory keeps its existing sequential/resumable behavior; the standalone dashboard alone adds progressive discovery with four independent branch requests. Existing sidebar chart and subagent-bar restoration is covered by offline renderer fixtures. Genuine-provider, remote, other-platform and long-running memory limits remain unchanged.

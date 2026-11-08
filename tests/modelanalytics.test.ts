@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { aggregateModels } from "../src/modelanalytics.ts";
+import {
+  aggregateModels,
+  analyzeModelRequests,
+  createModelAccumulator,
+} from "../src/modelanalytics.ts";
 import type { HistoryRecord } from "../src/history.ts";
 import type { PerformanceSnapshot } from "../src/performance.ts";
 
@@ -307,5 +311,33 @@ test("models CLI exports filtered JSON/CSV, completion ranges and archive covera
     expect(await Bun.file(file).text()).toBe(source);
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("incremental reconciliation matches canonical metrics and stop positions across complementary/conflicting observations", () => {
+  const rows = [
+    request("a", { tokenSource: "unavailable" }),
+    request("a"),
+    request("b"),
+    request("a", { requestOutputTokens: 5 }),
+    request("c"),
+    request("b"),
+    { ...request("gap"), type: "gap" as const },
+    request("d"),
+  ];
+  for (const maxRequests of [1, 2, 3, 4]) {
+    const options = { location: "/location", maxRequests };
+    const accumulator = createModelAccumulator(options);
+    const prefix: HistoryRecord[] = [];
+    for (const row of rows) {
+      accumulator.append([row]);
+      prefix.push(row);
+      expect(accumulator.result()).toEqual(
+        analyzeModelRequests(prefix, options),
+      );
+      expect(accumulator.result()).toEqual(
+        analyzeModelRequests(prefix, options),
+      );
+    }
   }
 });

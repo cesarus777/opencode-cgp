@@ -56,15 +56,7 @@ export function overviewLabels(rows: readonly DashboardRow[]): string[] {
   );
 }
 
-/** Each row is already cell-bounded; overview cards never wrap diagnostics. */
-export function overviewRowLines(
-  row: DashboardRow,
-  width: number,
-  selected: boolean,
-  label: string,
-  position: number,
-  maxLines = 3,
-): string[] {
+function overviewMetrics(row: DashboardRow) {
   const valid = row.freshness === "fresh" || row.freshness === "stale";
   const percent = `${valid && row.snapshot?.measurement?.confidence === "approximate" ? "~" : ""}${valid && row.utilizationPercent !== undefined ? Math.round(row.utilizationPercent) : "?"}%`;
   const context = `${row.freshness === "stale" ? "Last measured " : ""}${percent}`;
@@ -74,6 +66,64 @@ export function overviewRowLines(
       ? "At threshold; requires more"
       : distance
   ).replace(" · Threshold reached", " · reached");
+  const metric = `${context} context · ${threshold}`;
+  const shortThreshold = threshold
+    .replace("pressure unknown", "?")
+    .replace("At threshold; requires more", "At; needs more")
+    .replace(" · Near threshold", " near")
+    .replace(" · reached", " reached")
+    .replace("Threshold reached", "Reached");
+  const shortMetric = `${context} · T ${shortThreshold}`;
+  const pressure =
+    row.freshness !== "fresh" || row.pressure === "unknown"
+      ? "Threshold ?"
+      : row.pressure === "crossed"
+        ? "Reached"
+        : row.triggerDeltaTokens === 0
+          ? "At; needs more"
+          : row.pressure === "near"
+            ? "Near threshold"
+            : "Below threshold";
+  const metrics = [metric, shortMetric, `${context} · ${pressure}`];
+  return { percent, context, threshold, pressure, metrics };
+}
+
+/** Lightweight line count; identity clipping and exception text are viewport work. */
+export function overviewRowHeight(
+  row: DashboardRow,
+  width: number,
+  maxLines: number,
+): number {
+  const base = width >= 72 ? 1 : 2;
+  const exception =
+    row.freshness !== "fresh" ||
+    row.node.status === "failed" ||
+    row.node.interrupted ||
+    !!compactionLabel(row) ||
+    row.inventoryStale ||
+    row.liveStale ||
+    row.hidden > 0;
+  if (exception) return Math.min(maxLines, base + 1);
+  // On narrow screens metric fitting can add one line. This has no identity,
+  // grapheme label or exception formatting cost and is cached by the shell.
+  if (
+    width < 72 &&
+    !overviewMetrics(row).metrics.some((line) => cells(line) <= width)
+  )
+    return Math.min(maxLines, base + 1);
+  return Math.min(maxLines, base);
+}
+/** Each row is already cell-bounded; overview cards never wrap diagnostics. */
+export function overviewRowLines(
+  row: DashboardRow,
+  width: number,
+  selected: boolean,
+  label: string,
+  position: number,
+  maxLines = 3,
+): string[] {
+  const { percent, context, threshold, pressure, metrics } =
+    overviewMetrics(row);
   const state =
     width < 28
       ? {
@@ -99,25 +149,6 @@ export function overviewRowLines(
     indent +
     clip(name, Math.max(1, identityWidth - cells(marker + indent + tag))) +
     tag;
-  const metric = `${context} context · ${threshold}`;
-  const shortThreshold = threshold
-    .replace("pressure unknown", "?")
-    .replace("At threshold; requires more", "At; needs more")
-    .replace(" · Near threshold", " near")
-    .replace(" · reached", " reached")
-    .replace("Threshold reached", "Reached");
-  const shortMetric = `${context} · T ${shortThreshold}`;
-  const pressure =
-    row.freshness !== "fresh" || row.pressure === "unknown"
-      ? "Threshold ?"
-      : row.pressure === "crossed"
-        ? "Reached"
-        : row.triggerDeltaTokens === 0
-          ? "At; needs more"
-          : row.pressure === "near"
-            ? "Near threshold"
-            : "Below threshold";
-  const metrics = [metric, shortMetric, `${context} · ${pressure}`];
   const fittedMetric = metrics.find((line) => cells(line) <= width);
   const lines =
     width >= 72

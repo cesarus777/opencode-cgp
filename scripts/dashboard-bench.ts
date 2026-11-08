@@ -1,4 +1,6 @@
 /** Offline performance investigation. Run on the same Bun runtime as the dashboard. */
+import { coldPrototypes, timed } from "./dashboard-cold-prototypes.ts";
+import { PerformanceArchive } from "../src/archive.ts";
 import { DashboardController } from "../src/dashboard/controller.ts";
 import { discoverInventory } from "../src/dashboard/inventory.ts";
 import { TerminalShell } from "../src/dashboard/terminal.ts";
@@ -6,7 +8,14 @@ import { readPerformanceHistory, type HistoryRecord } from "../src/history.ts";
 import { createAnalyticsService } from "../src/modelanalyticsserver.ts";
 import type { DashboardPort, SessionPageInput } from "../src/dashboard/port.ts";
 import type { ContextSnapshot } from "../src/snapshot.ts";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  writeFile,
+  rm,
+  mkdir,
+  appendFile,
+  unlink,
+} from "node:fs/promises";
 import { tmpdir, cpus } from "node:os";
 import { join } from "node:path";
 
@@ -289,8 +298,27 @@ try {
       signal: new AbortController().signal,
     });
     const cancellableHistoryMs = performance.now() - cancellableStart;
+    const shared = new PerformanceArchive(dir);
+    const sharedCold = await timed(() =>
+      shared.read({ sessionId: "session-00000000", from: 999000, to: 1000001 }),
+    );
+    const sharedColdMs = sharedCold.elapsedMs;
+    const coldCounts = { ...shared.stats };
+    const repeated: number[] = [];
+    for (let repeat = 0; repeat < 5; repeat++) {
+      const start = performance.now();
+      await shared.read({
+        sessionId: "session-00000000",
+        from: 999000,
+        to: 1000001,
+      });
+      repeated.push(performance.now() - start);
+    }
+    const repeatedCounts = { ...shared.stats };
     const service = createAnalyticsService(dir, "/project", true, {
       now: () => 1000001,
+      read: (_path, filter) => shared.read(filter),
+      revisioned: true,
     });
     const input = {
       schemaVersion: 1 as const,
@@ -299,9 +327,11 @@ try {
       buckets: 80,
     };
     try {
-      const coldStart = performance.now();
-      const analytics = await service.read(input, new AbortController().signal);
-      const coldMs = performance.now() - coldStart;
+      const cold = await timed(() =>
+        service.read(input, new AbortController().signal),
+      );
+      const analytics = cold.result;
+      const coldMs = cold.elapsedMs;
       const warmStart = performance.now();
       await service.read(input, new AbortController().signal);
       const warmMs = performance.now() - warmStart;
@@ -309,6 +339,13 @@ try {
         throw new Error("Benchmark archive did not populate all four models");
       archive.push({
         archiveMiB: history.metadata.retainedBytes / 1024 / 1024,
+        sharedColdMs,
+        sharedMaxTimerDelayMs: sharedCold.maxTimerDelayMs,
+        analyticsMaxTimerDelayMs: cold.maxTimerDelayMs,
+        sharedWarmP95Ms: percentile(repeated, 0.95),
+        coldCounts,
+        repeatedCounts,
+        memory: process.memoryUsage(),
         historyMs,
         cancellableHistoryMs,
         historyMaxTimerDelayMs: maxDelay,
@@ -325,8 +362,69 @@ try {
       });
     } finally {
       service.dispose();
+      shared.dispose();
     }
   }
+  const mutationPath = join(dir, "mutations");
+  await mkdir(mutationPath);
+  const mutationName = "1-aa.jsonl",
+    mutationFile = join(mutationPath, mutationName);
+  await writeFile(mutationFile, block);
+  const mutationReader = new PerformanceArchive(mutationPath);
+  const mixedStart = performance.now();
+  await Promise.all([
+    mutationReader.read({ sessionId: "unrelated-session" }),
+    mutationReader.read(),
+  ]);
+  const mixedMs = performance.now() - mixedStart,
+    mixedCounts = { ...mutationReader.stats };
+  if (mixedCounts.readBytes !== Buffer.byteLength(block))
+    throw new Error("Mixed consumers duplicated scan work");
+  const appendStart = performance.now();
+  await appendFile(mutationFile, line);
+  mutationReader.invalidate(mutationName);
+  await mutationReader.read();
+  const appendMs = performance.now() - appendStart;
+  const appendReadBytes =
+    mutationReader.stats.readBytes - mixedCounts.readBytes;
+  const appendParsedRecords =
+    mutationReader.stats.parsedRecords - mixedCounts.parsedRecords;
+  if (appendReadBytes !== Buffer.byteLength(line) || appendParsedRecords !== 1)
+    throw new Error("Append reread the prefix");
+  await unlink(mutationFile);
+  mutationReader.invalidate(mutationName);
+  const pruned = await mutationReader.read();
+  if (pruned.records.length || pruned.metadata.retainedBytes)
+    throw new Error("Pruned archive retained records");
+  mutationReader.dispose();
+  const abortReader = new PerformanceArchive(dir);
+  const abort = new AbortController();
+  let abortedAt = performance.now();
+  const abortTimer = setTimeout(() => {
+    abortedAt = performance.now();
+    abort.abort();
+  }, 5);
+  try {
+    await abortReader.read({ signal: abort.signal });
+    throw new Error("Cold scan completed before benchmark cancellation");
+  } catch (error) {
+    if (!abort.signal.aborted) throw error;
+  } finally {
+    clearTimeout(abortTimer);
+    abortReader.dispose();
+  }
+  const abortSettlementMs = performance.now() - abortedAt;
+  await Bun.sleep(10);
+  const incremental = {
+    mixedMs,
+    mixedCounts,
+    appendMs,
+    appendReadBytes,
+    appendParsedRecords,
+    pruneRetainedBytes: pruned.metadata.retainedBytes,
+    abortSettlementMs,
+  };
+  const firstReadPrototypes = await coldPrototypes(dir);
   console.log(
     JSON.stringify(
       {
@@ -336,6 +434,9 @@ try {
         warmupIterations: 3,
         measuredIterations: 15,
         simulatedInventoryRequestDelayMs: 2,
+        firstReadPrototypes,
+        incremental,
+        maxRssKiB: process.resourceUsage().maxRSS,
         archiveWorkload: requestWorkload
           ? "Distinct completed requests across 1024 sessions and four models"
           : "Repeated valid samples without completed-request identity; isolates scanning overhead",

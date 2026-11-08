@@ -17,13 +17,29 @@ The current offline renderer fixture at 39 columns:
 │ Observing · Guard won't request     │
 │ compaction                          │
 │ Open: /context-guard                │
-│ History: show                       │
+│ History: hide                       │
+│ 100%│                             │ │
+│     │                             │ │
+│     │                             │ │
+│     │                             │ │
+│     │                             │ │
+│     │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
+│     │                            ▇│ │
+│   0%│                            █│ │
+│     └─────────────────────────────┘ │
+│ Recent samples → now · ┄ threshold  │
+│ Dim = last known context            │
+│ Policy threshold 160K · 70% of      │
+│ threshold                           │
 │ SUBAGENTS (4) · 3 running           │
 │ ▾ ● explore                         │
+│  ████████████████████████░░░░░ 82%  │
 │  Context 82% · Threshold reached    │
 │   └─ ● indexer                      │
+│    █████████░░░░░░░░░░░░░░░░░░ 34%  │
 │    Context 34% · Below threshold    │
 │ ● implementor                       │
+│  ████████████████░░░░░░░░░░░░░ 55%  │
 │  Context 55% · Near threshold       │
 │ Completed (1): show                 │
 │ Sort: pressure                      │
@@ -31,11 +47,11 @@ The current offline renderer fixture at 39 columns:
 ╰─────────────────────────────────────╯
 ```
 
-The same fixture occupies 22 rendered lines at 39 columns and 23 at 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
+The same fixture occupies 38 rendered lines at 39 columns and 40 at 35 columns, including borders and controls. Exceptional statuses and narrow layouts can use more lines. The host controls sidebar placement and may omit it on narrow or child routes; the existing panel and optional keyboard entry remain available.
 
 ## History and diagnostics
 
-History starts collapsed. Click `History: show` or use **Show or hide sidebar context history** in the command palette (`context-guard.history`, no default shortcut). The expanded chart uses effective input capacity, a separate threshold line labeled “┄ threshold,” and dimmed retained values labeled “Dim = last known context.” Disclosure resets on route changes and remounts; the bounded shared trace continues collecting while collapsed and survives sidebar/panel transitions. Model/capacity changes reset the trace. Disclosure creates no additional monitor consumer or retained-history reads.
+The primary session’s live context chart starts visible. Click `History: hide` to collapse it, `History: show` to restore it, or use **Show or hide sidebar context history** in the command palette (`context-guard.history`, no default shortcut). The expanded chart uses effective input capacity, a separate threshold line labeled “┄ threshold,” and dimmed retained values labeled “Dim = last known context.” History resets to visible on route changes and remounts; the bounded shared trace continues collecting while collapsed and survives sidebar/panel transitions. Model/capacity changes reset the trace. Disclosure creates no additional monitor consumer or retained-history reads.
 
 The occupancy bar always represents the measured value. Held values apply only to the history graph. Summaries say “Provider reported” or “Estimated,” with age; estimates also retain `~`. Stale usage says “Last measured” and “out of date,” with unknown current threshold pressure. Missing measurements say “Usage unknown”; unusable measurements say “Usage unavailable.” Above-capacity percentages remain textual even though the bar clips visually. Crossing a threshold does not promise compaction. Non-idle compaction and interruptions remain explicit. Accepted requests say “waiting to start”; ended compaction says “checking context reduction.” Unconfirmed completion retains automatic retry suppression.
 
@@ -43,7 +59,7 @@ Per-session throughput and timing remain in panel Details, which explains measur
 
 ## Agent tree and controls
 
-Ordinary descendants use two lines: execution symbol and identity, then context occupancy and threshold pressure. Narrow widths use compact wording or wrapping. Failed/unknown execution, stale/missing usage, interruptions, and unresolved compaction add explicit exception text. Repeated names still navigate using full session IDs. Colors supplement labels and symbols:
+Ordinary descendants show three lines: execution symbol and identity, a horizontal capacity occupancy bar, then context occupancy and threshold pressure. Narrow widths use compact wording or wrapping. Failed/unknown execution, stale/missing usage, interruptions, and unresolved compaction add explicit exception text. Repeated names still navigate using full session IDs. Colors supplement labels and symbols:
 
 - `●` running; `✓` completed; `✕` failed; `◌` idle/unknown.
 - Threshold pressure remains separate: below, near, reached, or unknown. A running symbol can be green while pressure text is red.

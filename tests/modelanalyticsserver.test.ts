@@ -376,3 +376,49 @@ test("analytics keeps unknown model attribution separate and selectable", async 
     fixture.service.dispose();
   }
 });
+
+test("revision validation reuses facts beyond TTL, preserves old snapshots, and copies cached bucket variants", async () => {
+  let now = 1000001,
+    revision = "a",
+    scans = 0;
+  const records = [analyticsRequest("a"), analyticsRequest("b")];
+  const service = createAnalyticsService("/unused", "/project", true, {
+    now: () => now,
+    revisioned: true,
+    read: async () => {
+      scans++;
+      return { revision, records, metadata: analyticsMetadata };
+    },
+  });
+  try {
+    const first = await service.read(input, signal());
+    const expected = structuredClone(first.buckets);
+    const bucket = first.buckets.find((b) => b.summary);
+    if (bucket?.summary) bucket.summary.completedRequests = 999;
+    now += 31000;
+    const warm = await service.read(input, signal());
+    expect(warm.snapshotId).toBe(first.snapshotId);
+    expect(warm.buckets).toEqual(expected);
+    expect(scans).toBe(2);
+    records.push(analyticsRequest("c"));
+    revision = "b";
+    const changed = await service.read(input, signal());
+    expect(changed.snapshotId).not.toBe(first.snapshotId);
+    expect(changed.selected?.completedRequests).toBe(3);
+    const original = await service.read(
+      { ...input, snapshotId: first.snapshotId },
+      signal(),
+    );
+    expect(original.selected?.completedRequests).toBe(2);
+    records.splice(0, 1);
+    revision = "c";
+    const pruned = await service.read(input, signal());
+    expect(pruned.selected?.completedRequests).toBe(2);
+    now += 91000;
+    const renewed = await service.read(input, signal());
+    expect(renewed.generatedAt).toBe(now);
+    expect(renewed.snapshotId).not.toBe(pruned.snapshotId);
+  } finally {
+    service.dispose();
+  }
+});

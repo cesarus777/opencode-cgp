@@ -70,6 +70,26 @@ test("narrow agent rows preserve names and separate execution from pressure", ()
   expect(agentLines(failed, 14).join(" ")).toContain("FAILED");
 });
 
+test("subagent bars use measured capacity occupancy and preserve unknown and over-capacity values", () => {
+  const row = sidebarFamily()[1];
+  if (!row) throw new Error("Missing fixture");
+  const { utilizationPercent: _utilizationPercent, ...unknown } = row;
+  for (const width of [14, 16, 29, 35]) {
+    expect(agentLines(row, width)[0]).toBe(progress(0.82, width));
+    expect(agentLines({ ...row, freshness: "stale" }, width)[0]).toBe(
+      progress(0.82, width),
+    );
+    for (const freshness of ["missing", "invalid"] as const)
+      expect(agentLines({ ...row, freshness }, width)[0]).toBe(
+        progress(undefined, width),
+      );
+    expect(agentLines(unknown, width)[0]).toBe(progress(undefined, width));
+    expect(agentLines({ ...row, utilizationPercent: 120 }, width)[0]).toBe(
+      progress(1.2, width),
+    );
+  }
+});
+
 test("subagent tree scopes descendants, preserves parents and prioritizes active branches", () => {
   const rows = sidebarFamily();
   const tree = subagentTree(rows, "main", new Set(), false, true);
@@ -336,7 +356,7 @@ test("compact descendant rows fit ordinary sidebar budgets and keep stale, estim
   ] as const) {
     const row = rows[index];
     if (!row) throw new Error("Missing fixture");
-    expect(agentLines(row, width)).toHaveLength(1);
+    expect(agentLines(row, width)).toHaveLength(2);
     expect(agentLines(row, width).every((line) => cells(line) <= width)).toBe(
       true,
     );

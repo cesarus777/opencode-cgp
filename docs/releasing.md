@@ -2,7 +2,7 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**. Version **0.4.0** is public; **0.4.1** prepares the native and standalone TUI usability improvements in the [changelog](../CHANGELOG.md). The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+Publish as **`@cesarus777/opencode-cgp`**. Release **0.4.2** contains the sidebar restoration and dashboard archive/Overview/discovery improvements in the [changelog](../CHANGELOG.md). The [0.4.2 release record](validation/release-0.4.2-2026-11-08.md) links validation and explicitly retains the cold-start limitations. The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
 
 ## Local validation
 

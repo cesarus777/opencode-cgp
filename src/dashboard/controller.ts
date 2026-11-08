@@ -72,6 +72,7 @@ export interface DashboardControllerOptions {
 
 /** Shared application state; subscribers never acquire additional upstream streams. */
 export class DashboardController {
+  private readonly snapshots = new WeakMap<ContextSnapshot, ContextSnapshot>();
   private readonly locations = new Map<string, LocationState>();
   private readonly cache = new Map<string, CachedHistory>();
   private readonly listeners = new Set<(view: DashboardView) => void>();
@@ -297,6 +298,32 @@ export class DashboardController {
           state.port,
           scanSignal,
           this.limits,
+          (partial) => {
+            if (!this.current(state, generation, scanSignal)) return;
+            for (const session of partial.sessions) {
+              const previous = state.nodes.get(session.sessionId);
+              if (!previous && state.nodes.size >= this.limits.maxNodes)
+                continue;
+              state.nodes.set(session.sessionId, {
+                ...session,
+                status: previous?.status ?? "unknown",
+                inventoryStale: true,
+              });
+            }
+            state.complete = false;
+            state.stale = true;
+            state.pages = partial.pages;
+            state.notices = partial.notices;
+            if (!state.selected) {
+              const first = state.nodes.keys().next().value;
+              if (first !== undefined) {
+                state.selected = first;
+                this.queueHistory();
+              }
+            }
+            state.client?.setIds([...state.nodes.keys()]);
+            this.publish();
+          },
         );
         let active: ReadonlySet<string> | undefined;
         try {
@@ -382,7 +409,16 @@ export class DashboardController {
             if (!this.current(state, generation, signal)) return;
             state.connection = client.connection;
             if (client.health) {
-              state.rows = new Map(client.rows);
+              state.rows = new Map(
+                [...client.rows].map(([id, row]) => {
+                  let snapshot = this.snapshots.get(row);
+                  if (!snapshot) {
+                    snapshot = immutableView(row);
+                    this.snapshots.set(row, snapshot);
+                  }
+                  return [id, snapshot];
+                }),
+              );
               state.health = client.health;
               state.serverAt = client.now();
               state.receivedAt = this.elapsed();

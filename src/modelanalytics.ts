@@ -131,6 +131,13 @@ export function analyzeModelRequests(
   records: readonly HistoryRecord[],
   options: ModelAnalyticsOptions,
 ): ModelAnalyticsResult & { requests: CompletedAnalyticsRequest[] } {
+  const accumulator = createModelAccumulator(options);
+  accumulator.append(records);
+  return accumulator.result();
+}
+
+/** Canonical reconciliation state, shared by full and proven-prefix append paths. */
+export function createModelAccumulator(options: ModelAnalyticsOptions) {
   const maxRequests = options.maxRequests ?? 100000;
   if (
     !Number.isSafeInteger(maxRequests) ||
@@ -149,7 +156,7 @@ export function analyzeModelRequests(
     options.from > options.to
   )
     throw new Error("--from must precede --to");
-  const coverage: ModelAnalyticsResult["coverage"] = {
+  const counters: ModelAnalyticsResult["coverage"] = {
     source: "retained-request-records",
     scannedRecords: 0,
     unscannedRecords: 0,
@@ -166,100 +173,128 @@ export function analyzeModelRequests(
     string,
     { fact: AnalyticsRequest; conflict: boolean }
   >();
-  for (const record of records) {
-    coverage.scannedRecords++;
-    if (record.type === "gap") {
-      coverage.gapRecords++;
-      continue;
-    }
-    if (record.type !== "request") continue;
-    const fact = requestFact(record);
-    if (!fact) {
-      coverage.missingIdentityRecords++;
-      continue;
-    }
-    fact.location = options.location;
-    const key = JSON.stringify([
-      fact.sessionId,
-      fact.requestId,
-      fact.startedAt,
-    ]);
-    const previous = requests.get(key);
-    if (previous) {
-      coverage.duplicateRecords++;
-      const merged = reconcile(previous.fact, fact);
-      if (!merged) previous.conflict = true;
-      else previous.fact = merged;
-    } else {
-      if (requests.size === maxRequests) {
-        coverage.scannedRecords--;
-        coverage.unscannedRecords = records.length - coverage.scannedRecords;
-        break;
+  let totalRecords = 0,
+    stopped = false;
+  function append(records: readonly HistoryRecord[]) {
+    totalRecords += records.length;
+    for (const record of records) {
+      if (stopped) break;
+      counters.scannedRecords++;
+      if (record.type === "gap") {
+        counters.gapRecords++;
+        continue;
       }
-      requests.set(key, { fact, conflict: false });
+      if (record.type !== "request") continue;
+      const fact = requestFact(record);
+      if (!fact) {
+        counters.missingIdentityRecords++;
+        continue;
+      }
+      fact.location = options.location;
+      const key = JSON.stringify([
+        fact.sessionId,
+        fact.requestId,
+        fact.startedAt,
+      ]);
+      const previous = requests.get(key);
+      if (previous) {
+        counters.duplicateRecords++;
+        const merged = reconcile(previous.fact, fact);
+        if (!merged) previous.conflict = true;
+        else previous.fact = merged;
+      } else {
+        if (requests.size === maxRequests) {
+          counters.scannedRecords--;
+          stopped = true;
+          break;
+        }
+        requests.set(key, { fact, conflict: false });
+      }
     }
   }
-  const accepted: CompletedAnalyticsRequest[] = [];
-  for (const { fact: r, conflict } of requests.values()) {
-    if (conflict) {
-      coverage.conflictingRequests++;
-      continue;
+  function* steps(): Generator<
+    void,
+    ModelAnalyticsResult & { requests: CompletedAnalyticsRequest[] }
+  > {
+    const coverage = {
+      ...counters,
+      unscannedRecords: totalRecords - counters.scannedRecords,
+    };
+    const accepted: CompletedAnalyticsRequest[] = [];
+    for (const { fact: r, conflict } of requests.values()) {
+      yield;
+      if (conflict) {
+        coverage.conflictingRequests++;
+        continue;
+      }
+      if (r.completedAt === undefined) {
+        coverage.incompleteRequests++;
+        continue;
+      }
+      const duration = r.completedAt - r.startedAt;
+      if (
+        !nonnegative(r.completedAt) ||
+        !Number.isFinite(duration) ||
+        duration <= 0
+      ) {
+        coverage.invalidTimingRequests++;
+        continue;
+      }
+      if (
+        (options.from !== undefined && r.completedAt < options.from) ||
+        (options.to !== undefined && r.completedAt >= options.to) ||
+        (options.model !== undefined && r.model !== options.model) ||
+        (options.agent !== undefined && r.agent !== options.agent)
+      )
+        continue;
+      accepted.push({ ...r, completedAt: r.completedAt });
     }
-    if (r.completedAt === undefined) {
-      coverage.incompleteRequests++;
-      continue;
-    }
-    const duration = r.completedAt - r.startedAt;
-    if (
-      !nonnegative(r.completedAt) ||
-      !Number.isFinite(duration) ||
-      duration <= 0
-    ) {
-      coverage.invalidTimingRequests++;
-      continue;
-    }
-    if (
-      (options.from !== undefined && r.completedAt < options.from) ||
-      (options.to !== undefined && r.completedAt >= options.to) ||
-      (options.model !== undefined && r.model !== options.model) ||
-      (options.agent !== undefined && r.agent !== options.agent)
-    )
-      continue;
-    accepted.push({ ...r, completedAt: r.completedAt });
+    const models = yield* summarizeModelRequestSteps(accepted);
+    coverage.partial =
+      coverage.unscannedRecords > 0 ||
+      coverage.conflictingRequests > 0 ||
+      coverage.missingIdentityRecords > 0 ||
+      coverage.incompleteRequests > 0 ||
+      coverage.invalidTimingRequests > 0 ||
+      coverage.gapRecords > 0 ||
+      models.some(
+        (s) =>
+          s.partialRequests > 0 ||
+          s.legacyAttributionRequests > 0 ||
+          s.excludedTpsRequests > 0 ||
+          s.excludedTtftRequests > 0 ||
+          !s.model,
+      );
+    return {
+      schemaVersion: 1,
+      location: options.location,
+      models,
+      coverage,
+      requests: accepted,
+    };
   }
-  const models = summarizeModelRequests(accepted);
-  coverage.partial =
-    coverage.unscannedRecords > 0 ||
-    coverage.conflictingRequests > 0 ||
-    coverage.missingIdentityRecords > 0 ||
-    coverage.incompleteRequests > 0 ||
-    coverage.invalidTimingRequests > 0 ||
-    coverage.gapRecords > 0 ||
-    models.some(
-      (s) =>
-        s.partialRequests > 0 ||
-        s.legacyAttributionRequests > 0 ||
-        s.excludedTpsRequests > 0 ||
-        s.excludedTtftRequests > 0 ||
-        !s.model,
-    );
-  return {
-    schemaVersion: 1,
-    location: options.location,
-    models,
-    coverage,
-    requests: accepted,
-  };
+  return { append, steps, result: () => finishSteps(steps()) };
 }
 
 export interface CompletedAnalyticsRequest extends AnalyticsRequest {
   completedAt: number;
 }
 
+function finishSteps<T>(steps: Generator<void, T>): T {
+  let step = steps.next();
+  while (!step.done) step = steps.next();
+  return step.value;
+}
+
 /** Summarize already reconciled requests, including independent metric eligibility. */
 export function summarizeModelRequests(
   requests: readonly CompletedAnalyticsRequest[],
 ): ModelSummary[] {
+  return finishSteps(summarizeModelRequestSteps(requests));
+}
+export function* summarizeModelRequestSteps(
+  requests: readonly CompletedAnalyticsRequest[],
+): Generator<void, ModelSummary[]> {
   const groups = new Map<
     string | undefined,
     {
@@ -269,6 +304,7 @@ export function summarizeModelRequests(
     }
   >();
   for (const r of requests) {
+    yield;
     const duration = r.completedAt - r.startedAt;
     let group = groups.get(r.model);
     if (!group) {

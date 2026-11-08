@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.2 — 2026-11-08
+
+- Share bounded revisioned archive reads between History and Models, stream/cancel scans, reuse model facts and bucket variants, and preserve authorization and request accounting. Cache limits and cold-start tradeoffs are recorded in the [performance delivery report](docs/validation/dashboard-performance-2026-11-08.md).
+- Cache Overview layouts, format the viewport, coalesce redraws and publish progressive discovery with four bounded child requests.
+
+- Restore the primary session’s live context chart by default in the sidebar, including after navigation and remounts. Keep the History control available to collapse it.
+- Restore horizontal capacity occupancy bars for visible subagents alongside their threshold and status labels.
+
 ## 0.4.1 — 2026-11-07
 
 - Keep native performance Charts visible immediately after returning from help. Pause reads and polling during help, retain only the matching plot, and discard it when session, location, or window changes. See the [chart-help continuity plan](docs/plans/native-chart-help-continuity.md) and [0.4.1 release validation](docs/validation/release-0.4.1-2026-11-07.md).

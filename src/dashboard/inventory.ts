@@ -44,6 +44,7 @@ export async function discoverInventory(
   port: Pick<DashboardPort, "location" | "listSessions">,
   signal: AbortSignal,
   limits: InventoryLimits = inventoryLimits,
+  progress?: (inventory: DashboardInventory) => void,
 ): Promise<DashboardInventory> {
   validateInventoryLimits(limits);
   const sessions = new Map<string, DashboardSession>();
@@ -57,63 +58,90 @@ export async function discoverInventory(
   let pages = 0;
   while (queue.length && pages < limits.maxPages) {
     signal.throwIfAborted();
-    const branch = queue.shift();
-    if (!branch) break;
-    try {
-      pages++;
-      const page = await port.listSessions(
-        {
-          parentID: branch.parent,
-          limit: 100,
-          ...(branch.cursor ? { cursor: branch.cursor } : {}),
-        },
-        signal,
-      );
-      signal.throwIfAborted();
-      for (const session of page.data) {
-        if (session.directory !== port.location.directory) {
-          notices.add("foreign-location");
-          continue;
+    // Reserve pages before launching requests. Root cursor chains remain serial;
+    // independent child branches use at most four concurrent requests.
+    const batch = queue.splice(
+      0,
+      Math.min(queue[0]?.parent === null ? 1 : 4, limits.maxPages - pages),
+    );
+    pages += batch.length;
+    const results = await Promise.allSettled(
+      batch.map(async (branch) =>
+        port.listSessions(
+          {
+            parentID: branch.parent,
+            limit: 100,
+            ...(branch.cursor ? { cursor: branch.cursor } : {}),
+          },
+          signal,
+        ),
+      ),
+    );
+    signal.throwIfAborted();
+    for (const [index, branch] of batch.entries()) {
+      try {
+        const result = results[index];
+        if (!result || result.status === "rejected")
+          throw new Error("Inventory unavailable");
+        const page = result.value;
+        signal.throwIfAborted();
+        for (const session of page.data) {
+          if (session.directory !== port.location.directory) {
+            notices.add("foreign-location");
+            continue;
+          }
+          if (
+            (session.parentId ?? null) !== branch.parent ||
+            sessions.has(session.sessionId)
+          ) {
+            notices.add("invalid-hierarchy");
+            continue;
+          }
+          if (sessions.size >= limits.maxNodes) {
+            notices.add("node-limit");
+            return {
+              sessions: [...sessions.values()],
+              complete: false,
+              pages,
+              notices: [...notices],
+            };
+          }
+          sessions.set(session.sessionId, session);
+          if (branch.depth < limits.maxDepth)
+            queue.push({
+              parent: session.sessionId,
+              depth: branch.depth + 1,
+              cursors: [],
+            });
+          else notices.add("depth-limit");
         }
-        if (
-          (session.parentId ?? null) !== branch.parent ||
-          sessions.has(session.sessionId)
-        ) {
-          notices.add("invalid-hierarchy");
-          continue;
+        const cursor = page.cursor?.next;
+        if (cursor) {
+          if (cursor === branch.cursor || branch.cursors.includes(cursor))
+            notices.add("repeated-cursor");
+          else
+            queue.unshift({
+              ...branch,
+              cursor,
+              cursors: [...branch.cursors, cursor],
+            });
         }
-        if (sessions.size >= limits.maxNodes) {
-          notices.add("node-limit");
-          return {
-            sessions: [...sessions.values()],
-            complete: false,
-            pages,
-            notices: [...notices],
-          };
-        }
-        sessions.set(session.sessionId, session);
-        if (branch.depth < limits.maxDepth)
-          queue.push({
-            parent: session.sessionId,
-            depth: branch.depth + 1,
-            cursors: [],
-          });
-        else notices.add("depth-limit");
+      } catch {
+        signal.throwIfAborted();
+        notices.add("inventory-unavailable");
       }
-      const cursor = page.cursor?.next;
-      if (cursor) {
-        if (cursor === branch.cursor || branch.cursors.includes(cursor))
-          notices.add("repeated-cursor");
-        else
-          queue.unshift({
-            ...branch,
-            cursor,
-            cursors: [...branch.cursors, cursor],
-          });
+    }
+    if (progress) {
+      try {
+        progress({
+          sessions: [...sessions.values()],
+          complete: false,
+          pages,
+          notices: [...notices],
+        });
+      } catch {
+        /* A frontend cannot interrupt bounded discovery. */
       }
-    } catch {
-      signal.throwIfAborted();
-      notices.add("inventory-unavailable");
     }
   }
   if (queue.length) notices.add("page-limit");

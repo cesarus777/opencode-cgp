@@ -1,6 +1,6 @@
 # Dashboard performance investigation
 
-Date: 2026-11-07. Status: investigation; improvements below are proposed, not implemented.
+Date: 2026-11-07. Status: historical baseline investigation. Steps 1–3 and 5 are now delivered; see the [implementation plan](dashboard-performance-implementation.md) and [2026-11-08 validation](../validation/dashboard-performance-2026-11-08.md). Findings below describe the pre-implementation code.
 
 The reported symptom is slow opening of standalone **History / Models** in a directory with many sessions and statistics. Archive loading is the first optimization target. Separate session-discovery and Overview redraw costs also grow with session count.
 
@@ -81,4 +81,4 @@ First delivery should combine reusable archive reads with cancellation/schedulin
 - Measure server event handling while scans run, not just terminal responsiveness. Cache/worker failures must not change compaction policy or enforcement.
 - For later UI work, target sub-16 ms warm Overview formatting at 1,024 sessions and test identity, Unicode widths, paging, narrow/tall rows and exceptions. For discovery, verify usable early results without claiming complete inventory prematurely.
 
-No production performance behavior has been changed by this investigation. Existing sidebar restoration work is independent.
+This investigation itself changed no production behavior. The later implementation delivers shared archive revisions, cooperative scans, Models reuse, bounded Overview formatting and progressive discovery; its [validation report](../validation/dashboard-performance-2026-11-08.md) records cold-start and responsiveness limitations. Sidebar restoration is included in 0.4.2.

@@ -15,6 +15,7 @@ import {
   overviewHeading,
   overviewLabels,
   overviewRowLines,
+  overviewRowHeight,
   terminalDetail,
   terminalHelp,
   terminalHistory,
@@ -31,6 +32,7 @@ export interface TerminalKey {
 
 /** Only presentation state lives here; application state stays in the controller. */
 export class TerminalShell {
+  readonly work = { formattedOverviewRows: 0 };
   scroll = 0;
   metric = 0;
   sample = 0;
@@ -48,6 +50,19 @@ export class TerminalShell {
   private rowOffset = 0;
   private overviewScope = "";
   private overviewPage = 1;
+  private labelKey = "";
+  private labels: string[] = [];
+  private layouts = new Map<
+    string,
+    {
+      key: string;
+      height: number;
+      lines?: string[];
+      selected?: boolean;
+      label?: string;
+      position?: number;
+    }
+  >();
   private historyIdentity = "";
   constructor(
     readonly controller: DashboardController,
@@ -453,47 +468,105 @@ export class TerminalShell {
           ),
         );
       const budget = Math.max(1, available - heading.length - status.length);
-      const labels = overviewLabels(view.rows);
-      const rows = view.rows.map((row, index) =>
-        overviewRowLines(
-          row,
+      const labelKey = view.rows.map((row) => row.node.sessionId).join("\0");
+      if (labelKey !== this.labelKey) {
+        this.labels = overviewLabels(view.rows);
+        this.labelKey = labelKey;
+      }
+      const ids = new Set(view.rows.map((row) => row.node.sessionId));
+      for (const id of this.layouts.keys())
+        if (!ids.has(id)) this.layouts.delete(id);
+      const heights = view.rows.map((row) => {
+        const key = JSON.stringify([
           width,
-          row.node.sessionId === view.selectedSessionId,
-          labels[index] ?? `#${index + 1}`,
-          index,
           budget,
-        ),
-      );
+          row.node,
+          row.depth,
+          row.freshness,
+          row.pressure,
+          row.triggerDeltaTokens,
+          row.utilizationPercent,
+          row.snapshot?.measurement?.confidence,
+          row.snapshot?.compaction,
+          row.inventoryStale,
+          row.liveStale,
+          row.hidden,
+        ]);
+        let layout = this.layouts.get(row.node.sessionId);
+        if (!layout || layout.key !== key) {
+          layout = { key, height: overviewRowHeight(row, width, budget) };
+          this.layouts.set(row.node.sessionId, layout);
+        }
+        return layout.height;
+      });
       const selected = view.rows.findIndex(
         (row) => row.node.sessionId === view.selectedSessionId,
       );
-      const start = rows
+      const start = heights
         .slice(0, Math.max(0, selected))
-        .reduce((n, row) => n + row.length, 0);
-      const end = start + (rows[selected]?.length ?? 0);
+        .reduce((n, h) => n + h, 0);
+      const end = start + (heights[selected] ?? 0);
       if (start < this.rowOffset) this.rowOffset = start;
       if (end > this.rowOffset + budget)
         this.rowOffset = Math.max(start, end - budget);
-      const flat = rows.flat();
+      const total = heights.reduce((n, h) => n + h, 0);
       this.rowOffset = Math.max(
         0,
-        Math.min(this.rowOffset, Math.max(0, flat.length - budget)),
+        Math.min(this.rowOffset, Math.max(0, total - budget)),
       );
-      // A page measures session rows, not terminal lines or header assumptions.
-      let cursor = 0;
-      this.overviewPage = Math.max(
-        1,
-        rows.filter((row) => {
-          const start = cursor;
-          cursor += row.length;
-          return start >= this.rowOffset && cursor <= this.rowOffset + budget;
-        }).length,
-      );
+      const visible: string[] = [];
+      let cursor = 0,
+        page = 0;
+      for (const [index, row] of view.rows.entries()) {
+        const rowHeight = heights[index] ?? 1;
+        if (
+          cursor >= this.rowOffset &&
+          cursor + rowHeight <= this.rowOffset + budget
+        )
+          page++;
+        if (
+          cursor + rowHeight > this.rowOffset &&
+          cursor < this.rowOffset + budget
+        ) {
+          const layout = this.layouts.get(row.node.sessionId);
+          const chosen = row.node.sessionId === view.selectedSessionId;
+          const label = this.labels[index] ?? `#${index + 1}`;
+          if (layout) {
+            if (
+              !layout.lines ||
+              layout.selected !== chosen ||
+              layout.label !== label ||
+              layout.position !== index
+            ) {
+              this.work.formattedOverviewRows++;
+              layout.lines = overviewRowLines(
+                row,
+                width,
+                chosen,
+                label,
+                index,
+                budget,
+              );
+              layout.selected = chosen;
+              layout.label = label;
+              layout.position = index;
+            }
+            visible.push(
+              ...layout.lines.slice(
+                Math.max(0, this.rowOffset - cursor),
+                this.rowOffset + budget - cursor,
+              ),
+            );
+          }
+        }
+        cursor += rowHeight;
+      }
+      this.overviewPage = Math.max(1, page);
       body = [
         ...status,
         ...heading,
-        ...(flat.length
-          ? flat.slice(this.rowOffset, this.rowOffset + budget)
+        ...(total
+          ? visible
           : [
               clip(
                 "No matching sessions; / search, f filters, r refresh.",
@@ -580,7 +653,9 @@ export function mountTerminal(
   text: TextRenderable,
   finished: (failed: boolean) => void,
 ) {
-  let closed = false;
+  let closed = false,
+    pendingDraw = false,
+    drawing = false;
   let unsubscribe = () => {};
   const shutdown = (failed = false) => {
     if (closed) return;
@@ -608,24 +683,35 @@ export function mountTerminal(
   const onSignal = () => shutdown();
   const signals = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
   const draw = () => {
-    if (closed) return;
+    if (closed || drawing) return;
+    pendingDraw = false;
+    drawing = true;
     try {
       text.content = shell.frame(renderer.width, renderer.height);
     } catch {
       fail();
+    } finally {
+      drawing = false;
     }
+  };
+  const scheduleDraw = () => {
+    if (pendingDraw || closed || drawing) return;
+    pendingDraw = true;
+    queueMicrotask(() => {
+      if (pendingDraw) draw();
+    });
   };
   const key = (event: KeyEvent) => {
     try {
       shell.key(event, Math.max(1, renderer.height - 4));
-      draw();
+      scheduleDraw();
     } catch {
       fail();
     }
   };
   const paste = (event: { bytes: Uint8Array }) => {
     shell.paste(new TextDecoder().decode(event.bytes));
-    draw();
+    scheduleDraw();
   };
   try {
     renderer.root.add(text);
@@ -638,7 +724,8 @@ export function mountTerminal(
     for (const signal of signals) process.on(signal, onSignal);
     process.on("uncaughtException", fail);
     process.on("unhandledRejection", fail);
-    unsubscribe = controller.subscribe(draw);
+    unsubscribe = controller.subscribe(scheduleDraw);
+    draw();
     if (closed) {
       unsubscribe();
       return { shell, shutdown };

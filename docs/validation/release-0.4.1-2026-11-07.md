@@ -1,6 +1,6 @@
 # 0.4.1 release candidate validation
 
-Date: 2026-11-07. Status: candidate prepared; no release tag or npm stage has been created.
+Date: 2026-11-07. Historical candidate record: the checks below preceded release. Subsequent registry verification on 2026-11-08 confirms `0.4.1` is public and tagged `v0.4.1`. The pending-release statements below describe the original candidate checkpoint.
 
 The candidate includes the nine UI/UX commits after `v0.4.0`: native panel overview, shared threshold and Guard wording, compact standalone overview, native keyboard help and inventory feedback, compact sidebar, plain-language terminology, history failure recovery, and chart continuity through help. The registry reported `0.4.0` as `latest` before preparation. The manifest and changelog now identify `0.4.1`; `bun install` found no dependency changes, and the existing binary lockfile remained unchanged.
 

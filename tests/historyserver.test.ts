@@ -115,3 +115,68 @@ test("disabled history returns explicit status without reading the filesystem", 
     expect(isHistoryResult(result)).toBe(true);
     if (isHistoryResult(result)) expect(result.enabled).toBe(false);
   }));
+
+test("history forwards service shutdown cancellation and rejects later admission", async () => {
+  let handlers: RpcHandlers<typeof historyRpc> | undefined;
+  let release = () => {};
+  let started = () => {};
+  let reads = 0,
+    authorizations = 0;
+  const entered = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const stop = await serveHistory(
+    {
+      register: async (_definition, value) => {
+        handlers = value;
+        return { dispose: async () => {} };
+      },
+    },
+    "/unused",
+    true,
+    () => 5,
+    async () => {
+      authorizations++;
+      return true;
+    },
+    async (_path, filter) => {
+      reads++;
+      if (reads === 1) {
+        started();
+        await new Promise<void>((resolve, reject) => {
+          release = resolve;
+          filter?.signal?.addEventListener(
+            "abort",
+            () => reject(new Error("cancelled")),
+            { once: true },
+          );
+        });
+      }
+      return {
+        records: [],
+        metadata: {
+          schema: 1,
+          retainedBytes: 0,
+          skippedBytes: 0,
+          malformedRecords: 0,
+          completeness: "bounded-retention",
+        },
+      };
+    },
+  );
+  if (!handlers) throw new Error("No handler");
+  const input = {
+    schemaVersion: 1,
+    sessionId: "s",
+    from: 0,
+    to: 5,
+    maxPoints: 100,
+  };
+  const pending = handlers.read(input, context);
+  await entered;
+  await stop();
+  await expect(pending).rejects.toThrow("cancelled");
+  release();
+  await expect(handlers.read(input, context)).rejects.toThrow("stopped");
+  expect(authorizations).toBe(1);
+});

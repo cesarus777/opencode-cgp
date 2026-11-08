@@ -8,13 +8,29 @@
 │ Observing · Guard won't request     │
 │ compaction                          │
 │ Open: /context-guard                │
-│ History: show                       │
+│ History: hide                       │
+│ 100%│                             │ │
+│     │                             │ │
+│     │                             │ │
+│     │                             │ │
+│     │                             │ │
+│     │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│ │
+│     │                            ▇│ │
+│   0%│                            █│ │
+│     └─────────────────────────────┘ │
+│ Recent samples → now · ┄ threshold  │
+│ Dim = last known context            │
+│ Policy threshold 160K · 70% of      │
+│ threshold                           │
 │ SUBAGENTS (4) · 3 running           │
 │ ▾ ● explore                         │
+│  ████████████████████████░░░░░ 82%  │
 │  Context 82% · Threshold reached    │
 │   └─ ● indexer                      │
+│    █████████░░░░░░░░░░░░░░░░░░ 34%  │
 │    Context 34% · Below threshold    │
 │ ● implementor                       │
+│  ████████████████░░░░░░░░░░░░░ 55%  │
 │  Context 55% · Near threshold       │
 │ Completed (1): show                 │
 │ Sort: pressure                      │

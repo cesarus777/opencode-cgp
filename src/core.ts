@@ -11,5 +11,14 @@ export * from "./family.ts";
 export * from "./performance.ts";
 
 export * from "./charts.ts";
-export * from "./modelanalytics.ts";
+export {
+  analyzeModelRequests,
+  aggregateModels,
+  summarizeModelRequests,
+  type ModelAnalyticsOptions,
+  type AnalyticsRequest,
+  type ModelSummary,
+  type ModelAnalyticsResult,
+  type CompletedAnalyticsRequest,
+} from "./modelanalytics.ts";
 export * from "./modelseries.ts";

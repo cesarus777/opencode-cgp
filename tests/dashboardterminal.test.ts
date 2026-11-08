@@ -667,6 +667,11 @@ test("public native renderer handles resize, editor focus and idempotent shutdow
     await settle(() => controller.getView().connection === "live");
     await settle(() => counts.streams === 1);
     await host.renderOnce();
+    const frames = spyOn(app.shell, "frame");
+    host.mockInput.pressKey("DOWN");
+    await Promise.resolve();
+    expect(frames).toHaveBeenCalledTimes(1);
+    frames.mockRestore();
     expect(host.captureCharFrame()).toContain("Context Guard");
     for (const position of [1, 2, 3])
       expect(host.captureCharFrame()).toContain(`#${position}`);
@@ -722,5 +727,36 @@ test("renderer initialization and runtime failures stop the controller and remov
     expect(failures).toBe(1);
     expect(controller.getView().running).toBe(false);
     expect(process.listenerCount("SIGTERM")).toBe(before);
+  }
+});
+
+test("Overview only formats rows in the viewport and reuses warm layouts", async () => {
+  const { controller } = terminalFixture();
+  try {
+    await controller.start();
+    const view = controller.getView();
+    const template = view.rows[0];
+    if (!template) throw new Error("Missing fixture row");
+    const rows = Array.from({ length: 1024 }, (_, index) => ({
+      ...template,
+      node: { ...template.node, sessionId: `s-${index}` },
+    }));
+    const stub = spyOn(controller, "getView").mockReturnValue({
+      ...view,
+      rows,
+      selectedSessionId: "s-0",
+    });
+    const shell = new TerminalShell(controller, () => {});
+    shell.frame(80, 24);
+    expect(shell.work.formattedOverviewRows).toBeLessThan(24);
+    const first = shell.work.formattedOverviewRows;
+    shell.frame(80, 24);
+    expect(shell.work.formattedOverviewRows).toBe(first);
+    stub.mockReturnValue({ ...view, rows, selectedSessionId: "s-900" });
+    expect(shell.frame(80, 24)).toContain("#901");
+    expect(shell.work.formattedOverviewRows - first).toBeLessThan(24);
+    stub.mockRestore();
+  } finally {
+    controller.stop();
   }
 });

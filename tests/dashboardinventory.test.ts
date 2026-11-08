@@ -122,3 +122,57 @@ test("dashboard inventory aborts obsolete scans and rejects unbounded limits", a
     }),
   ).rejects.toThrow("Invalid dashboard inventory limits");
 });
+
+test("discovery publishes roots before child completion with four bounded requests and deterministic commits", async () => {
+  let active = 0,
+    maximum = 0;
+  const commits: string[][] = [];
+  const port = {
+    location: { directory: "/project" },
+    async listSessions(input: Parameters<DashboardPort["listSessions"]>[0]) {
+      active++;
+      maximum = Math.max(maximum, active);
+      try {
+        if (input.parentID === null)
+          return {
+            data: [node("a"), node("b"), node("c"), node("d"), node("e")],
+            cursor: { next: null },
+          };
+        await Bun.sleep(input.parentID === "a" ? 4 : 1);
+        return {
+          data:
+            String(input.parentID).length === 1
+              ? [node(`${input.parentID}-child`, input.parentID ?? undefined)]
+              : [],
+          cursor: { next: null },
+        };
+      } finally {
+        active--;
+      }
+    },
+  };
+  const result = await discoverInventory(
+    port,
+    new AbortController().signal,
+    undefined,
+    (partial) => {
+      expect(partial.complete).toBe(false);
+      commits.push(partial.sessions.map((s) => s.sessionId));
+    },
+  );
+  expect(commits[0]).toEqual(["a", "b", "c", "d", "e"]);
+  expect(maximum).toBe(4);
+  expect(result.sessions.map((s) => s.sessionId)).toEqual([
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "a-child",
+    "b-child",
+    "c-child",
+    "d-child",
+    "e-child",
+  ]);
+  expect(result.complete).toBe(true);
+});

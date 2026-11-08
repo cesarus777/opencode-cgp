@@ -81,16 +81,15 @@ export type DashboardView = Immutable<{
   notices: readonly string[];
 }>;
 
-/** Clone before freezing so transport-owned objects never become UI-owned state. */
+const owned = new WeakSet<object>();
+/** Copy transport objects once; already-owned immutable subtrees can be shared. */
 export function immutableView<T>(value: T): T {
-  const copy = structuredClone(value);
-  const freeze = (item: unknown): void => {
-    if (item === null || typeof item !== "object") return;
-    for (const child of Object.values(item)) freeze(child);
-    Object.freeze(item);
-  };
-  freeze(copy);
-  return copy;
+  if (value === null || typeof value !== "object" || owned.has(value))
+    return value;
+  const copy = Object.assign(Array.isArray(value) ? [] : {}, value);
+  for (const key in copy) copy[key] = immutableView(copy[key]);
+  owned.add(copy);
+  return Object.freeze(copy);
 }
 
 export function projectHistory(

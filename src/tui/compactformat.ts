@@ -183,6 +183,12 @@ export function agentLines(row: GuardRow, width: number) {
   const short = `${row.freshness === "stale" ? "Last measured" : "Ctx"} ${estimate}${percent} · ${pressure === "Below threshold" ? "Threshold below" : pressure}`;
   const lifecycle = compactionLabel(row);
   return [
+    progress(
+      valid && row.utilizationPercent !== undefined
+        ? row.utilizationPercent / 100
+        : undefined,
+      width,
+    ),
     ...wrap(cells(full) <= width ? full : short, width),
     ...(row.node.status === "failed" || row.node.status === "unknown"
       ? wrap(row.node.status.toUpperCase(), width)

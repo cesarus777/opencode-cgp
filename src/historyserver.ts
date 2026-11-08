@@ -23,8 +23,10 @@ export async function serveHistory(
     sessionId: string,
     signal: AbortSignal,
   ) => Promise<boolean> = async () => true,
+  reader: typeof readPerformanceHistory = readPerformanceHistory,
 ) {
   if (!rpc) return () => {};
+  const shutdown = new AbortController();
   let reading = false,
     stopped = false;
   const registration = await rpc.register(historyRpc, {
@@ -33,13 +35,15 @@ export async function serveHistory(
         throw new Error("Invalid history request (maximum window: seven days)");
       if (reading || stopped)
         throw new Error("History service busy or stopped; retry later");
+      const signal = AbortSignal.any([context.signal, shutdown.signal]);
+      signal.throwIfAborted();
       reading = true;
       try {
-        const allowed =
-          !enabled || (await authorize(input.sessionId, context.signal));
+        const allowed = !enabled || (await authorize(input.sessionId, signal));
         if (!allowed) throw new Error("Session is outside this location");
         const result = enabled
-          ? await readPerformanceHistory(path, {
+          ? await reader(path, {
+              signal,
               sessionId: input.sessionId,
               from: input.from,
               to: input.to,
@@ -90,6 +94,7 @@ export async function serveHistory(
   });
   return async () => {
     stopped = true;
+    shutdown.abort();
     await registration.dispose();
   };
 }

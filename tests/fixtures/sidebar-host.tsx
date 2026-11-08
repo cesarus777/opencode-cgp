@@ -162,7 +162,10 @@ try {
   await host.renderOnce();
   await host.renderOnce();
   assert.equal(consumers, 1);
-  assert.doesNotMatch(frame(), /100%│/);
+  assert.match(frame(), /History: hide/);
+  assertMainChart(palette.muted);
+  for (const percent of [82, 34, 55])
+    assert.match(frame(), new RegExp(`[█░]+ ${percent}%`));
   assertColor("RUNNING", palette.success, "Main");
   assertColor("●", palette.success, "explore");
   assertColor("explore", palette.error);
@@ -180,7 +183,6 @@ try {
   assert.match(frame(), /SUBAGENTS \(4\)/);
   assert.match(frame(), /3 running/);
   assert.match(frame(), /Completed \(1\): show/);
-  assert.ok(frame().trimEnd().split("\n").length <= 28);
   assert.ok(
     frame().indexOf("Open: /context-guard") < frame().indexOf("SUBAGENTS"),
   );
@@ -270,8 +272,11 @@ try {
   assert.match(frame(), /Completed \(1\): hide/);
   run("context-guard.completed");
   run("context-guard.sort");
+  run("context-guard.history");
   await host.renderOnce();
   assert.match(frame(), /Sort: activity/);
+  assert.match(frame(), /History: show/);
+  assert.doesNotMatch(frame(), /100%│/);
   const before = rows()[0];
   assert.ok(before?.snapshot?.measurement);
   const snapshot = {
@@ -382,7 +387,6 @@ try {
   await host.renderOnce();
   assertColor("FAILED", palette.error, "Main");
   setRows(sidebarFamily());
-  run("context-guard.history");
   await host.renderOnce();
   host.resize(35, 100);
   await host.renderOnce();
@@ -390,7 +394,7 @@ try {
   assert.match(frame(), /Main/);
   assert.match(frame(), /RUNNING/);
   assert.match(frame(), /explore/);
-  assert.ok(frame().trimEnd().split("\n").length <= 34);
+  assertMainChart();
   console.log(
     `DENSITY: 35 columns ${frame().trimEnd().split("\n").length} lines`,
   );
@@ -408,13 +412,15 @@ try {
       .filter((line) => line.includes("│"))
       .every((line) => line.startsWith("│") && line.endsWith("│")),
   );
+  // Hiding history is local to the route; another session starts with its chart.
   run("context-guard.history");
   await host.renderOnce();
+  assert.match(frame(), /History: show/);
   setSessionID("explore");
   await host.renderOnce();
   assert.match(frame(), /SUBAGENTS \(1\)/);
-  assert.match(frame(), /History: show/);
-  assert.doesNotMatch(frame(), /100%│/);
+  assert.match(frame(), /History: hide/);
+  assert.match(frame(), /100%│/);
   assert.match(frame(), /indexer/);
   assert.doesNotMatch(frame(), /implementor/);
 } finally {

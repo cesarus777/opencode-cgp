@@ -1,3 +1,4 @@
+import { PerformanceArchive } from "./archive.ts";
 import { PerformanceTracker, outputTokens } from "./performance.ts";
 import { serveHistory, type HistoryRpcPort } from "./historyserver.ts";
 import {
@@ -98,6 +99,13 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       return () => {};
     },
   );
+  const archive = new PerformanceArchive(
+    config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
+  );
+  const archiveRead: typeof import("./history.ts").readPerformanceHistory = (
+    _path,
+    filter,
+  ) => archive.read(filter);
   const stopHistory = await serveHistory(
     ctx.historyRpc,
     config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
@@ -107,6 +115,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
       const info = await ctx.session.get({ sessionID: sessionId }, { signal });
       return info.location.directory === ctx.location.directory;
     },
+    archiveRead,
   ).catch(() => {
     diagnostics.emit({ time: Date.now(), type: "history-service-unavailable" });
     return () => {};
@@ -116,6 +125,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     config.history.path ?? `${defaultPath(ctx.location.directory)}.metrics`,
     ctx.location.directory,
     config.enabled && config.metrics.enabled && config.history.enabled,
+    { read: archiveRead, revisioned: true },
   ).catch(() => {
     diagnostics.emit({
       time: Date.now(),
@@ -124,8 +134,13 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     return () => {};
   });
   const stopSnapshots = async () => {
-    await stopAnalytics();
-    await stopHistory();
+    const archives = await Promise.allSettled([stopAnalytics(), stopHistory()]);
+    archive.dispose();
+    if (archives.some((result) => result.status === "rejected"))
+      diagnostics.emit({
+        time: Date.now(),
+        type: "registration-cleanup-failed",
+      });
     await stopV2();
     await stopV1();
   };
@@ -144,6 +159,7 @@ export async function setup(ctx: Host, injectedSink?: TelemetrySink) {
     },
     Date.now,
     (type) => diagnostics.emit({ time: Date.now(), type }),
+    (name) => archive.invalidate(name),
   );
   await history.initialize();
   if (config.metrics.enabled) {

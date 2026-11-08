@@ -1,3 +1,4 @@
+import type { Stats } from "node:fs";
 import { mkdir, readdir, stat, open, unlink } from "node:fs/promises";
 import { isPerformanceSnapshot } from "./rpc.ts";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ export interface HistoryRecord extends Identity {
   droppedRecords?: number;
 }
 const filename = /^([0-9]+)-[a-f0-9-]+\.jsonl$/;
-async function segments(directory: string) {
+export async function segments(directory: string) {
   const names = await readdir(directory).catch((error: unknown) => {
     if (error instanceof Error && "code" in error && error.code === "ENOENT")
       return [];
@@ -27,10 +28,131 @@ async function segments(directory: string) {
         .map(async (name) => ({
           name,
           time: Number(filename.exec(name)?.[1]),
-          bytes: (await stat(join(directory, name))).size,
+          ...fileIdentity(await stat(join(directory, name))),
         })),
     )
   ).sort((a, b) => a.time - b.time || a.name.localeCompare(b.name));
+}
+export function fileIdentity(info: Stats) {
+  return {
+    bytes: info.size,
+    dev: info.dev,
+    ino: info.ino,
+    mtimeMs: info.mtimeMs,
+    ctimeMs: info.ctimeMs,
+  };
+}
+export interface ScanOptions {
+  now?: () => number;
+  yield?: () => Promise<void>;
+  chunkBytes?: number;
+  onRead?: (bytes: number) => void;
+  onParse?: () => void;
+}
+/** Cooperative scheduling is independent of cancellation. */
+export function scanScheduler(signal?: AbortSignal, options: ScanOptions = {}) {
+  const now = options.now ?? (() => performance.now());
+  const pause =
+    options.yield ?? (() => new Promise<void>((done) => setTimeout(done, 0)));
+  let started = now();
+  return () => {
+    signal?.throwIfAborted();
+    if (now() - started >= 4)
+      return pause().then(() => {
+        signal?.throwIfAborted();
+        started = now();
+      });
+  };
+}
+export function matchesHistory(value: HistoryRecord, filter: HistoryFilter) {
+  return !(
+    (filter.sessionId !== undefined &&
+      value.sessionId !== filter.sessionId &&
+      value.sessionId !== "__history__") ||
+    (value.type !== "gap" &&
+      filter.agent !== undefined &&
+      (value.performance?.requestAgent ?? value.agent) !== filter.agent) ||
+    (value.type !== "gap" &&
+      filter.model !== undefined &&
+      (value.performance?.requestModel ?? value.model) !== filter.model) ||
+    (filter.from !== undefined && value.time < filter.from) ||
+    (filter.to !== undefined && value.time > filter.to)
+  );
+}
+/** Reads captured bytes only. Byte boundaries retain UTF-8 exactly, including tails. */
+export async function scanHistorySegment(
+  handle: Awaited<ReturnType<typeof open>>,
+  size: number,
+  filter: HistoryFilter = {},
+  options: ScanOptions = {},
+  start = 0,
+) {
+  const records: HistoryRecord[] = [];
+  let malformedRecords = 0,
+    position = start,
+    boundary = start;
+  let pending = Buffer.alloc(0);
+  const checkpoint = scanScheduler(filter.signal, options);
+  function parse(line: Buffer) {
+    if (!line.length) return;
+    options.onParse?.();
+    let value: unknown;
+    try {
+      value = JSON.parse(line.toString("utf8"));
+    } catch {
+      malformedRecords++;
+      return;
+    }
+    if (!isHistoryRecord(value)) {
+      malformedRecords++;
+      return;
+    }
+    if (matchesHistory(value, filter)) records.push(value);
+  }
+  while (position < size) {
+    {
+      const waiting = checkpoint();
+      if (waiting) await waiting;
+    }
+    const buffer = Buffer.alloc(
+      Math.min(options.chunkBytes ?? 65536, size - position),
+    );
+    const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+    if (!bytesRead) throw new Error("Archive changed during read");
+    options.onRead?.(bytesRead);
+    position += bytesRead;
+    const chunk = pending.length
+      ? Buffer.concat([pending, buffer.subarray(0, bytesRead)])
+      : buffer.subarray(0, bytesRead);
+    let offset = 0;
+    for (;;) {
+      const end = chunk.indexOf(10, offset);
+      if (end < 0) break;
+      {
+        const waiting = checkpoint();
+        if (waiting) await waiting;
+      }
+      parse(chunk.subarray(offset, end));
+      offset = end + 1;
+    }
+    pending = Buffer.from(chunk.subarray(offset));
+    boundary = position - pending.length;
+  }
+  const completeRecords = records.length,
+    completeMalformed = malformedRecords;
+  {
+    const waiting = checkpoint();
+    if (waiting) await waiting;
+  }
+  parse(pending);
+  filter.signal?.throwIfAborted();
+  return {
+    records,
+    malformedRecords,
+    boundary,
+    completeRecords,
+    completeMalformed,
+  };
 }
 /** Separate bounded journal; the API accepts only projected scalar measurements. */
 export class PerformanceHistory {
@@ -47,6 +169,7 @@ export class PerformanceHistory {
     private readonly config: Config["history"],
     private readonly now = Date.now,
     private readonly report: (event: string) => void = () => {},
+    private readonly changed: (name: string) => void = () => {},
   ) {}
   emit(record: HistoryRecord) {
     if (!this.config.enabled || this.disabled) return;
@@ -105,6 +228,7 @@ export class PerformanceHistory {
       )
         break;
       await unlink(join(this.path, file.name));
+      this.changed(file.name);
       if (file.name === this.active) {
         this.active = undefined;
         this.bytes = 0;
@@ -159,6 +283,7 @@ export class PerformanceHistory {
       const file = await open(join(this.path, this.active), "a", 0o600);
       try {
         await file.writeFile(line);
+        this.changed(this.active);
       } finally {
         await file.close();
       }
@@ -236,7 +361,9 @@ export interface HistoryMetadata {
 export async function readPerformanceHistory(
   directory: string,
   filter: HistoryFilter = {},
+  options: ScanOptions = {},
 ) {
+  filter.signal?.throwIfAborted();
   const records: HistoryRecord[] = [];
   const files = await segments(directory);
   filter.signal?.throwIfAborted();
@@ -256,49 +383,20 @@ export async function readPerformanceHistory(
   for (const file of selected) {
     filter.signal?.throwIfAborted();
     const handle = await open(join(directory, file.name), "r");
-    let source: string;
     try {
-      const buffer = Buffer.alloc(file.bytes);
-      const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-      source = buffer.subarray(0, bytesRead).toString("utf8");
+      const result = await scanHistorySegment(
+        handle,
+        file.bytes,
+        filter,
+        options,
+      );
+      for (const record of result.records) records.push(record);
+      malformedRecords += result.malformedRecords;
     } finally {
       await handle.close();
     }
-    let scannedLines = 0;
-    for (const line of source.split("\n")) {
-      if (filter.signal && ++scannedLines % 256 === 0) {
-        await new Promise<void>((done) => setTimeout(done, 0));
-        filter.signal.throwIfAborted();
-      }
-      if (!line) continue;
-      try {
-        const value: unknown = JSON.parse(line);
-        if (!isHistoryRecord(value)) {
-          malformedRecords++;
-          continue;
-        }
-        if (
-          (filter.sessionId !== undefined &&
-            value.sessionId !== filter.sessionId &&
-            value.sessionId !== "__history__") ||
-          (value.type !== "gap" &&
-            filter.agent !== undefined &&
-            (value.performance?.requestAgent ?? value.agent) !==
-              filter.agent) ||
-          (value.type !== "gap" &&
-            filter.model !== undefined &&
-            (value.performance?.requestModel ?? value.model) !==
-              filter.model) ||
-          (filter.from !== undefined && value.time < filter.from) ||
-          (filter.to !== undefined && value.time > filter.to)
-        )
-          continue;
-        records.push(value);
-      } catch {
-        malformedRecords++;
-      }
-    }
   }
+  filter.signal?.throwIfAborted();
   const metadata: HistoryMetadata = {
     schema: 1,
     ...(files[0] ? { retainedFrom: files[0].time } : {}),
@@ -313,24 +411,24 @@ export async function readPerformanceHistory(
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
+const historyFields = new Set([
+  "schema",
+  "recordId",
+  "time",
+  "type",
+  "sessionId",
+  "parentId",
+  "agent",
+  "model",
+  "event",
+  "performance",
+  "droppedRecords",
+]);
 function isHistoryRecord(value: unknown): value is HistoryRecord {
   if (!isRecord(value)) return false;
   const r: Record<string, unknown> = value;
-  const allowed = new Set([
-    "schema",
-    "recordId",
-    "time",
-    "type",
-    "sessionId",
-    "parentId",
-    "agent",
-    "model",
-    "event",
-    "performance",
-    "droppedRecords",
-  ]);
   return (
-    Object.keys(r).every((k) => allowed.has(k)) &&
+    Object.keys(r).every((k) => historyFields.has(k)) &&
     r.schema === 1 &&
     typeof r.recordId === "string" &&
     typeof r.time === "number" &&
