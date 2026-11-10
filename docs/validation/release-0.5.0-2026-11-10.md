@@ -1,6 +1,6 @@
 # 0.5.0 release validation
 
-Date: 2026-11-10. Status: candidate prepared for the tag-triggered npm staging workflow; public publication is not yet verified.
+Date: 2026-11-10. Status: committed, pushed and successfully staged on npm with provenance; awaiting maintainer 2FA approval. Public publication is not yet verified.
 
 ## Scope and documentation audit
 
@@ -27,4 +27,11 @@ Optional host skips are distinct from passes. Synthetic-provider checks do not c
 
 ## Publication
 
-The authorized release sequence is: commit the reviewed candidate, push `master` and annotated tag `v0.5.0`, then monitor CI and **Stage npm package**. The repository workflow uses OIDC and provenance to stage the npm package with the `latest` dist-tag. GitHub environment approval, if required, and npm maintainer 2FA approval remain service-enforced gates. A green staging workflow alone does not establish public availability; verify the public version, dist-tag and `gitHead` afterward.
+Release commit: `c75c423b2abb7a9c5fc93a6f655217aa218275e7`; annotated tag: `v0.5.0`. The reviewed implementation, documentation and version metadata were pushed atomically to `master` and the release tag.
+
+- [CI](https://github.com/cesarus777/opencode-cgp/actions/runs/42728725323): passed the pinned Node 22.14.0/npm 11.21.0/Bun 1.1.34 validation and package checks.
+- [Stage npm package](https://github.com/cesarus777/opencode-cgp/actions/runs/42728725388): passed all checks and staged `0.5.0` through npm OIDC with provenance and the intended `latest` tag.
+- Public registry after staging: `latest` still points to `0.4.3`; staged success is not public publication.
+- Remaining service gate: an npm maintainer must review `@cesarus777/opencode-cgp@0.5.0` under **Staged Packages** on npmjs.com and approve it with 2FA. OIDC cannot approve stages. See [release instructions](../releasing.md#release) and [npm's approval documentation](https://docs.npmjs.com/staged-publishing/#approve-a-staged-package).
+
+After approval, verify the public version, `latest` dist-tag and `gitHead` against the release commit before marking this record published. No credentials or OTPs are retained.
