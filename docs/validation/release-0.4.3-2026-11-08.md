@@ -1,6 +1,6 @@
 # 0.4.3 release validation
 
-Date: 2026-11-08. Candidate prepared for the tag-triggered npm staging workflow.
+Date: 2026-11-08. Original candidate preparation record; validation below describes that run. Public npm availability of 0.4.3 was confirmed as `latest` on 2026-11-10 before preparing [0.5.0](release-0.5.0-2026-11-10.md).
 
 Restores Live TPS, average model/session TPS, and observed TTFT to the main sidebar session, visible descendants, and native panel agent rows. Existing performance collection and metric definitions are unchanged. README, configuration, sidebar description, historical plan annotation, and changelog describe the restored display.
 

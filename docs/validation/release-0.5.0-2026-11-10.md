@@ -1,6 +1,6 @@
 # 0.5.0 release validation
 
-Date: 2026-11-10. Status: committed, pushed and successfully staged on npm with provenance; awaiting maintainer 2FA approval. Public publication is not yet verified.
+Date: 2026-11-10. Status: published on npm as `0.5.0`, with `latest` pointing to `0.5.0`. Maintainer 2FA approval completed and public registry metadata was verified.
 
 ## Scope and documentation audit
 
@@ -31,7 +31,8 @@ Release commit: `c75c423b2abb7a9c5fc93a6f655217aa218275e7`; annotated tag: `v0.5
 
 - [CI](https://github.com/cesarus777/opencode-cgp/actions/runs/42728725323): passed the pinned Node 22.14.0/npm 11.21.0/Bun 1.1.34 validation and package checks.
 - [Stage npm package](https://github.com/cesarus777/opencode-cgp/actions/runs/42728725388): passed all checks and staged `0.5.0` through npm OIDC with provenance and the intended `latest` tag.
-- Public registry after staging: `latest` still points to `0.4.3`; staged success is not public publication.
-- Remaining service gate: an npm maintainer must review `@cesarus777/opencode-cgp@0.5.0` under **Staged Packages** on npmjs.com and approve it with 2FA. OIDC cannot approve stages. See [release instructions](../releasing.md#release) and [npm's approval documentation](https://docs.npmjs.com/staged-publishing/#approve-a-staged-package).
+- The intermediate staging state was recorded in follow-up commit `f7f7b38`; the public registry still reported `latest: 0.4.3` at that point.
+- Maintainer 2FA approval: completed on npmjs.com. The registry then confirmed version `0.5.0`, `latest: 0.5.0`, and `gitHead: c75c423b2abb7a9c5fc93a6f655217aa218275e7`, matching the annotated release tag.
+- Public artifact SHA-1: `62119dda2d0dee2418c541c3e1e64c12d49072cd`. npm exposes an SLSA provenance v1 attestation for this version.
 
-After approval, verify the public version, `latest` dist-tag and `gitHead` against the release commit before marking this record published. No credentials or OTPs are retained.
+Publication was marked complete only after maintainer approval and public-registry verification; successful staging alone was not treated as deployment. See [release instructions](../releasing.md#release) and [npm's approval documentation](https://docs.npmjs.com/staged-publishing/#approve-a-staged-package). No credentials or OTPs are retained.
