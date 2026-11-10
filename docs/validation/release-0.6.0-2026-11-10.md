@@ -1,6 +1,6 @@
 # 0.6.0 release validation
 
-Date: 2026-11-10. Status: candidate preparation; publication is not yet confirmed.
+Date: 2026-11-10. Status: committed, pushed and staged successfully through npm OIDC. Public publication awaits maintainer npm 2FA approval and registry verification.
 
 ## Scope and documentation audit
 
@@ -20,4 +20,10 @@ The final versioned `0.6.0` candidate passed `bun run validate`: formatting, str
 
 ## Publication
 
-Not yet confirmed. The tag workflow stages with npm OIDC/provenance and the `latest` tag. A successful staging workflow is not public publication; maintainer 2FA approval and public registry verification are separate required steps. This record will be updated with the commit, tag, workflow and registry evidence as those steps finish.
+Release commit: `80332ec204cc558a0e9c3ba805e209c2e69f5a4a`; annotated tag: `v0.6.0`. The validated implementation, documentation and version metadata were pushed atomically to `master` and the release tag.
+
+- [CI](https://github.com/cesarus777/opencode-cgp/actions/runs/42750969633): passed the pinned toolchain's full validation and package checks.
+- [Stage npm package](https://github.com/cesarus777/opencode-cgp/actions/runs/42750969482): passed validation and staged `0.6.0` with OIDC/provenance and the intended `latest` tag.
+- Public publication is not yet confirmed. Maintainer npm 2FA approval is required; OIDC cannot approve stages. Verify `version`, `gitHead`, provenance and the public `latest` tag after approval.
+
+Successful staging is recorded separately from public deployment. The release tag remains attached to the validated implementation commit; subsequent documentation updates record deployment evidence without moving that tag.
