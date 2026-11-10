@@ -2,7 +2,9 @@
 
 ## Package identity
 
-Publish as **`@cesarus777/opencode-cgp`**. Release **0.5.0** adds Orbit workspaces, default-terminal styling and native fullscreen controls, as described in the [changelog](../CHANGELOG.md) and [release record](validation/release-0.5.0-2026-11-10.md). The earlier archive performance limits remain documented in the [performance report](validation/dashboard-performance-2026-11-08.md). The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+Publish as **`@cesarus777/opencode-cgp`**. Release **0.6.0** enables textual compaction preservation by default and adds persistent exact-text/token-target verification warnings, as described in the [changelog](../CHANGELOG.md) and [release record](validation/release-0.6.0-2026-11-10.md). The earlier archive performance limits remain documented in the [performance report](validation/dashboard-performance-2026-11-08.md). The requested unscoped `opencode-context-guard` name is occupied by a different repository/maintainer, so the maintainer selected this scoped name. The plugin ID remains `context-guard`; existing options, RPC IDs and `opencode-context-guard` diagnostic storage paths stay unchanged. Verify registry availability before each release.
+
+For this release, preservation applies in observe mode to manual/native compactions. Its opt-out, textual scope, experimental generation endpoint and optional RPC fields are documented in [configuration](configuration.md#compaction-preservation-and-verification) and [compatibility](compatibility.md#text-preservation). Run the [two-host preservation harness](testing.md#preservation-host-validation) before release; a successful package test alone does not establish generation-endpoint or continuation compatibility.
 
 ## Local validation
 

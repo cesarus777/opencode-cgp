@@ -62,6 +62,7 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
   const sessions = new Map<string, SessionInfo>();
   const contexts = new Map<string, SessionMessageInfo[]>();
   const contextReads: string[] = [];
+  const hooks = new Map<string, (event: never) => unknown>();
   let disposed = 0;
   let state: Awaited<ReturnType<Host["storage"]["get"]>>;
   const add = (id: string, parentID?: string) =>
@@ -146,11 +147,14 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
         contextReads.push(sessionID);
         return contexts.get(sessionID) ?? [];
       },
-      hook: async () => ({
-        dispose: async () => {
-          disposed++;
-        },
-      }),
+      hook: async (name, callback) => {
+        hooks.set(name, callback as (event: never) => unknown);
+        return {
+          dispose: async () => {
+            disposed++;
+          },
+        };
+      },
       get: async ({ sessionID }) => {
         const s = sessions.get(sessionID);
         if (!s) throw new Error("unknown session");
@@ -207,6 +211,7 @@ function fixture(mode: "enforce" | "observe" = "enforce") {
   };
   return {
     host,
+    hooks,
     sink,
     logs,
     calls,
@@ -886,5 +891,393 @@ test("performance checkpoints restore aggregates independently of safety storage
     });
   } finally {
     await stop();
+  }
+});
+
+test("custom hook preserves text, verifies context and warns above target despite sufficient reclaim", async () => {
+  const f = fixture("observe");
+  f.add("preserve");
+  const sourceText = "private-original\n请求🙂";
+  const latest = "private-latest\nexact";
+  const assistant = (id: string, text: string): SessionMessageAssistant => ({
+    id,
+    type: "assistant",
+    agent: "build",
+    model: { providerID: "local", id: "deepseek" },
+    time: { created: 1, completed: 2 },
+    finish: "stop",
+    content: [{ type: "text", text }],
+  });
+  f.contexts.set("preserve", [
+    { id: "u1", type: "user", text: sourceText, time: { created: 0 } },
+    assistant("a1", "initial"),
+    { id: "u2", type: "user", text: latest, time: { created: 3 } },
+    assistant("a2", "private-answer"),
+  ]);
+  f.host.generate = {
+    text: async ({ model, prompt }) => {
+      expect(model?.id).toBe("summary-model");
+      expect(prompt).toContain("initial");
+      return { text: "private-middle" };
+    },
+  };
+  const dispose = await setup(f.host, f.sink);
+  try {
+    f.step("preserve", 300000, "before");
+    await until(() =>
+      f.logs.some((e) => e.session?.usage.current?.tokens === 300000),
+    );
+    f.events.push({
+      ...f.base("preserve"),
+      type: "session.compaction.started",
+      data: {
+        sessionID: "preserve",
+        inputID: "compact1",
+        reason: "manual",
+        recent: "",
+      },
+    });
+    await until(() => f.logs.some((e) => e.type === "compaction.started"));
+    const event = {
+      sessionID: "preserve",
+      model: { providerID: "local", id: "summary-model" },
+      messages: [],
+      system: [],
+      tools: {},
+      agent: "build",
+      options: {},
+      result: undefined as
+        | import("@opencode/plugin/promise/session").SessionCompactionResult
+        | undefined,
+    };
+    await f.hooks.get("compaction")?.(event as never);
+    expect(event.result?.summary).toContain(sourceText);
+    expect(event.result?.summary).toContain(latest);
+    expect(event.result?.summary).toContain("private-answer");
+    const ended = {
+      ...f.base("preserve"),
+      type: "session.compaction.ended" as const,
+      data: {
+        sessionID: "preserve",
+        reason: "manual" as const,
+        text: event.result?.summary ?? "",
+        recent: "",
+      },
+    };
+    f.events.push(ended);
+    await until(() => f.logs.some((e) => e.type === "compaction.ended"));
+    await f.hooks.get("context")?.({
+      sessionID: "preserve",
+      model: { providerID: "local", id: "deepseek" },
+      agent: "build",
+      system: [],
+      tools: {},
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: event.result?.summary }],
+        },
+      ],
+    } as never);
+    await Bun.sleep(5);
+    f.step("preserve", 140000, "after");
+    await until(() =>
+      f.logs.some((e) => e.type === "compaction.warning.token-target-exceeded"),
+    );
+    const result = await f.read(["preserve"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.upserts[0]?.compaction.verification?.protection).toBe(
+      "verified",
+    );
+    expect(result.upserts[0]?.compaction.verification?.tokens).toBe("failed");
+    expect(result.upserts[0]?.compaction.verification?.measuredTokens).toBe(
+      140000,
+    );
+    expect(f.calls).toHaveLength(0);
+    expect(JSON.stringify(f.logs)).not.toContain("private-");
+    expect(JSON.stringify(result)).not.toContain("private-");
+    f.events.push(ended);
+    await Bun.sleep(20);
+    expect(
+      f.logs.filter(
+        (e) => e.type === "compaction.warning.token-target-exceeded",
+      ),
+    ).toHaveLength(1);
+  } finally {
+    await dispose();
+  }
+});
+
+for (const failure of [
+  "history",
+  "oversized",
+  "generation",
+  "empty",
+  "opaque",
+] as const)
+  test(`preservation ${failure} falls back without recursive compaction`, async () => {
+    const f = fixture("observe");
+    f.add("fallback");
+    f.contexts.set("fallback", [
+      {
+        id: "u",
+        type: "user",
+        time: { created: 1 },
+        text:
+          failure === "oversized" ? "x".repeat(2_000_001) : "private-source",
+      },
+      {
+        id: "a",
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "local", id: "deepseek" },
+        time: { created: 2, completed: 3 },
+        finish: "stop",
+        content: [{ type: "text", text: "private-answer" }],
+      },
+    ]);
+    if (failure === "history") delete f.host.session.context;
+    f.host.generate = {
+      text: async () => {
+        if (failure === "generation") throw new Error("private-error");
+        return { text: failure === "empty" ? " " : "summary" };
+      },
+    };
+    const dispose = await setup(f.host, f.sink);
+    try {
+      f.step("fallback", 100000, "before");
+      await until(() => f.logs.some((e) => e.session?.usage.current));
+      const event = {
+        sessionID: "fallback",
+        model: { providerID: "local", id: "deepseek" },
+        messages:
+          failure === "opaque" ? [{ content: [{ type: "compaction" }] }] : [],
+        system: [],
+        tools: {},
+        agent: "build",
+        options: {},
+        result: undefined,
+      };
+      await f.hooks.get("compaction")?.(event as never);
+      expect(event.result).toBeUndefined();
+      f.events.push({
+        ...f.base("fallback"),
+        type: "session.compaction.ended",
+        data: {
+          sessionID: "fallback",
+          reason: "manual",
+          text: "native private-summary",
+          recent: "",
+        },
+      });
+      await until(() =>
+        f.logs.some(
+          (e) => e.type === "compaction.warning.preservation-fallback",
+        ),
+      );
+      expect(f.calls).toHaveLength(0);
+      expect(JSON.stringify(f.logs)).not.toContain("private-");
+    } finally {
+      await dispose();
+    }
+  });
+
+test("concurrent children isolate early continuation checks, retain warnings during work and replace them on verified compaction", async () => {
+  const f = fixture("observe");
+  for (const id of ["bad-child", "good-child"]) {
+    f.add(id, "parent");
+    f.contexts.set(id, [
+      {
+        id: `u-${id}`,
+        type: "user",
+        time: { created: 1 },
+        text: `private-original-${id}`,
+      },
+      {
+        id: `a-${id}`,
+        type: "assistant",
+        agent: "build",
+        model: { providerID: "local", id: "deepseek" },
+        time: { created: 2, completed: 3 },
+        finish: "stop",
+        content: [{ type: "text", text: `private-answer-${id}` }],
+      },
+    ]);
+  }
+  f.host.generate = { text: async () => ({ text: "private-middle" }) };
+  const dispose = await setup(f.host, f.sink);
+  const hookEvent = (id: string) => ({
+    sessionID: id,
+    model: { providerID: "local", id: "deepseek" },
+    system: [],
+    messages: [],
+    tools: {},
+    agent: "build",
+    options: {},
+    result: undefined as
+      | import("@opencode/plugin/promise/session").SessionCompactionResult
+      | undefined,
+  });
+  const context = async (id: string, text: string) =>
+    f.hooks.get("context")?.({
+      ...hookEvent(id),
+      messages: [{ role: "user", content: [{ type: "text", text }] }],
+    } as never);
+  const started = (id: string) =>
+    f.events.push({
+      ...f.base(id),
+      type: "session.compaction.started",
+      data: { sessionID: id, reason: "manual", recent: "" },
+    });
+  const ended = (id: string, text: string) =>
+    f.events.push({
+      ...f.base(id),
+      type: "session.compaction.ended",
+      data: { sessionID: id, reason: "manual", recent: "", text },
+    });
+  try {
+    for (const id of ["bad-child", "good-child"]) {
+      f.step(id, 300000, "before");
+    }
+    await until(
+      () =>
+        f.logs.filter((e) => e.session?.usage.current?.tokens === 300000)
+          .length >= 2,
+    );
+    for (const id of ["bad-child", "good-child"]) {
+      started(id);
+      await until(() =>
+        f.logs.some(
+          (e) => e.type === "compaction.started" && e.session?.sessionId === id,
+        ),
+      );
+      const event = hookEvent(id);
+      await f.hooks.get("compaction")?.(event as never);
+      // Context can run after native completion but before the event observer receives ended.
+      const completion = {
+        ...f.base(id),
+        type: "session.compaction.ended" as const,
+        data: {
+          sessionID: id,
+          reason: "manual" as const,
+          recent: "",
+          text: event.result?.summary ?? "",
+        },
+      };
+      await context(
+        id,
+        id === "bad-child" ? "changed" : (event.result?.summary ?? ""),
+      );
+      f.events.push(completion);
+    }
+    await until(
+      () => f.logs.filter((e) => e.type === "compaction.ended").length === 2,
+    );
+    await Bun.sleep(5);
+    f.step("bad-child", 140000, "after-bad");
+    f.step("good-child", 100000, "after-good");
+    await until(() =>
+      f.logs.some((e) => e.type === "compaction.warning.token-target-exceeded"),
+    );
+    let result = await f.read(["bad-child", "good-child"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(
+      result.upserts.find((r) => r.sessionId === "bad-child")?.compaction
+        .verification?.warnings,
+    ).toContain("protected-text-changed");
+    expect(
+      result.upserts.find((r) => r.sessionId === "good-child")?.compaction
+        .verification?.warnings,
+    ).toEqual([]);
+    started("bad-child");
+    await until(
+      () => f.logs.filter((e) => e.type === "compaction.started").length === 3,
+    );
+    result = await f.read(["bad-child"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.upserts[0]?.compaction.verification?.warnings).toContain(
+      "protected-text-changed",
+    );
+    const next = hookEvent("bad-child");
+    await f.hooks.get("compaction")?.(next as never);
+    ended("bad-child", next.result?.summary ?? "");
+    await until(
+      () => f.logs.filter((e) => e.type === "compaction.ended").length === 3,
+    );
+    await context("bad-child", next.result?.summary ?? "");
+    await Bun.sleep(5);
+    f.step("bad-child", 100000, "after-recovery");
+    await until(() =>
+      f.logs.some(
+        (e) =>
+          e.session?.compaction.verification?.tokens === "verified" &&
+          e.session?.compaction.verification?.protection === "verified" &&
+          e.session?.sessionId === "bad-child",
+      ),
+    );
+    result = await f.read(["bad-child"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.upserts[0]?.compaction.verification?.warnings).toEqual([]);
+    expect(JSON.stringify(f.logs)).not.toContain("private-");
+  } finally {
+    await dispose();
+  }
+});
+
+test("preservation opt-out retains native hook result and token-target warnings", async () => {
+  const f = fixture("observe");
+  f.add("native");
+  f.host.options = {
+    mode: "observe",
+    compaction: { preserve: { enabled: false } },
+    telemetry: { enabled: false },
+    history: { enabled: false },
+  };
+  f.host.generate = {
+    text: async () => {
+      throw new Error("must not generate");
+    },
+  };
+  const dispose = await setup(f.host, f.sink);
+  try {
+    f.step("native", 300000, "before");
+    await until(() =>
+      f.logs.some((e) => e.session?.usage.current?.tokens === 300000),
+    );
+    f.events.push({
+      ...f.base("native"),
+      type: "session.compaction.started",
+      data: { sessionID: "native", reason: "manual", recent: "" },
+    });
+    await until(() => f.logs.some((e) => e.type === "compaction.started"));
+    const event = { sessionID: "native", result: undefined };
+    await f.hooks.get("compaction")?.(event as never);
+    expect(event.result).toBeUndefined();
+    f.events.push({
+      ...f.base("native"),
+      type: "session.compaction.ended",
+      data: {
+        sessionID: "native",
+        reason: "manual",
+        recent: "",
+        text: "native",
+      },
+    });
+    await until(() => f.logs.some((e) => e.type === "compaction.ended"));
+    await Bun.sleep(5);
+    f.step("native", 140000, "after");
+    await until(() =>
+      f.logs.some((e) => e.type === "compaction.warning.token-target-exceeded"),
+    );
+    const result = await f.read(["native"]);
+    if (!isResult(result)) throw new Error("Invalid snapshot");
+    expect(result.upserts[0]?.compaction.verification?.protection).toBe(
+      "disabled",
+    );
+    expect(result.upserts[0]?.compaction.verification?.warnings).not.toContain(
+      "preservation-fallback",
+    );
+  } finally {
+    await dispose();
   }
 });

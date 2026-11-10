@@ -8,6 +8,14 @@ The source's `packages/core/test/session-runner.test.ts` includes “runs manual
 
 Actual local 2.0.29 host validation with synthetic streaming, metrics/history RPCs, restart/retention, chart controls and completed child compaction is recorded in the [2026-10-20 report](validation/metrics-2.0.29-2026-10-20.md). The packed artifact also serves all three RPC versions in observe and enforce modes. Genuine-provider accounting and reclaim remain separate validation gates.
 
+## Text preservation
+
+Preservation is enabled by default, including manual/native automatic compactions in observe mode. Disable `compaction.preserve.enabled` for native summaries; token-target verification remains active. Only textual first-request/latest-complete-exchange content is protected. Attachments, reasoning and original tool-message structure are excluded. Opaque provider compaction and unavailable/oversized history fall back with an explicit warning.
+
+The pinned SDK's `ctx.generate.text` uses an experimental endpoint. Actual OpenCode 2.0.29 and 2.1.2 synthetic-provider checks cover custom results, native metadata, repeated preservation, assembled context, tool continuation, restart, above-target warnings and generation-failure fallback. See [preservation validation](validation/compaction-preservation.md). Genuine-provider behavior, other host versions and remote deployments remain unverified. Exact-text checks do not establish semantic summary correctness.
+
+Monitor v1/v2 add optional scalar `compaction.verification` data; new readers accept older rows and storage records without it. Older clients with closed schemas may reject extended rows and should be updated alongside the server.
+
 ## Capability matrix
 
 | Criterion                                                           | Status                                                                                            |
@@ -30,7 +38,7 @@ An active long-running child is never excluded because it is a child or because 
 
 The assembled-context estimator is a heuristic. Large binary/media-heavy or >2-million-character fallback contexts can be unknown. Provider metrics remain preferred; a zero or missing metric does not become an exact count. Protocol-specific `contextTokens` is not available in public step events. Native provider compaction may retain opaque state that is not comparable across models; model changes invalidate prompt usage.
 
-The public directory identifies plugin ownership. Parent/child sessions moved to another location require the plugin to be loaded there too. Sessions inactive before installation appear on their next activity or when selected by a sidebar/panel snapshot read. Those reads can restore the last matching-model prompt usage through public `session.context`, retaining its original timestamp; they never request compaction or reconstruct compaction completion. No usable usage after compaction, missing revert boundaries and missing/zero provider metrics remain unknown. The plugin does not list historical transcripts or poll every session. CLI history is limited to retained journal records.
+The public directory identifies plugin ownership. Parent/child sessions moved to another location require the plugin to be loaded there too. Sessions inactive before installation appear on their next activity or when selected by a sidebar/panel snapshot read. Those reads can restore the last matching-model prompt usage through public `session.context`, retaining its original timestamp; they never request compaction or reconstruct compaction completion. No usable usage after compaction, missing revert boundaries and missing/zero provider metrics remain unknown. Snapshot reads do not enumerate full session history or poll every session. Compaction preservation separately reads the applicable native transcript during the compaction hook. CLI history is limited to retained journal records.
 
 `uncertain` means an admission/completion may have happened without evidence. It never expires into permission to compact again. A subsequent explicit compaction lifecycle can resolve it; manual native compaction is available through OpenCode. A failure circuit resets after observed success. Reloading does not erase persisted unresolved safety state. No automatic destructive state reset is provided. Long-lived dormant recovery records may exhaust `maxSessions`; increase this bound or inspect/remove obsolete sessions through OpenCode so deletion events can clean them up. Capacity conditions are logged explicitly.
 
@@ -71,7 +79,7 @@ The initial 0.1.0 checks preceded publication; later staging/public-registry evi
 
 Live TPS uses approximate character counts from public text/reasoning deltas; exact per-token streaming counts are unavailable in the pinned SDK. Completed request rates use normalized output + reasoning and `session.step.streamed` timing. TTFT includes native delta batching and transport publication delay. Tool-only output does not establish text/reasoning TTFT. Historical model durations before observation, across restart, or across a stream gap cannot be reconstructed from cumulative tokens; rates retain an explicit partial label.
 
-Both `context-guard.monitor.v1` and `.v2` are served; v1 retains its closed payload shape. Performance integration is covered by offline SDK/mocked-adapter tests. Real-provider timing validation requires the opt-in `test:metrics-live` command and is not certified by offline tests.
+Both `context-guard.monitor.v1` and `.v2` are served; v1 excludes performance fields; both versions accept optional scalar compaction verification. Performance integration is covered by offline SDK/mocked-adapter tests. Real-provider timing validation requires the opt-in `test:metrics-live` command and is not certified by offline tests.
 
 Charts require retained scalar history. Existing history records remain readable without migration. The updated terminal chart mode needs `context-guard.history.v1` on the owning server; older servers keep live/context views and show an unavailable-history message. Offline reports require JavaScript for interaction and embed all selected scalar identities/metrics; no external assets or service are used. Native chart formatting/rendering and HTML generation are tested offline; this does not certify a live remote provider.
 

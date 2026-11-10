@@ -1,8 +1,10 @@
 # OpenCode V2 Context Guard
 
-Configurable early compaction for root sessions and nested agents, using OpenCode's native durable compaction API. No model-limit changes, prompt injection, custom summaries, or task/workflow rewrites. Observe mode is the default.
+Configurable early compaction for root sessions and nested agents, using OpenCode's native durable compaction API. Preserves the original request and latest complete exchange as text by default, summarizes intermediate work, and warns when exact-text preservation or the post-compaction token target fails. Observe mode is the default: it observes thresholds without requesting compaction, while preservation still applies to manual and native automatic compactions. Set `compaction.preserve.enabled: false` in plugin options to use native summarization; token-target warnings remain active.
 
 Targets **`@opencode/plugin@2.0.29`**. The published SDK, official documentation, runner implementation, and upstream continuation test were inspected. The real 2.0.29 server and native TUI now pass [local verification with a synthetic provider](docs/validation/tui-2.0.29-2026-10-16.md); real-provider compaction and Superpowers validation remain unverified. OpenCode 2.1.2 also passes [local server/TUI validation](docs/validation/context-chart-2.1.2-2026-10-22.md). See [compatibility](docs/compatibility.md).
+
+Release **0.6.0** changes default compaction behavior. Preservation protects text only; attachments, hidden reasoning and tool-message structure are excluded. Middle summarization depends on the SDK’s experimental generation endpoint and falls back to native compaction with a warning if unavailable. Monitor v1/v2 include optional verification data; update older clients with closed schemas alongside the server. See [configuration](docs/configuration.md#compaction-preservation-and-verification), [compatibility](docs/compatibility.md#text-preservation), and the [changelog](CHANGELOG.md).
 
 ## Install
 

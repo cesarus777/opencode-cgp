@@ -1,6 +1,6 @@
 {
   "name": "@cesarus777/opencode-cgp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "type": "module",
   "exports": {
     ".": {
@@ -33,6 +33,7 @@
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "inspect": "bun src/cli.ts",
+    "test:preservation-live": "bun scripts/preservation-live.ts",
     "test:live": "bun scripts/live.ts",
     "format": "prettier --write src tests scripts docs README.md examples package.json tsconfig.json server.ts tui.tsx rpc.ts tsconfig.build.json .github AGENTS.md",
     "format:check": "prettier --check src tests scripts docs README.md examples package.json tsconfig.json server.ts tui.tsx rpc.ts tsconfig.build.json .github AGENTS.md",

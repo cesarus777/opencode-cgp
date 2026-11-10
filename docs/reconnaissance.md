@@ -1,5 +1,7 @@
 # API investigation (2026-10-15)
 
+Historical investigation. Later SDK and actual-host validation verified the public custom compaction result, native checkpoint metadata, `session.context`, and experimental `ctx.generate.text` on OpenCode 2.0.29/2.1.2. See [preservation evidence](validation/compaction-preservation.md) and [current compatibility](compatibility.md). The original environment limitations below describe the initial investigation.
+
 No OpenCode binary, installed SDK, or existing application was present in this workspace. Bun is 1.1.34. Target: published `@opencode/plugin@2.0.29`; upstream source commit `4397ee44d038a5f17bf6ac161431673d93e563b5`. This is a V2-only plugin, not a V1 compatibility shim.
 
 Sources read:

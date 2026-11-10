@@ -1,3 +1,4 @@
+import { decodeVerification } from "./verification.ts";
 import type { CompactionState } from "./types.ts";
 export interface Recovery {
   sessionId: string;
@@ -46,6 +47,19 @@ export function decodeRecovery(v: unknown, max: number): Recovery[] {
       compaction.blockedReason = c.blockedReason;
     if (phase === "uncertain")
       compaction.blockedReason = "restart-needs-lifecycle-evidence";
+    const verification = decodeVerification(c.verification);
+    if (verification) {
+      if (verification.protection === "pending")
+        verification.protection = "unverified";
+      if (verification.tokens === "pending") verification.tokens = "unverified";
+      if (
+        (verification.protection === "unverified" ||
+          verification.tokens === "unverified") &&
+        !verification.warnings.includes("verification-unverified")
+      )
+        verification.warnings.push("verification-unverified");
+      compaction.verification = verification;
+    }
     result.push({
       sessionId: item.sessionId,
       compaction,
@@ -59,6 +73,14 @@ export function encodeRecovery(rows: Recovery[]) {
     sessionId,
     sequence: sequence ?? -1,
     compaction: {
+      ...(c.verification
+        ? {
+            verification: {
+              ...c.verification,
+              warnings: [...c.verification.warnings],
+            },
+          }
+        : {}),
       requestId: c.requestId ?? null,
       phase: c.phase,
       armed: c.armed,

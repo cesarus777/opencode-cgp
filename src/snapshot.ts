@@ -1,6 +1,7 @@
 import type { PerformanceSnapshot } from "./performance.ts";
 import { PolicyResolver, evaluateThreshold } from "./policy.ts";
 import type {
+  CompactionVerification,
   Config,
   SessionState,
   Measurement,
@@ -32,6 +33,11 @@ export interface ContextSnapshot {
     readonly crossed: boolean;
   };
   readonly compaction: {
+    readonly verification?: Readonly<
+      Omit<CompactionVerification, "warnings">
+    > & {
+      readonly warnings: readonly CompactionVerification["warnings"][number][];
+    };
     readonly phase: CompactionPhase;
     /** Completed lifecycle events observed by the monitor, never admissions. */
     readonly count?: number;
@@ -144,6 +150,14 @@ export function project(
       crossed: d.crossed,
     },
     compaction: {
+      ...(c.verification
+        ? {
+            verification: {
+              ...c.verification,
+              warnings: [...c.verification.warnings],
+            },
+          }
+        : {}),
       phase: c.phase,
       count: c.count,
       armed: c.armed,
@@ -347,6 +361,10 @@ function freezeSnapshot(row: ContextSnapshot): ContextSnapshot {
   if (row.limits) Object.freeze(row.limits);
   Object.freeze(row.policy.configured);
   Object.freeze(row.policy);
+  if (row.compaction.verification) {
+    Object.freeze(row.compaction.verification.warnings);
+    Object.freeze(row.compaction.verification);
+  }
   Object.freeze(row.compaction);
   if (row.cumulative) {
     Object.freeze(row.cumulative.cache);

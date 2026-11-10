@@ -16,6 +16,7 @@ export interface Config {
   mode: "observe" | "enforce";
   defaults: { threshold: Threshold };
   policies: Policy[];
+  compaction: { preserve: { enabled: boolean } };
   safety: {
     cooldownMs: number;
     minReclaimTokens: number;
@@ -90,7 +91,31 @@ export type CompactionPhase =
   | "awaiting-measurement"
   | "blocked"
   | "uncertain";
+export type VerificationStatus =
+  | "pending"
+  | "verified"
+  | "failed"
+  | "unverified"
+  | "disabled";
+export type CompactionWarning =
+  | "protected-text-changed"
+  | "preservation-fallback"
+  | "token-target-exceeded"
+  | "verification-unverified";
+export interface CompactionVerification {
+  completionId: string;
+  completedAt: number;
+  protection: VerificationStatus;
+  tokens: VerificationStatus;
+  warnings: CompactionWarning[];
+  target?: number;
+  comparison?: ">=" | ">";
+  model?: string;
+  checkedAt?: number;
+  measuredTokens?: number;
+}
 export interface CompactionState {
+  verification?: CompactionVerification;
   phase: CompactionPhase;
   count: number;
   failures: number;

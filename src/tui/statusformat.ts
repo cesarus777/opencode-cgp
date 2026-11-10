@@ -46,11 +46,49 @@ export function measurementExplanation(row: GuardRow): readonly string[] {
   ];
 }
 
+export function verificationWarnings(
+  row: GuardRow | undefined,
+  compact = false,
+): string[] {
+  const v = row?.snapshot?.compaction.verification;
+  if (!v) return [];
+  return v.warnings.map((code) => {
+    switch (code) {
+      case "protected-text-changed":
+        return compact
+          ? "Protected text changed"
+          : "Protected text is missing or changed after compaction.";
+      case "preservation-fallback":
+        return compact
+          ? "Preservation unavailable"
+          : "Preservation unavailable; native compaction used.";
+      case "token-target-exceeded":
+        return compact
+          ? "Still above target"
+          : v.tokens !== "failed"
+            ? "An earlier compaction exceeded its token target; verification remains unresolved."
+            : `Post-compaction usage ${v.measuredTokens ?? "?"} tokens still reaches target ${v.target ?? "?"} (${v.comparison ?? ">="}). Intervening work may contribute to this reading.`;
+      case "verification-unverified":
+        return compact
+          ? "Compaction unverified"
+          : "Compaction verification is unverified; lifecycle or comparable provider usage is unavailable.";
+    }
+  });
+}
+
 export function compactionLabel(
   row: GuardRow | undefined,
   compact = false,
 ): string | undefined {
+  const warnings = verificationWarnings(row, compact);
   const phase = row?.snapshot?.compaction.phase;
+  if (warnings.length)
+    return (
+      warnings.join(" · ") +
+      (phase === "running"
+        ? " · " + (compact ? "Compacting" : "Compaction running")
+        : "")
+    );
   if (!phase || phase === "idle") return undefined;
   if (compact)
     return {

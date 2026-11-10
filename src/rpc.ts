@@ -78,6 +78,41 @@ const row = object(
     ),
     compaction: object(
       {
+        verification: object(
+          {
+            completionId: text,
+            completedAt: count,
+            protection: enumeration(
+              "pending",
+              "verified",
+              "failed",
+              "unverified",
+              "disabled",
+            ),
+            tokens: enumeration(
+              "pending",
+              "verified",
+              "failed",
+              "unverified",
+              "disabled",
+            ),
+            warnings: array(
+              enumeration(
+                "protected-text-changed",
+                "preservation-fallback",
+                "token-target-exceeded",
+                "verification-unverified",
+              ),
+              4,
+            ),
+            target: count,
+            comparison: enumeration(">", ">="),
+            model: text,
+            checkedAt: count,
+            measuredTokens: count,
+          },
+          ["completionId", "completedAt", "protection", "tokens", "warnings"],
+        ),
         phase: enumeration(
           "idle",
           "requesting",

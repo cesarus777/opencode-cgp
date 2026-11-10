@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0 — 2026-11-10
+
+- Enable textual preservation by default for Guard, manual, and native automatic compactions, including observe mode. Keep the original user request and latest complete exchange verbatim, summarize intermediate work, and retain native system instructions and pending-work continuation. Set `compaction.preserve.enabled: false` to restore native summaries.
+- Store versioned section boundaries and integrity hashes with native checkpoints; carry exact protected sections across repeated compactions and restart. Bound processing at two million characters and fall back to native compaction with an explicit warning when preservation is unavailable.
+- Verify exact protected text in the first assembled context and check the captured policy target against fresh provider usage from the first request started after completion. Warn above target even when reclaim is sufficient; retain unverified status for missing evidence, stale readings, model changes and observation gaps.
+- Show persistent scalar verification warnings in the sidebar, native panel, standalone dashboard and diagnostics without exposing protected text or changing cooldown, retry or failure-circuit rules. Monitor v1/v2 add optional verification fields; older clients with closed schemas should update alongside the server.
+- Use the hook-selected compaction model through the SDK’s experimental `ctx.generate.text` endpoint. Text protection excludes attachments, hidden reasoning and original tool-message structure; exact-text verification does not certify summary semantics.
+- Validate with 279 offline tests, typecheck, formatting, build, clean-package checks, and OpenCode 2.0.29/2.1.2 synthetic-provider checks for custom results, tool continuation, restart, token warnings and fallback. Genuine-provider validation remains unverified. See the [preservation report](docs/validation/compaction-preservation.md) and [release record](docs/validation/release-0.6.0-2026-11-10.md).
+
 ## 0.5.0 — 2026-11-10
 
 - Add the Orbit workspace to wide standalone Overview/Detail and the expanded native `/context-guard` panel: a session family tree, selected context/performance panels, and responsive compact fallbacks.

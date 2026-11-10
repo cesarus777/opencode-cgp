@@ -114,6 +114,7 @@ export function familyRows(
       protectedIds.has(n.sessionId) ||
       n.status === "running" ||
       m?.pressure === "crossed" ||
+      !!snapshots.get(n.sessionId)?.compaction.verification?.warnings.length ||
       ["blocked", "uncertain"].includes(
         snapshots.get(n.sessionId)?.compaction.phase ?? "",
       );

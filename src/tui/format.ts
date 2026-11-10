@@ -127,6 +127,13 @@ export function detailLines(
     measurementLabel(row, ageMs),
     ...measurementExplanation(row),
     compactionLabel(row) ?? "No compaction request in progress.",
+    `Compaction verification: protection ${s.compaction.verification?.protection ?? "unavailable"}; token target ${s.compaction.verification?.tokens ?? "unavailable"}`,
+    ...(s.compaction.verification
+      ? [
+          `Verification completion: ${s.compaction.verification.completionId}`,
+          `Verification warnings: ${s.compaction.verification.warnings.join(", ") || "none"}`,
+        ]
+      : []),
     ...(s.compaction.blockedReason
       ? [reasonExplanation(s.compaction.blockedReason)]
       : []),

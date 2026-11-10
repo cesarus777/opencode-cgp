@@ -6,6 +6,8 @@
       "options": {
         "enabled": true,
         "mode": "observe",
+        // Applies to manual/native compactions too; false opts out of textual preservation.
+        "compaction": { "preserve": { "enabled": true } },
         "defaults": { "threshold": { "type": "tokens", "value": 131072 } },
         // All selectors within one rule must match. LAST matching rule wins.
         "policies": [

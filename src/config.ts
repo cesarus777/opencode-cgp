@@ -54,6 +54,7 @@ export function parseConfig(value: unknown = {}): Config {
       "defaults",
       "policies",
       "safety",
+      "compaction",
       "telemetry",
       "metrics",
       "history",
@@ -64,6 +65,10 @@ export function parseConfig(value: unknown = {}): Config {
     throw new Error("mode: expected observe or enforce");
   const d = object(o.defaults ?? {}, "defaults");
   keys(d, ["threshold"], "defaults");
+  const compaction = object(o.compaction ?? {}, "compaction");
+  keys(compaction, ["preserve"], "compaction");
+  const preserve = object(compaction.preserve ?? {}, "compaction.preserve");
+  keys(preserve, ["enabled"], "compaction.preserve");
   const s = object(o.safety ?? {}, "safety");
   keys(
     s,
@@ -133,6 +138,11 @@ export function parseConfig(value: unknown = {}): Config {
       ),
     },
     policies,
+    compaction: {
+      preserve: {
+        enabled: bool(preserve.enabled, true, "compaction.preserve.enabled"),
+      },
+    },
     safety: {
       cooldownMs: number(s.cooldownMs, 60000, "cooldownMs"),
       minReclaimTokens: number(s.minReclaimTokens, 8192, "minReclaimTokens"),

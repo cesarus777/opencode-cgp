@@ -22,3 +22,6 @@ export {
   type CompletedAnalyticsRequest,
 } from "./modelanalytics.ts";
 export * from "./modelseries.ts";
+
+export * from "./verification.ts";
+export * from "./preservation.ts";

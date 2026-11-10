@@ -263,6 +263,7 @@ export function subagentTree(
         row.freshness === "fresh" &&
         row.pressure === "normal" &&
         row.snapshot?.compaction.phase === "idle" &&
+        !row.snapshot.compaction.verification?.warnings.length &&
         !row.node.interrupted &&
         nested.branches.every((b) => b.eligible);
       branches.push({
