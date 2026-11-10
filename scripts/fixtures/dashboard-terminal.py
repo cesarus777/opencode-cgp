@@ -100,7 +100,14 @@ def resize(cols, rows):
 try:
     expect("Context Guard")
     expect("monitored 3")
+    # The compact family rail clips model identities; the inspector exposes
+    # the complete model for the selected session.
+    for _ in range(3):
+        if "synthetic/beta" in frame():
+            break
+        key("j")
     expect("synthetic/beta")
+    key("\x1b[H")
     native_child = subprocess.Popen(
         [connection["binary"], "--server", connection["url"], "--session", connection["ids"][0], connection["project"]],
         cwd=connection["project"], env=env, stdin=native_slave, stdout=native_slave, stderr=native_slave, start_new_session=True,
@@ -118,6 +125,7 @@ try:
     expect("TPS: tokens per second")
     expect("TTFT: time to first output")
     expect("Diagnostic codes and accounting")
+    key("\x1b[6~")
     expect("measurement.provenance: provider-normalized")
     key("\x1b[6~")
     expect("performance.")

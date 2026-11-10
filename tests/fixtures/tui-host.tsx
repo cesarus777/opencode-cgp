@@ -1,6 +1,6 @@
 // Executed with the public OpenTUI Solid preload in an isolated Bun process.
 import { testRender } from "@opentui/solid";
-import { RGBA } from "@opentui/core";
+import { RGBA, TextAttributes } from "@opentui/core";
 import type { Plugin } from "@opencode/plugin/tui";
 import type { KeymapLayer } from "@opencode/plugin/tui/context";
 import { ContextTraceStore } from "../../src/tui/contextchart.ts";
@@ -19,6 +19,7 @@ const [width, setWidth] = createSignal(40);
 const [focused, setFocused] = createSignal(true);
 let acquisitions = 0,
   consumers = 0,
+  fullscreens = 0,
   closed = false,
   destination = "";
 const family: GuardRow[] = Array.from({ length: 150 }, (_, i) => ({
@@ -123,6 +124,7 @@ const state: GuardState = {
   rows: () => family,
   dispose() {},
   age: () => 0,
+  timing: () => ({ now: 4000, staleMs: 300000 }),
   health,
   connection,
   complete,
@@ -210,7 +212,9 @@ const input = {
   close() {
     closed = true;
   },
-  toggleFullscreen() {},
+  toggleFullscreen() {
+    fullscreens++;
+  },
 };
 const host = await testRender(
   () => <GuardPanel input={input} context={context} state={state} />,
@@ -251,6 +255,44 @@ try {
     /q close/,
     "close hint stays visible after scrolling",
   );
+  setWidth(120);
+  host.resize(120, 40);
+  await host.flush();
+  assert.match(host.captureCharFrame(), /Session family/);
+  assert.match(host.captureCharFrame(), /agent120/);
+  assert.match(host.captureCharFrame(), /Context unavailable/);
+  assert.match(host.captureCharFrame(), /Performance/);
+  assert.equal(
+    historyReads.length,
+    0,
+    "workspace context trace adds no history reads",
+  );
+  assert.equal(consumers, 1);
+  run("context-guard.fullscreen");
+  assert.equal(fullscreens, 1);
+  assert.equal(
+    layer?.().commands?.find(
+      (command) => command.id === "context-guard.fullscreen",
+    )?.bind,
+    false,
+  );
+  const wideSpans = host.captureSpans().lines.flatMap((line) => line.spans);
+  assert.ok(
+    wideSpans.some(
+      (span) =>
+        span.text.includes("Session family") &&
+        span.fg.intent === "indexed" &&
+        span.fg.slot === 6,
+    ),
+  );
+  assert.ok(
+    wideSpans.some(
+      (span) =>
+        span.text.includes("agent120") &&
+        (span.attributes & TextAttributes.INVERSE) !== 0,
+    ),
+  );
+  setWidth(40);
   host.resize(40, 28);
   run("context-guard.charts");
   await Bun.sleep(5);
@@ -331,9 +373,11 @@ try {
     "charts",
     "expand",
     "chart-next",
+    "fullscreen",
   ])
     run(`context-guard.${name}`);
   assert.equal(refreshes, beforeHelpRefreshes);
+  assert.equal(fullscreens, 1, "help consumes presentation actions");
   assert.equal(historyReads.length, beforeHelpReads);
   run("context-guard.last");
   await host.flush();
@@ -700,6 +744,142 @@ try {
     "chart uses nine rows without line wrapping",
   );
   assert.equal(consumers, 1);
+  // Native Orbit: allocation, independent scroll viewports, metric freshness,
+  // retained-history lifecycle and help restoration use the same consumer.
+  assert.ok(root.snapshot);
+  const performanceRoot: GuardRow = {
+    ...root,
+    snapshot: {
+      ...root.snapshot,
+      performance: {
+        at: 4000,
+        sessionCreatedAt: 0,
+        observedSince: 1000,
+        status: "streaming",
+        liveTps: 42.8,
+        averageModelTps: 38.6,
+        averageSessionTps: 12.4,
+        ttftMs: 820,
+        estimatedOutputTokens: 128,
+        modelOutputTokens: 128,
+        modelDurationMs: 3000,
+        completedRequests: 2,
+        tokenSource: "estimated",
+        partial: true,
+      },
+    },
+  };
+  setChartRows([performanceRoot, child]);
+  run("context-guard.inspect");
+  setWidth(120);
+  chartHost.resize(120, 40);
+  await chartHost.flush();
+  let workspaceFrame = chartHost.captureCharFrame();
+  assert.match(workspaceFrame, /Session family/);
+  assert.match(workspaceFrame, /22% occupied/);
+  assert.match(workspaceFrame, /42.8 live TPS/);
+  assert.match(workspaceFrame, /0.82s TTFT/);
+  assert.match(workspaceFrame, /38.6 model avg TPS/);
+  assert.match(workspaceFrame, /Context history/);
+  assert.match(workspaceFrame, /q close/);
+  if (process.env.GUARD_NATIVE_CAPTURE) {
+    const captured = chartHost.captureSpans();
+    await Bun.write(
+      ".artifacts/native-orbit-frame.json",
+      JSON.stringify({
+        ...captured,
+        attrs: TextAttributes,
+        lines: captured.lines.map((line) => ({
+          spans: line.spans.map((span) => ({
+            ...span,
+            fg: { intent: span.fg.intent, slot: span.fg.slot },
+            bg: { intent: span.bg.intent, slot: span.bg.slot },
+          })),
+        })),
+      }),
+    );
+  }
+  const workspaceReads = historyReads.length;
+  for (const [w, h, hasWorkspace] of [
+    [113, 40, false],
+    [114, 40, true],
+    [120, 29, false],
+    [120, 30, true],
+    [180, 50, true],
+    [80, 24, false],
+  ] as const) {
+    setWidth(w);
+    chartHost.resize(w, h);
+    await chartHost.flush();
+    assert.equal(
+      chartHost.captureCharFrame().includes("Session family"),
+      hasWorkspace,
+    );
+    assert.match(chartHost.captureCharFrame(), /q close/);
+  }
+  // A wide host does not enlarge an allocated narrow panel.
+  setWidth(80);
+  chartHost.resize(180, 50);
+  await chartHost.flush();
+  assert.doesNotMatch(chartHost.captureCharFrame(), /Session family/);
+  setWidth(120);
+  chartHost.resize(120, 40);
+  await chartHost.flush();
+  assert.equal(historyReads.length, workspaceReads);
+  const performanceSnapshot = performanceRoot.snapshot;
+  assert.ok(performanceSnapshot?.performance);
+  setChartRows([
+    {
+      ...performanceRoot,
+      snapshot: {
+        ...performanceSnapshot,
+        performance: { ...performanceSnapshot.performance, at: -400000 },
+      },
+    },
+    child,
+  ]);
+  await chartHost.flush();
+  workspaceFrame = chartHost.captureCharFrame();
+  assert.doesNotMatch(workspaceFrame, /42.8 live TPS/);
+  assert.match(workspaceFrame, /22% occupied/);
+  setChartRows([performanceRoot, child]);
+  run("context-guard.next");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Session: child/);
+  run("context-guard.inspect");
+  await chartHost.flush();
+  run("context-guard.last");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Route family statistics: s0/);
+  assert.match(chartHost.captureCharFrame(), /Native Context uses different/);
+  const beforeWorkspaceHelp = chartHost.captureCharFrame();
+  run("context-guard.help");
+  await chartHost.flush();
+  run("context-guard.last");
+  await chartHost.flush();
+  run("context-guard.help-back");
+  await chartHost.flush();
+  assert.equal(chartHost.captureCharFrame(), beforeWorkspaceHelp);
+  run("context-guard.charts");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /Session family/);
+  assert.match(chartHost.captureCharFrame(), /Performance charts/);
+  assert.equal(historyReads.at(-1)?.sessionId, "child");
+  const chartReads = historyReads.length;
+  run("context-guard.chart-next");
+  await chartHost.flush();
+  assert.equal(historyReads.length, chartReads);
+  setHealth({
+    ...health(),
+    enforcement: "suspended",
+    reasons: ["persistence-unavailable"],
+  });
+  setConnection("reconnecting");
+  await chartHost.flush();
+  assert.match(chartHost.captureCharFrame(), /repair storage and reload/);
+  assert.match(chartHost.captureCharFrame(), /Last known Guard/);
+  assert.equal(consumers, 1);
+  assert.equal(acquisitions, 2);
 } finally {
   chartHost.renderer.destroy();
 }

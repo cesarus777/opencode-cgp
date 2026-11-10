@@ -1,5 +1,19 @@
 import { isAbsolute } from "node:path";
-import type { CliRenderer, KeyEvent, TextRenderable } from "@opentui/core";
+import type {
+  CliRenderer,
+  KeyEvent,
+  StyledText,
+  TextRenderable,
+} from "@opentui/core";
+import {
+  decorateTerminal,
+  plainLine,
+  terminalStyler,
+  workspaceContent,
+  workspaceFrame,
+  workspaceWidth,
+  type TerminalLine,
+} from "./presentation.ts";
 import { DashboardController } from "./controller.ts";
 import {
   connectDashboard,
@@ -32,6 +46,7 @@ export interface TerminalKey {
 
 /** Only presentation state lives here; application state stays in the controller. */
 export class TerminalShell {
+  presentation: readonly TerminalLine[] | undefined;
   readonly work = { formattedOverviewRows: 0 };
   scroll = 0;
   metric = 0;
@@ -362,6 +377,7 @@ export class TerminalShell {
   }
 
   frame(width: number, height: number): string {
+    this.presentation = undefined;
     width = Math.max(1, width);
     height = Math.max(1, height);
     this.controller.models.setWidth(width);
@@ -444,6 +460,34 @@ export class TerminalShell {
           ]
         : []),
     ];
+    if (
+      width >= 110 &&
+      height >= 28 &&
+      !this.help &&
+      (view.screen === "overview" || view.screen === "detail")
+    ) {
+      const content = workspaceContent(view, workspaceWidth(width), notices);
+      const bodyHeight = height - header.length - 3;
+      this.overviewPage = Math.max(1, Math.floor((bodyHeight - 4) / 3));
+      this.scroll =
+        view.screen === "overview"
+          ? 0
+          : Math.max(0, Math.min(this.scroll, content.length - bodyHeight));
+      this.presentation = workspaceFrame(
+        header,
+        view,
+        width,
+        height,
+        content,
+        this.scroll,
+        this.editor
+          ? footer
+          : view.screen === "overview"
+            ? "↑↓ select · Enter full detail · 3 history · / search · f filters · l location · r refresh · ? help · q quit"
+            : "↑↓ scroll · 1 select session · 3 history · / search · r refresh · ? help · q quit",
+      );
+      return this.presentation.map(plainLine).join("\n");
+    }
     let body: string[];
     if (this.help) body = wrapped(terminalHelp, width);
     else if (view.screen === "overview") {
@@ -652,6 +696,7 @@ export function mountTerminal(
   renderer: CliRenderer,
   text: TextRenderable,
   finished: (failed: boolean) => void,
+  style?: (lines: readonly TerminalLine[]) => StyledText,
 ) {
   let closed = false,
     pendingDraw = false,
@@ -687,7 +732,10 @@ export function mountTerminal(
     pendingDraw = false;
     drawing = true;
     try {
-      text.content = shell.frame(renderer.width, renderer.height);
+      const frame = shell.frame(renderer.width, renderer.height);
+      text.content = style
+        ? style(shell.presentation ?? decorateTerminal(frame))
+        : frame;
     } catch {
       fail();
     } finally {
@@ -740,7 +788,8 @@ export function mountTerminal(
 export async function runTerminal(
   options: DashboardConnectionOptions,
 ): Promise<void> {
-  const { createCliRenderer, TextRenderable } = await loadTerminalRenderer();
+  const api = await loadTerminalRenderer();
+  const { createCliRenderer, TextRenderable, RGBA } = api;
   const connection = await connectDashboard(options);
   await connection.info(AbortSignal.timeout(15000));
   const controller = new DashboardController(connection);
@@ -752,6 +801,7 @@ export async function runTerminal(
     screenMode: "alternate-screen",
     consoleMode: "disabled",
     openConsoleOnError: false,
+    backgroundColor: RGBA.defaultBackground(),
   });
   let failed = false;
   let app: ReturnType<typeof mountTerminal> | undefined;
@@ -763,11 +813,19 @@ export async function runTerminal(
         height: "100%",
         content: "",
         wrapMode: "none",
+        fg: RGBA.defaultForeground(),
+        bg: RGBA.defaultBackground(),
       });
-      app = mountTerminal(controller, renderer, text, (error) => {
-        failed = error;
-        done();
-      });
+      app = mountTerminal(
+        controller,
+        renderer,
+        text,
+        (error) => {
+          failed = error;
+          done();
+        },
+        terminalStyler(api),
+      );
     });
   } finally {
     if (app) app.shutdown();

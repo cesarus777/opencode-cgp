@@ -15,7 +15,17 @@ import type { GuardRow } from "../family.ts";
 import { HistoryCharts } from "./charts.tsx";
 import { HistoryState, type HistoryView } from "./historystate.ts";
 import { routeFamily } from "./compactformat.ts";
-import { PanelDetails, PanelOverview } from "./panelview.tsx";
+import {
+  PanelDetails,
+  PanelOverview,
+  PanelContextHistory,
+} from "./panelview.tsx";
+import { WorkspaceSummary, WorkspaceTree } from "./workspace.tsx";
+import {
+  nativeWorkspaceLayout,
+  performanceDisplayRow,
+} from "./workspaceformat.ts";
+import { panelColors as color, panelAttributes as attr } from "./panelstyle.ts";
 import {
   compactionLabel,
   panelRowHeading,
@@ -41,13 +51,22 @@ export function GuardPanel(props: {
   );
   onCleanup(() => consumer.release());
   const [help, setHelp] = createSignal(false);
-  let sourceScroll = 0;
+  let sourceScroll = 0,
+    sourceTreeScroll = 0;
   const [view, setView] = createSignal<PanelView>("overview");
   const [metricIndex, setMetricIndex] = createSignal(0);
   const [viewportWidth, setViewportWidth] = createSignal<number>();
+  const [allocatedWidth, setAllocatedWidth] = createSignal(props.input.width);
   const [height, setHeight] = createSignal(24);
   const width = () =>
-    Math.max(1, Math.min(props.input.width - 4, viewportWidth() ?? Infinity));
+    Math.max(1, Math.min(props.input.width, allocatedWidth()) - 4);
+  const layout = () =>
+    nativeWorkspaceLayout(width(), height() - (compact() ? 0 : 2));
+  const wide = () => layout().wide;
+  const contentWidth = () =>
+    wide()
+      ? Math.max(1, layout().contentWidth - 1)
+      : Math.max(1, Math.min(width(), viewportWidth() ?? Infinity));
   const compact = () => height() < 18;
   const windows = [300000, 3600000, 86400000, 7 * 86400000];
   const [windowIndex, setWindowIndex] = createSignal(1);
@@ -73,6 +92,15 @@ export function GuardPanel(props: {
   const selectedRow = createMemo(() =>
     rows().find((row) => row.node.sessionId === selected()),
   );
+  const displayRow = (row: GuardRow) => {
+    const timing = props.state.timing(row.node.sessionId);
+    return performanceDisplayRow(
+      row,
+      timing.now,
+      timing.staleMs,
+      props.state.connection() === "live",
+    );
+  };
   createEffect(
     on(
       () => {
@@ -135,6 +163,7 @@ export function GuardPanel(props: {
       );
   });
   let scroll: ScrollBoxRenderable | undefined;
+  let treeScroll: ScrollBoxRenderable | undefined;
   let follow: ((deltaTime: number) => Promise<void>) | undefined;
   function cancelFollow() {
     if (follow) props.context.renderer.removeFrameCallback(follow);
@@ -154,7 +183,9 @@ export function GuardPanel(props: {
   }
   function revealSelection() {
     afterLayout(() =>
-      scroll?.scrollChildIntoView(`context-guard.row.${selected()}`),
+      (wide() ? treeScroll : scroll)?.scrollChildIntoView(
+        `context-guard.row.${selected()}`,
+      ),
     );
   }
   function toggleHelp() {
@@ -162,12 +193,18 @@ export function GuardPanel(props: {
     if (!help()) {
       if (view() === "charts") history.pause();
       sourceScroll = scroll?.scrollTop ?? 0;
+      sourceTreeScroll = treeScroll?.scrollTop ?? 0;
       setHelp(true);
       afterLayout(() => scroll?.scrollTo(0));
     } else {
       setHelp(false);
       if (view() === "charts") history.resume();
-      afterLayout(() => scroll?.scrollTo(sourceScroll));
+      afterLayout(() => {
+        scroll?.scrollTo(sourceScroll);
+        treeScroll?.scrollTo(sourceTreeScroll);
+        if (wide())
+          treeScroll?.scrollChildIntoView(`context-guard.row.${selected()}`);
+      });
     }
   }
   onCleanup(cancelFollow);
@@ -177,7 +214,7 @@ export function GuardPanel(props: {
     rows();
     width();
     height();
-    if (!help() && view() === "overview") revealSelection();
+    if (!help() && (wide() || view() === "overview")) revealSelection();
   });
   function changeView(next: PanelView) {
     if (next !== "overview" && !selectedRow()) return;
@@ -210,7 +247,8 @@ export function GuardPanel(props: {
           Math.max(
             1,
             Math.floor(
-              (scroll?.viewport.height ?? 1) / (width() >= 72 ? 1 : 3),
+              ((wide() ? treeScroll : scroll)?.viewport.height ?? 1) /
+                (wide() ? 3 : contentWidth() >= 72 ? 1 : 3),
             ),
           ),
       );
@@ -235,7 +273,7 @@ export function GuardPanel(props: {
   function command(
     name: string,
     title: string,
-    bind: string,
+    bind: string | false,
     run: () => void,
     enabled: () => boolean = () => !help(),
   ): KeymapCommand {
@@ -243,6 +281,7 @@ export function GuardPanel(props: {
       id: `context-guard.${name}`,
       title,
       bind,
+      ...(name === "fullscreen" ? { palette: true as const } : {}),
       enabled,
       run: () => {
         if (props.input.focused && enabled()) run();
@@ -259,6 +298,9 @@ export function GuardPanel(props: {
     ),
     command("help", "Toggle native panel help", "?", toggleHelp, () => true),
     command("help-back", "Return from help", "escape", toggleHelp, help),
+    command("fullscreen", "Toggle Context Guard fullscreen", false, () =>
+      props.input.toggleFullscreen(),
+    ),
     command(
       "chart-previous",
       "Previous chart metric",
@@ -392,6 +434,7 @@ export function GuardPanel(props: {
       "Native OpenCode panel — keyboard help",
       `Return to ${view()}; selected session: ${selectedRow()?.node.agent ?? selected() ?? "none"}`,
       "> marks selection; * marks the current OpenCode route. Open selected session navigates there and closes the panel.",
+      "Wide panels show a session tree and separate context/performance panels. Recent context uses observation order, not retained performance history.",
       "Overview: arrows select agents. Details: arrows scroll. Charts: arrows select sessions; Left/Right changes metric and brackets change window.",
       "PageUp/PageDown moves selection in Overview and scrolls Details/Charts/help. Home/End reaches the first/last row or top/bottom.",
       "Space toggles a branch in Overview. Load more resumes pending family discovery when available.",
@@ -445,6 +488,10 @@ export function GuardPanel(props: {
           ...(view() === "overview" && expandable()
             ? [action("expand", "branch")]
             : []),
+          action(
+            "fullscreen",
+            props.input.presentation === "fullscreen" ? "split" : "fullscreen",
+          ),
         ];
     return footerActions(
       [action("help", help() ? "back" : "help"), action("close", "close")],
@@ -471,10 +518,11 @@ export function GuardPanel(props: {
       paddingBottom={compact() ? 0 : 1}
       onSizeChange={function () {
         setHeight(this.height);
+        setAllocatedWidth(this.width);
       }}
     >
       <box flexDirection="column" flexShrink={0}>
-        <text fg={props.context.theme.text.base}>
+        <text fg={color.text} attributes={attr.BOLD}>
           {clip(
             width() < 28
               ? `${connectionLabel(props.state.connection(), true)} · Guard`
@@ -488,8 +536,8 @@ export function GuardPanel(props: {
               fg={
                 props.state.health()?.enforcement === "suspended" ||
                 props.state.health()?.enforcement === "disabled"
-                  ? props.context.theme.text.feedback.warning.base
-                  : props.context.theme.text.muted
+                  ? color.warning
+                  : color.text
               }
             >
               {line}
@@ -497,20 +545,18 @@ export function GuardPanel(props: {
           )}
         </For>
         <Show when={!["2.0.29", "2.1.2"].includes(props.context.app.version)}>
-          <text fg={props.context.theme.text.feedback.warning.base}>
+          <text fg={color.warning}>
             {clip(`Runtime ${props.context.app.version}: unverified`, width())}
           </text>
         </Show>
         <Show when={notice()}>
           {(message) => (
-            <text fg={props.context.theme.text.feedback.warning.base}>
-              {clip(message(), width())}
-            </text>
+            <text fg={color.warning}>{clip(message(), width())}</text>
           )}
         </Show>
         <Show when={(help() || view() !== "overview") && selectedRow()}>
           {(row) => (
-            <text fg={props.context.theme.text.base}>
+            <text fg={color.text}>
               {clip(
                 `Selected: ${row().node.agent ?? row().node.sessionId}`,
                 width(),
@@ -518,7 +564,7 @@ export function GuardPanel(props: {
             </text>
           )}
         </Show>
-        <Show when={!help() && view() === "overview"}>
+        <Show when={!help() && !wide() && view() === "overview"}>
           <For
             each={panelSummary(
               selectedRow(),
@@ -527,9 +573,9 @@ export function GuardPanel(props: {
               compact(),
             )}
           >
-            {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
+            {(line) => <text fg={color.text}>{line}</text>}
           </For>
-          <text fg={props.context.theme.text.muted}>
+          <text fg={color.text}>
             {panelRowHeading(
               `Family ${rows().length ? offset() + 1 : 0}/${rows().length}${props.state.complete() ? "" : " · partial"} · * current`,
               width(),
@@ -538,77 +584,141 @@ export function GuardPanel(props: {
         </Show>
         <Show when={!help() && view() === "overview"}>
           <For each={inventoryMessages(inventory())}>
-            {(line) => (
-              <text fg={props.context.theme.text.muted}>
-                {clip(line, width())}
-              </text>
-            )}
+            {(line) => <text fg={color.text}>{clip(line, width())}</text>}
           </For>
         </Show>
       </box>
-      <scrollbox
-        viewportOptions={{
-          onSizeChange: function () {
-            setViewportWidth(this.width);
-          },
-        }}
-        ref={(value) => {
-          scroll = value;
-        }}
+      <Show when={!help() && wide()}>
+        <box flexDirection="row" flexShrink={0}>
+          <text
+            fg={view() === "overview" ? color.accent : color.text}
+            attributes={view() === "overview" ? attr.BOLD : attr.DIM}
+            onMouseDown={() => changeView("overview")}
+          >
+            Overview{" "}
+          </text>
+          <text
+            fg={view() === "details" ? color.accent : color.text}
+            attributes={view() === "details" ? attr.BOLD : attr.DIM}
+            onMouseDown={() => changeView("details")}
+          >{`${shortcut("inspect")} Details  `}</text>
+          <text
+            fg={view() === "charts" ? color.accent : color.text}
+            attributes={view() === "charts" ? attr.BOLD : attr.DIM}
+            onMouseDown={() => changeView("charts")}
+          >{`${shortcut("charts")} Performance charts`}</text>
+        </box>
+      </Show>
+      <box
+        flexDirection={wide() && !help() ? "row" : "column"}
+        gap={wide() && !help() ? 2 : 0}
+        width={width()}
+        flexBasis={0}
         flexGrow={1}
         minHeight={0}
-        scrollX={false}
       >
-        <Show when={help()}>
-          <For each={helpLines()}>
-            {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
-          </For>
-        </Show>
-        <Show when={!help() && view() === "overview"}>
-          <PanelOverview
+        <Show when={wide() && !help()}>
+          <WorkspaceTree
             rows={rows()}
             selectedId={selected()}
-            width={width()}
-            context={props.context}
+            width={layout().treeWidth}
+            complete={props.state.complete()}
+            scrollRef={(value) => {
+              treeScroll = value;
+            }}
             open={(row) => {
               if (row.hidden) props.state.expand(row.node.sessionId);
               else open(row);
             }}
           />
         </Show>
-        <Show when={!help() && view() === "details"}>
-          <PanelDetails
-            row={selectedRow()}
-            rows={rows()}
-            routeID={props.input.sessionID}
-            familyRows={family().rows}
-            familyComplete={family().complete && props.state.complete()}
-            trace={trace()}
-            width={width()}
-            age={props.state.age(selected() ?? "")}
-            context={props.context}
-            reasons={props.state.health()?.reasons ?? []}
-          />
-        </Show>
-        <Show when={!help() && view() === "charts" && selected()}>
-          {(id) => (
-            <HistoryCharts
-              sessionId={id()}
-              windowMs={windows[windowIndex()] ?? 3600000}
-              metricIndex={metricIndex()}
-              width={width()}
-              view={chartView()}
-              context={props.context}
+        <scrollbox
+          viewportOptions={{
+            onSizeChange: function () {
+              setViewportWidth(this.width);
+            },
+          }}
+          ref={(value) => {
+            scroll = value;
+          }}
+          width={help() ? width() : layout().contentWidth}
+          flexBasis={wide() && !help() ? "auto" : 0}
+          flexGrow={1}
+          minHeight={0}
+          scrollX={false}
+        >
+          <Show when={!help() && wide() && view() !== "charts"}>
+            <WorkspaceSummary
+              row={selectedRow()}
+              width={contentWidth()}
+              age={props.state.age(selected() ?? "")}
+              now={props.state.timing(selected() ?? "").now}
+              staleMs={props.state.timing(selected() ?? "").staleMs}
+              live={props.state.connection() === "live"}
             />
-          )}
-        </Show>
-      </scrollbox>
+          </Show>
+          <Show when={!help() && wide() && view() === "overview"}>
+            <PanelContextHistory
+              row={selectedRow()}
+              trace={trace()}
+              width={contentWidth()}
+              age={props.state.age(selected() ?? "")}
+            />
+          </Show>
+          <Show when={help()}>
+            <For each={helpLines()}>
+              {(line) => <text fg={color.text}>{line}</text>}
+            </For>
+          </Show>
+          <Show when={!help() && !wide() && view() === "overview"}>
+            <PanelOverview
+              displayRow={displayRow}
+              rows={rows()}
+              selectedId={selected()}
+              width={contentWidth()}
+              context={props.context}
+              open={(row) => {
+                if (row.hidden) props.state.expand(row.node.sessionId);
+                else open(row);
+              }}
+            />
+          </Show>
+          <Show when={!help() && view() === "details"}>
+            <PanelDetails
+              displayRow={displayRow}
+              row={selectedRow()}
+              rows={rows()}
+              routeID={props.input.sessionID}
+              familyRows={family().rows}
+              familyComplete={family().complete && props.state.complete()}
+              trace={trace()}
+              width={contentWidth()}
+              age={props.state.age(selected() ?? "")}
+              context={props.context}
+              reasons={props.state.health()?.reasons ?? []}
+            />
+          </Show>
+          <Show when={!help() && view() === "charts" && selected()}>
+            {(id) => (
+              <HistoryCharts
+                sessionId={id()}
+                windowMs={windows[windowIndex()] ?? 3600000}
+                metricIndex={metricIndex()}
+                width={contentWidth()}
+                view={chartView()}
+                context={props.context}
+              />
+            )}
+          </Show>
+        </scrollbox>
+      </box>
       <box flexDirection="column" flexShrink={0}>
         <box flexDirection="row" flexShrink={0}>
           <For each={actions()}>
             {(action, index) => (
               <text
-                fg={props.context.theme.text.muted}
+                fg={color.text}
+                attributes={attr.DIM}
                 onMouseDown={action.run}
               >
                 {`${index() ? " " : ""}${action.label}`}
@@ -616,7 +726,9 @@ export function GuardPanel(props: {
             )}
           </For>
         </box>
-        <text fg={props.context.theme.text.muted}>{clip(hint(), width())}</text>
+        <text fg={color.text} attributes={attr.DIM}>
+          {clip(hint(), width())}
+        </text>
       </box>
     </box>
   );

@@ -30,6 +30,12 @@ Authentication (explicit servers)
   CONTEXT_GUARD_PASSWORD   Server password
   CONTEXT_GUARD_USERNAME   Server username (default: opencode)
 
+Layout
+  Overview/Detail use a family tree and metric panels at 110x28 cells or larger.
+  Smaller terminals use compact rows. Colors follow terminal defaults and ANSI
+  slots; no theme configuration is required. Overview reuses retained history
+  after visiting History and does not start archive reads.
+
 Keys
   1/2/3/4 overview/detail/history/models; arrows or j/k move; Enter detail/chart;
   Models: Left/Right metric, [/] bucket, d requests, n/p pages, s sort;

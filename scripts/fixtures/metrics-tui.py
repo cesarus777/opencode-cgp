@@ -128,7 +128,8 @@ def capture_chart(name):
         geometry = [(i, [(m.start(), m.group()) for m in re.finditer(r"[│└┘─┈░█▁▂▃▄▅▆▇]+", line)]) for i, line in enumerate(lines) if "│" in line or "└" in line or "┘" in line]
         raise AssertionError("Incomplete chart rectangle: " + repr(geometry))
     right = lines[top].index("│", left + 5) + 1
-    os.makedirs(".artifacts", exist_ok=True)
+    artifact_root = os.environ.get("GUARD_NATIVE_ARTIFACT_DIR", ".artifacts")
+    os.makedirs(artifact_root, exist_ok=True)
     font_path = subprocess.check_output(["fc-match", "-f", "%{file}", "monospace"], text=True)
     font = ImageFont.truetype(font_path, 18)
     image = Image.new("RGB", ((right - left) * 12 + 24, (bottom - top + 1) * 24 + 24), "#101018")
@@ -139,8 +140,8 @@ def capture_chart(name):
             char = screen.buffer[y][x]
             color = named.get(char.fg, "#" + char.fg if len(char.fg) == 6 else "#cccccc")
             draw.text((12 + (x - left) * 12, 12 + (y - top) * 24), char.data, font=font, fill=color)
-    image.save(".artifacts/context-" + name + ".png")
-    with open(".artifacts/context-" + name + ".txt", "w") as output:
+    image.save(os.path.join(artifact_root, "context-" + name + ".png"))
+    with open(os.path.join(artifact_root, "context-" + name + ".txt"), "w") as output:
         output.write("\n".join(line[left:right].rstrip() for line in lines[top:bottom+1]))
     return [line[left:right] for line in lines[top:bottom+1]]
 
@@ -153,6 +154,17 @@ try:
     key("/context-guard")
     key("\r")
     expect("c charts")
+    # The host normally allocates a narrow split panel even in this 180-column
+    # terminal. Use its public fullscreen action to exercise the actual workspace.
+    expect("fullscreen")
+    y = next(i for i, line in enumerate(screen.display) if "fullscreen" in line)
+    x = screen.display[y].index("fullscreen") + 2
+    history_before_fullscreen = counts()["history"]
+    key(f"\x1b[<0;{x + 1};{y + 1}M\x1b[<0;{x + 1};{y + 1}m")
+    expect("Session family")
+    expect("Performance")
+    expect("split")
+    assert counts()["history"] == history_before_fullscreen, "workspace adds no retained-history reads"
     key("?")
     expect("Native OpenCode panel")
     key("\x1b[F")

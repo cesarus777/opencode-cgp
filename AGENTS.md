@@ -33,7 +33,7 @@ Use `bun:test` and name files `*.test.ts`. Describe observable behavior in test 
 
 ## Commit & Pull Request Guidelines
 
-The repository currently has no commits, so no established message convention exists. Use concise imperative subjects, such as “Fix compaction recovery after restart.” Keep changes focused.
+Use concise imperative subjects, such as “Fix compaction recovery after restart.” Keep changes focused.
 
 PRs should explain the problem, behavior changes, validation commands/results, and compatibility limitations. Link related issues when available. Update examples and documentation when configuration or public contracts change.
 

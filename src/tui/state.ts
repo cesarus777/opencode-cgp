@@ -58,10 +58,12 @@ export function createGuardState(context: Plugin.Context) {
     let delay = Infinity;
     for (const client of clients.values())
       for (const row of client.rows.values()) {
-        if (!row.measurement || !client.health) continue;
-        const remaining =
-          row.measurement.at + client.health.staleMs + 1 - client.now();
-        if (remaining > 0) delay = Math.min(delay, remaining);
+        if (!client.health) continue;
+        for (const at of [row.measurement?.at, row.performance?.at]) {
+          if (at === undefined) continue;
+          const remaining = at + client.health.staleMs + 1 - client.now();
+          if (remaining > 0) delay = Math.min(delay, remaining);
+        }
       }
     if (Number.isFinite(delay))
       expiryTimer = setTimeout(notify, Math.min(2147483647, Math.ceil(delay)));
@@ -359,6 +361,11 @@ export function createGuardState(context: Plugin.Context) {
       const c = [...clients.values()].find((c) => c.rows.has(id));
       const m = c?.rows.get(id)?.measurement;
       return c && m ? c.now() - m.at : 0;
+    },
+    timing(id: string) {
+      version();
+      const client = [...clients.values()].find((c) => c.rows.has(id));
+      return { now: client?.now(), staleMs: client?.health?.staleMs };
     },
     health() {
       version();

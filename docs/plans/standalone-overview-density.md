@@ -2,6 +2,8 @@
 
 Date: 2026-11-06. Status: implemented and locally validated, including actual-host checks on OpenCode 2.0.29 and 2.1.2; see the [delivery report](../validation/standalone-overview-density-2026-11-06.md). Covers UX-04 and UX-05 from the [TUI UX review](tui-ux-review.md). The investigation and design targets below are retained as the implementation scope.
 
+The later Orbit workspace uses a family rail and selected metric panels in Overview/Detail at 110×28 terminal cells. The compact rows/cards described below remain the constrained-layout fallback. See [current configuration](../configuration.md#standalone-terminal-dashboard) and the [0.5.0 record](../validation/release-0.5.0-2026-11-10.md).
+
 ## Next improvement
 
 Make the standalone dashboard Overview useful for comparing agents, and keep the selected agent's identity visible at narrow sizes. Deliver row density and selection reveal together: shorter rows reduce the problem, but do not by themselves establish correct behavior for small viewports, exceptions, resizing, or long identities.

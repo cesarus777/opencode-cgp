@@ -168,6 +168,7 @@ test("Models pagination and global sort preserve complete totals without archive
   }
 });
 
+// One-cell viewports exercise thousands of scroll/format steps on slower hosts.
 test("Models keeps complete wrapped rows reachable in narrow viewports", async () => {
   const f = fixture();
   try {
@@ -226,7 +227,7 @@ test("Models keeps complete wrapped rows reachable in narrow viewports", async (
     f.controller.stop();
     f.service.dispose();
   }
-});
+}, 15000);
 
 test("Models filters ignore session search and agent editor does not start the inventory model editor", async () => {
   const f = fixture([

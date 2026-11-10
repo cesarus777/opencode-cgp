@@ -4,6 +4,7 @@ import { historyChartLines } from "./chartformat.ts";
 import { historyStatusLines } from "../historyclient.ts";
 import type { HistoryView } from "./historystate.ts";
 import { wrap } from "./format.ts";
+import { panelColors as color, panelAttributes as attr } from "./panelstyle.ts";
 export function HistoryCharts(props: {
   sessionId: string;
   windowMs: number;
@@ -27,7 +28,11 @@ export function HistoryCharts(props: {
   return (
     <box flexDirection="column">
       <For each={wrap(`Performance charts · ${props.sessionId}`, props.width)}>
-        {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
+        {(line) => (
+          <text fg={color.accent} attributes={attr.BOLD}>
+            {line}
+          </text>
+        )}
       </For>
       <For
         each={wrap(
@@ -42,20 +47,26 @@ export function HistoryCharts(props: {
           props.width,
         )}
       >
-        {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
+        {(line) => (
+          <text fg={color.text} attributes={attr.DIM}>
+            {line}
+          </text>
+        )}
       </For>
       <For
         each={historyStatusLines(props.view).flatMap((line) =>
           wrap(line, props.width),
         )}
       >
-        {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
+        {(line) => (
+          <text fg={color.text} attributes={attr.DIM}>
+            {line}
+          </text>
+        )}
       </For>
       <box flexDirection="column" paddingTop={1}>
         <For each={lines()}>
-          {(line) => (
-            <text fg={props.context.theme.text.base}>{line || " "}</text>
-          )}
+          {(line) => <text fg={color.text}>{line || " "}</text>}
         </For>
       </box>
     </box>

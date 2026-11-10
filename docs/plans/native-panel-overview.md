@@ -4,6 +4,8 @@ Date: 2026-11-06. Status: implemented and locally validated; see the [delivery r
 
 The design targets below retain this increment's scope. Later [keyboard/help delivery](../validation/native-keyboard-help-2026-11-06.md) adds native help, inventory feedback, and optional child keyboard entry; constrained footers now prioritize help/close, with inspection controls available through help when omitted. Later [sidebar density delivery](../validation/sidebar-density-2026-11-06.md) changes the sidebar defaults and adds route-family statistics to Details, independent of selected-session diagnostics. Sidebar-unchanged acceptance checks below apply only to this original increment. Use [current configuration](../configuration.md#native-context-guard-view) for the supported controls.
 
+The later [native Orbit workspace](native-orbit-workspace.md) adds a persistent family rail, metric panels and recent context history to wide Overview allocations; compact layouts retain this increment’s summary/list. Current controls and validation are documented in the [Orbit delivery record](../validation/native-orbit-workspace-2026-11-10.md).
+
 ## Problem and outcome
 
 Before this change, opening `/context-guard` rendered a context history chart, expanded route-session diagnostics, and optional inspected-child diagnostics before the family list. The user's first comparison task required scrolling past information that is useful mainly during investigation.

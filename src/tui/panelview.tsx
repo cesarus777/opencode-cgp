@@ -7,6 +7,7 @@ import { detailLines, wrap } from "./format.ts";
 import { statistics } from "./compactformat.ts";
 import { contextHistoryLegend, reasonExplanation } from "./statusformat.ts";
 import { panelRowLines } from "./panelformat.ts";
+import { panelColors as color, panelAttributes as attr } from "./panelstyle.ts";
 
 export function PanelOverview(props: {
   rows: readonly GuardRow[];
@@ -14,6 +15,7 @@ export function PanelOverview(props: {
   width: number;
   context: Plugin.Context;
   open: (row: GuardRow) => void;
+  displayRow: (row: GuardRow) => GuardRow;
 }) {
   const visible = createMemo(() => {
     const index = Math.max(
@@ -34,19 +36,24 @@ export function PanelOverview(props: {
         >
           <Index
             each={panelRowLines(
-              row(),
+              props.displayRow(row()),
               props.width,
               row().node.sessionId === props.selectedId,
             )}
           >
-            {(line) => (
+            {(line, index) => (
               <text
+                attributes={
+                  index === 0 && row().node.sessionId === props.selectedId
+                    ? attr.BOLD | attr.INVERSE
+                    : attr.NONE
+                }
                 fg={
                   row().pressure === "crossed" || row().node.status === "failed"
-                    ? props.context.theme.text.feedback.error.base
+                    ? color.danger
                     : row().pressure === "near"
-                      ? props.context.theme.text.feedback.warning.base
-                      : props.context.theme.text.base
+                      ? color.warning
+                      : color.text
                 }
               >
                 {line()}
@@ -70,18 +77,8 @@ export function PanelDetails(props: {
   age: number;
   context: Plugin.Context;
   reasons: readonly string[];
+  displayRow: (row: GuardRow) => GuardRow;
 }) {
-  const chart = createMemo(() =>
-    contextChart(
-      props.trace.samples,
-      props.row?.snapshot?.capacityTokens ?? props.trace.capacity,
-      props.row?.snapshot?.policy.triggerTokens,
-      props.width,
-      props.row?.snapshot?.measurement
-        ? props.row.snapshot.measurement.at + props.age
-        : undefined,
-    ),
-  );
   const detail = createMemo(() => {
     const row = props.row;
     if (!row) return ["No selected session; return to Overview."];
@@ -98,7 +95,10 @@ export function PanelDetails(props: {
     }
     return [
       `Session: ${row.node.sessionId}${row.current ? " (current)" : ""}`,
-      ...detailLines(row, props.width, true, props.age),
+      ...(props.displayRow(row) !== row
+        ? ["Performance readings stale or unavailable; current rates unknown."]
+        : []),
+      ...detailLines(props.displayRow(row), props.width, true, props.age),
       `Ancestry: ${ancestry.join(" / ")}`,
       ...props.reasons.flatMap((reason) => [
         reasonExplanation(reason),
@@ -116,29 +116,53 @@ export function PanelDetails(props: {
   });
   return (
     <box flexDirection="column" flexShrink={0}>
-      <text fg={props.context.theme.text.base}>Context history</text>
+      <PanelContextHistory
+        row={props.row}
+        trace={props.trace}
+        width={props.width}
+        age={props.age}
+      />
+      <For each={detail()}>{(line) => <text fg={color.text}>{line}</text>}</For>
+    </box>
+  );
+}
+
+export function PanelContextHistory(props: {
+  row: GuardRow | undefined;
+  trace: ContextTrace;
+  width: number;
+  age: number;
+}) {
+  const chart = createMemo(() =>
+    contextChart(
+      props.trace.samples,
+      props.row?.snapshot?.capacityTokens ?? props.trace.capacity,
+      props.row?.snapshot?.policy.triggerTokens,
+      props.width,
+      props.row?.snapshot?.measurement
+        ? props.row.snapshot.measurement.at + props.age
+        : undefined,
+    ),
+  );
+  return (
+    <box flexDirection="column" flexShrink={0}>
+      <text fg={color.accent} attributes={attr.BOLD}>
+        Context history
+      </text>
       <For each={chart()}>
         {(item) => (
-          <text
-            fg={
-              item.threshold
-                ? props.context.theme.text.feedback.warning.base
-                : props.context.theme.text.muted
-            }
-          >
+          <text fg={item.threshold ? color.warning : color.text}>
             <Show when={item.segments} fallback={item.line}>
               <For each={item.segments}>
                 {(part) => (
                   <span
                     style={{
+                      dim:
+                        part.tone === "held" ||
+                        part.tone === "axis" ||
+                        props.row?.freshness !== "fresh",
                       fg:
-                        part.tone === "threshold"
-                          ? props.context.theme.text.feedback.warning.base
-                          : part.tone === "axis" ||
-                              part.tone === "held" ||
-                              props.row?.freshness !== "fresh"
-                            ? props.context.theme.text.muted
-                            : props.context.theme.text.base,
+                        part.tone === "threshold" ? color.warning : color.text,
                     }}
                   >
                     {part.text}
@@ -152,10 +176,11 @@ export function PanelDetails(props: {
       <For
         each={contextHistoryLegend.flatMap((line) => wrap(line, props.width))}
       >
-        {(line) => <text fg={props.context.theme.text.muted}>{line}</text>}
-      </For>
-      <For each={detail()}>
-        {(line) => <text fg={props.context.theme.text.base}>{line}</text>}
+        {(line) => (
+          <text fg={color.text} attributes={attr.DIM}>
+            {line}
+          </text>
+        )}
       </For>
     </box>
   );

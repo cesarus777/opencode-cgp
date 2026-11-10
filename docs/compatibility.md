@@ -55,15 +55,17 @@ The [2026-11-06 compact-sidebar validation](validation/sidebar-density-2026-11-0
 
 The [plain-language terminology delivery](validation/plain-language-terminology-2026-11-07.md) covers measurement/lifecycle labels, readable Details with exact diagnostic codes, performance explanations and context legends. Offline coverage preserves narrow layouts, stale/unknown distinctions, route-family scope and cleanup. The delivery report records synthetic-provider host results and rerun limitations separately; it does not extend genuine-provider, remote or platform certification.
 
+The [native Orbit delivery](validation/native-orbit-workspace-2026-11-10.md) adds an allocated-width workspace and an unbound fullscreen action through the public panel API. The final built plugin passes the isolated synthetic-provider PTY harness on OpenCode 2.0.29 and 2.1.2, including fullscreen entry, native help/selection, chart recovery and context continuity. The 258-test offline suite covers wide/narrow allocation boundaries, terminal color intents, performance freshness and consumer cleanup. The pinned SDK and the remote/platform/provider limitations above remain unchanged.
+
 ## npm distribution verification
 
-The prepared package is `@cesarus777/opencode-cgp@0.1.0`; the unscoped name belongs to another project. Package identity does not change the plugin ID, options, RPC contract or diagnostic storage locations.
+Initial distribution verification used `@cesarus777/opencode-cgp@0.1.0`; the unscoped name belongs to another project. Package identity does not change the plugin ID, options, RPC contract or diagnostic storage locations.
 
 The tarball has been installed into a temporary clean environment and checked independently of the source checkout. Server/core/RPC load without renderer peers; all five exports resolve; the nine adapter regressions run against the installed default export; declarations compile in a consumer; and the compiled TUI renders, responds to shared Solid state and clicks, and disposes through public OpenTUI runtime support. No renderer or SDK is bundled into the plugin.
 
 Actual **OpenCode 2.0.29** additionally registered the installed tarball's built directory and returned RPC health in **observe and enforce** modes on 2026-10-16. These isolated servers made no model requests. This establishes real-host initialization and RPC compatibility, not real-provider compaction. The 2.0.29 configured-local loader skips direct files despite newer live docs describing file paths; use checkout directories or the packed `dist` directory for local validation. Normal npm resolution uses the package exports.
 
-The native npm-manager fetch cannot be verified until publication. Interactive TUI in the compiled host against the **packed** artifact, Git preparation in the native manager, other V2 versions, and GitHub Actions/OIDC execution remain unverified. The prior interactive synthetic-provider report applies to the source checkout. See [packed validation and reproduction](testing.md#packed-npm-artifact).
+The initial 0.1.0 checks preceded publication; later staging/public-registry evidence is recorded for [0.4.2](validation/release-0.4.2-2026-11-08.md) and current candidate checks in [0.5.0](validation/release-0.5.0-2026-11-10.md). Native npm-manager fetching remains separate from clean npm installation. Interactive TUI in the compiled host against the **packed** artifact, Git preparation in the native manager, and other V2 versions remain unverified. GitHub Actions/OIDC staging has since been verified in the linked release records. The prior interactive synthetic-provider report applies to the source checkout. See [packed validation and reproduction](testing.md#packed-npm-artifact).
 
 ## Performance metrics
 
@@ -86,6 +88,8 @@ The [2026-11-06 standalone overview validation](validation/standalone-overview-d
 ## Model analytics
 
 The standalone Models screen requires `context-guard.analytics.v1` on the owning server. It has a separate versioned contract; monitor v1/v2 and session history v1 are unchanged. Missing analytics capability preserves other dashboard screens. Models uses retained scalar archives, not live inventory enumeration or transcript access. Its seven-day range, 64 MiB scan, 100,000 request identity limit and bounded snapshots are explicit; totals precede pagination and chart resolution. It does not provide all-time history or combined live fleet TPS. See [terminal model analytics](configuration.md#terminal-model-analytics).
+
+The [0.5.0 release candidate](validation/release-0.5.0-2026-11-10.md) adds the standalone Orbit workspace with default terminal/indexed color intents and compact fallbacks. Its built CLI passes the authenticated OpenCode 2.1.2 synthetic-provider PTY harness, including selected model identities, full diagnostics, History/Models, fault recovery, resize, restart, native-client survival and terminal restoration. Clean-package verification passes with 69 allowlisted files; optional installed-host probes remain separately gated.
 
 ## Dashboard archive reuse in 0.4.2
 

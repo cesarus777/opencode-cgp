@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-11-10
+
+- Add the Orbit workspace to wide standalone Overview/Detail and the expanded native `/context-guard` panel: a session family tree, selected context/performance panels, and responsive compact fallbacks.
+- Use terminal-default foreground/background and standard ANSI slots with bold, dim and inverse styles; no custom theme configuration. Preserve the native sidebar’s existing appearance.
+- Add native **fullscreen**/**split** controls and an unbound palette action through OpenCode’s public panel API. Preserve native shortcuts, selected identities, help scroll restoration and one monitor consumer.
+- Keep recent native context history separate from retained performance charts; standalone Overview reuses matching retained history without initiating archive reads.
+- Hide stale, disconnected or invalid-timing native performance rates without modifying stored accounting or context usage. Preserve resolved threshold markers, unknown readings and compaction lifecycle distinctions.
+- Validate with 258 offline tests, native synthetic-provider PTYs on OpenCode 2.0.29 and 2.1.2, and clean-package checks. See the [native workspace delivery](docs/validation/native-orbit-workspace-2026-11-10.md) and [release record](docs/validation/release-0.5.0-2026-11-10.md).
+
 ## 0.4.3 — 2026-11-08
 
 - Restore Live TPS, average model/session TPS, and observed TTFT for the main agent and each visible subagent in the sidebar and native panel agent rows. Preserve estimated, waiting, and partial labels, with wrapping at narrow widths.
